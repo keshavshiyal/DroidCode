@@ -1,5 +1,7 @@
 package com.example.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,10 +23,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.db.WorkspaceEntity
+import com.example.filesystem.SafUtils
 import com.example.project.ProjectTemplate
 import com.example.project.WorkspaceManager
 
@@ -59,6 +64,18 @@ fun HomeView(
 
     var showNewProjectDialog by remember { mutableStateOf(false) }
     var showOpenDirDialog by remember { mutableStateOf(false) }
+
+    // SAF (Storage Access Framework) Folder Picker Launcher
+    val safLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            val resolvedPath = SafUtils.resolvePathFromTreeUri(context, uri)
+            if (resolvedPath != null) {
+                onOpenWorkspace(resolvedPath, "General Workspace")
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -116,8 +133,8 @@ fun HomeView(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 ActionTile(
-                    title = "Open Directory",
-                    subtitle = "Open an existing folder on device",
+                    title = "Open Directory (SAF)",
+                    subtitle = "Select folder from device locations",
                     icon = Icons.Default.FolderOpen,
                     onClick = { showOpenDirDialog = true },
                     testTag = "home_open_directory_btn"
@@ -203,6 +220,10 @@ fun HomeView(
     if (showOpenDirDialog) {
         OpenDirectoryModal(
             onDismiss = { showOpenDirDialog = false },
+            onLaunchSaf = {
+                showOpenDirDialog = false
+                safLauncher.launch(null)
+            },
             onOpen = { path ->
                 showOpenDirDialog = false
                 onOpenWorkspace(path, "General Workspace")
@@ -406,6 +427,7 @@ private fun NewProjectModal(
 @Composable
 private fun OpenDirectoryModal(
     onDismiss: () -> Unit,
+    onLaunchSaf: () -> Unit,
     onOpen: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -429,10 +451,21 @@ private fun OpenDirectoryModal(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onLaunchSaf,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Browse Device Locations (SAF)")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Enter directory path on device storage:",
+                    text = "Or enter custom directory path manually:",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

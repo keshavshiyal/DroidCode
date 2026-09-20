@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,15 +24,20 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +54,7 @@ import com.example.project.WorkspaceManager
 import com.example.settings.SettingsManager
 import com.example.ui.theme.DroidCodeTheme
 import java.io.File
+import kotlinx.coroutines.launch
 
 @Composable
 fun MainShell() {
@@ -61,7 +69,9 @@ fun MainShell() {
     var isWorkspaceOpen by remember { mutableStateOf(workspaceMgr.hasOpenWorkspace()) }
     var currentView by remember { mutableStateOf(if (isWorkspaceOpen) "IDE" else "HOME") }
 
-    var showExplorer by remember { mutableStateOf(true) }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
+
     var showBottomPanel by remember { mutableStateOf(true) }
     var showCommandPalette by remember { mutableStateOf(false) }
 
@@ -141,205 +151,230 @@ fun MainShell() {
     }
 
     DroidCodeTheme(themeMode = settingsState.themeMode) {
-        Scaffold(
-            topBar = {
-                // Top App Bar Shell
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(1.dp, MaterialTheme.colorScheme.outline)
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "<D/> DroidCode",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .clickable {
-                                    if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
-                                }
-                                .padding(end = 12.dp)
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = currentView == "IDE" && isWorkspaceOpen,
+            drawerContent = {
+                if (isWorkspaceOpen) {
+                    ModalDrawerSheet(
+                        drawerContainerColor = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier
+                            .width(280.dp)
+                            .fillMaxHeight()
+                            .statusBarsPadding()
+                    ) {
+                        ExplorerPanel(
+                            onOpenFile = { file: File ->
+                                try { editorMgr.openFile(file) } catch (e: Exception) {}
+                                coroutineScope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.fillMaxSize()
                         )
-
-                        if (isWorkspaceOpen && workspaceMgr.currentProject != null) {
-                            Box(
-                                modifier = Modifier
-                                    .background(
-                                        MaterialTheme.colorScheme.surfaceVariant,
-                                        RoundedCornerShape(4.dp)
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = workspaceMgr.currentProject.name,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
-
-                    Row {
-                        IconButton(
-                            onClick = { showCommandPalette = true },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .testTag("top_bar_command_palette_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Command Palette",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        if (isWorkspaceOpen) {
-                            IconButton(
-                                onClick = { showExplorer = !showExplorer },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Folder,
-                                    contentDescription = "Toggle Explorer",
-                                    tint = if (showExplorer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            IconButton(
-                                onClick = { showBottomPanel = !showBottomPanel },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Terminal,
-                                    contentDescription = "Toggle Terminal",
-                                    tint = if (showBottomPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            IconButton(
-                                onClick = {
-                                    workspaceMgr.closeWorkspace()
-                                    editorMgr.closeAllTabs()
-                                    isWorkspaceOpen = false
-                                    currentView = "HOME"
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Close Workspace",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = { currentView = "SETTINGS" },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .testTag("top_bar_settings_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
                     }
                 }
             }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                when (currentView) {
-                    "HOME" -> {
-                        HomeView(
-                            onOpenWorkspace = { path, type ->
-                                workspaceMgr.openWorkspace(context, File(path), type)
-                                isWorkspaceOpen = true
-                                currentView = "IDE"
-                            },
-                            onOpenSettings = { currentView = "SETTINGS" }
-                        )
-                    }
+        ) {
+            Scaffold(
+                topBar = {
+                    // Top App Bar Container with statusBarsPadding to keep title below Android notification bar
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .statusBarsPadding()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .border(1.dp, MaterialTheme.colorScheme.outline)
+                                .padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "<D/> DroidCode",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .clickable {
+                                            if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
+                                        }
+                                        .padding(end = 12.dp)
+                                )
 
-                    "SETTINGS" -> {
-                        SettingsView(
-                            onBack = {
-                                if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
-                            },
-                            onSettingsChanged = {
-                                settingsState = settingsMgr.settings
+                                if (isWorkspaceOpen && workspaceMgr.currentProject != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                MaterialTheme.colorScheme.surfaceVariant,
+                                                RoundedCornerShape(4.dp)
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = workspaceMgr.currentProject.name,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
                             }
-                        )
-                    }
 
-                    "IDE" -> {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Main Editor & Explorer Workstation Area
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                            ) {
-                                if (showExplorer) {
-                                    ExplorerPanel(
-                                        onOpenFile = { file: File ->
-                                            try { editorMgr.openFile(file) } catch (e: Exception) {}
-                                        },
-                                        modifier = Modifier.width(220.dp)
+                            Row {
+                                IconButton(
+                                    onClick = { showCommandPalette = true },
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .testTag("top_bar_command_palette_btn")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = "Command Palette",
+                                        tint = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
 
-                                EditorView(
-                                    settings = settingsState,
-                                    onSaveRequested = {},
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
+                                if (isWorkspaceOpen) {
+                                    IconButton(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Folder,
+                                            contentDescription = "Toggle Project Explorer",
+                                            tint = if (drawerState.isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
 
-                            // Developer Quick Key Bar
-                            if (settingsState.isQuickKeyBarEnabled) {
-                                DeveloperQuickKeyBar(
-                                    density = settingsState.quickKeyBarDensity,
-                                    ctrlActive = ctrlActive,
-                                    shiftActive = shiftActive,
-                                    altActive = altActive,
-                                    onToggleCtrl = { ctrlActive = !ctrlActive },
-                                    onToggleShift = { shiftActive = !shiftActive },
-                                    onToggleAlt = { altActive = !altActive },
-                                    onInsertText = insertText,
-                                    onActionKey = triggerActionKey
-                                )
-                            }
+                                    IconButton(
+                                        onClick = { showBottomPanel = !showBottomPanel },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Terminal,
+                                            contentDescription = "Toggle Terminal",
+                                            tint = if (showBottomPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
 
-                            // Bottom Panel (Git / Terminal / Database / Problems)
-                            if (showBottomPanel) {
-                                BottomPanel()
+                                    IconButton(
+                                        onClick = {
+                                            workspaceMgr.closeWorkspace()
+                                            editorMgr.closeAllTabs()
+                                            isWorkspaceOpen = false
+                                            currentView = "HOME"
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Close Workspace",
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+
+                                IconButton(
+                                    onClick = { currentView = "SETTINGS" },
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .testTag("top_bar_settings_btn")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Settings",
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                             }
                         }
                     }
                 }
-
-                // Command Palette Modal Dialog
-                if (showCommandPalette) {
-                    CommandPaletteDialog(
-                        onDismiss = { showCommandPalette = false },
-                        onExecuteCommand = { cmd ->
-                            cmd.execute()
+            ) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    when (currentView) {
+                        "HOME" -> {
+                            HomeView(
+                                onOpenWorkspace = { path, type ->
+                                    workspaceMgr.openWorkspace(context, File(path), type)
+                                    isWorkspaceOpen = true
+                                    currentView = "IDE"
+                                },
+                                onOpenSettings = { currentView = "SETTINGS" }
+                            )
                         }
-                    )
+
+                        "SETTINGS" -> {
+                            SettingsView(
+                                onBack = {
+                                    if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
+                                },
+                                onSettingsChanged = {
+                                    settingsState = settingsMgr.settings
+                                }
+                            )
+                        }
+
+                        "IDE" -> {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // Main Editor Workstation Area
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                ) {
+                                    EditorView(
+                                        settings = settingsState,
+                                        onSaveRequested = {},
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+
+                                // Developer Quick Key Bar
+                                if (settingsState.isQuickKeyBarEnabled) {
+                                    DeveloperQuickKeyBar(
+                                        density = settingsState.quickKeyBarDensity,
+                                        ctrlActive = ctrlActive,
+                                        shiftActive = shiftActive,
+                                        altActive = altActive,
+                                        onToggleCtrl = { ctrlActive = !ctrlActive },
+                                        onToggleShift = { shiftActive = !shiftActive },
+                                        onToggleAlt = { altActive = !altActive },
+                                        onInsertText = insertText,
+                                        onActionKey = triggerActionKey
+                                    )
+                                }
+
+                                // Bottom Panel (Git / Terminal / Database / Problems)
+                                if (showBottomPanel) {
+                                    BottomPanel()
+                                }
+                            }
+                        }
+                    }
+
+                    // Command Palette Modal Dialog
+                    if (showCommandPalette) {
+                        CommandPaletteDialog(
+                            onDismiss = { showCommandPalette = false },
+                            onExecuteCommand = { cmd ->
+                                cmd.execute()
+                            }
+                        )
+                    }
                 }
             }
         }
