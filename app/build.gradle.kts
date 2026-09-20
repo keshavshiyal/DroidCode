@@ -32,20 +32,6 @@ android {
         storePassword = System.getenv("STORE_PASSWORD")
         keyAlias = "upload"
         keyPassword = System.getenv("KEY_PASSWORD")
-      } else if (file("${rootDir}/debug.keystore").exists()) {
-        storeFile = file("${rootDir}/debug.keystore")
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      }
-    }
-    create("debugConfig") {
-      val keystoreFile = file("${rootDir}/debug.keystore")
-      if (keystoreFile.exists()) {
-        storeFile = keystoreFile
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
       }
     }
   }
@@ -60,9 +46,7 @@ android {
       }
     }
     debug {
-      if (signingConfigs.getByName("debugConfig").storeFile != null) {
-        signingConfig = signingConfigs.getByName("debugConfig")
-      }
+      isDebuggable = true
     }
   }
   compileOptions {
