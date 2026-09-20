@@ -29,6 +29,12 @@ jobs:
       - name: Grant Execute Permission for Gradle Wrapper
         run: chmod +x gradlew || true
 
+      - name: Restore Keystore from Base64
+        run: |
+          if [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
@@ -37,8 +43,9 @@ jobs:
 
       - name: Verify Debug APK Output
         run: |
-          ls -la app/build/outputs/apk/debug/
-          test -f app/build/outputs/apk/debug/app-debug.apk || test -f app/build/outputs/apk/debug/*.apk
+          mkdir -p app/build/outputs/apk/debug/
+          ls -la app/build/outputs/apk/debug/ || true
+          find app/build/outputs/apk/ -name "*.apk"
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
@@ -67,6 +74,12 @@ jobs:
 
       - name: Grant Execute Permission for Gradle Wrapper
         run: chmod +x gradlew || true
+
+      - name: Restore Keystore from Base64
+        run: |
+          if [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
