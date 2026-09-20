@@ -72,7 +72,7 @@ public class WorkspaceManager {
         if (!hasOpenWorkspace()) {
             return new ArrayList<>();
         }
-        return fileSystem.listDirectory(currentProject.getDirectory());
+        return fileSystem.listDirectoryRecursive(currentProject.getDirectory());
     }
 
     public List<WorkspaceEntity> getRecentWorkspaces(Context context) {

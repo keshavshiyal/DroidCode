@@ -22,6 +22,10 @@ public class LocalFileSystem {
     }
 
     public List<FileNode> listDirectory(File directory) {
+        return listDirectoryRecursive(directory);
+    }
+
+    public List<FileNode> listDirectoryRecursive(File directory) {
         List<FileNode> nodes = new ArrayList<>();
         if (directory == null || !directory.exists() || !directory.isDirectory()) {
             return nodes;
@@ -30,10 +34,13 @@ public class LocalFileSystem {
         File[] files = directory.listFiles();
         if (files != null) {
             for (File file : files) {
-                // Ignore hidden .git or build caches in tree list if desired, or include .git
                 if (file.getName().equals(".DS_Store")) continue;
                 FileNode node = FileNode.fromFile(file);
                 if (node != null) {
+                    if (node.isFolder()) {
+                        List<FileNode> subChildren = listDirectoryRecursive(file);
+                        node.setChildren(subChildren);
+                    }
                     nodes.add(node);
                 }
             }

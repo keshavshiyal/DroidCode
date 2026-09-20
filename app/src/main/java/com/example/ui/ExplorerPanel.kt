@@ -85,24 +85,36 @@ fun ExplorerPanel(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp)
+                .height(48.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "EXPLORER",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column {
+                Text(
+                    text = "PROJECT EXPLORER",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontFamily = FontFamily.Monospace
+                )
+                if (workspaceMgr.hasOpenWorkspace()) {
+                    Text(
+                        text = workspaceMgr.currentProject.name,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                }
+            }
 
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = { showNewFileDialog = true },
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(32.dp)
                         .testTag("explorer_new_file_btn")
                 ) {
                     Icon(
@@ -116,7 +128,7 @@ fun ExplorerPanel(
                 IconButton(
                     onClick = { showNewFolderDialog = true },
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(32.dp)
                         .testTag("explorer_new_folder_btn")
                 ) {
                     Icon(
@@ -127,10 +139,36 @@ fun ExplorerPanel(
                     )
                 }
 
+                if (selectedNode != null) {
+                    IconButton(
+                        onClick = { showRenameDialog = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Rename",
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
                 IconButton(
                     onClick = { refreshTree() },
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(32.dp)
                         .testTag("explorer_refresh_btn")
                 ) {
                     Icon(
@@ -139,6 +177,32 @@ fun ExplorerPanel(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
+                }
+            }
+        }
+
+        // Selected Node Bar
+        if (selectedNode != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Selected: ${selectedNode!!.name}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1
+                )
+                TextButton(
+                    onClick = { selectedNode = null },
+                    modifier = Modifier.height(24.dp)
+                ) {
+                    Text("Clear", fontSize = 10.sp)
                 }
             }
         }
@@ -176,27 +240,24 @@ fun ExplorerPanel(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(4.dp)
+                    .padding(horizontal = 4.dp, vertical = 8.dp)
             ) {
                 items(treeNodes) { node ->
                     FileTreeItem(
                         node = node,
                         depth = 0,
-                        isSelected = selectedNode?.path == node.path,
+                        selectedPath = selectedNode?.path,
                         onNodeClick = { clicked ->
                             selectedNode = clicked
                             if (clicked.isFolder) {
                                 clicked.isExpanded = !clicked.isExpanded
-                                if (clicked.isExpanded) {
-                                    clicked.children = fs.listDirectory(File(clicked.path))
+                                if (clicked.isExpanded && clicked.children.isEmpty()) {
+                                    clicked.children = fs.listDirectoryRecursive(File(clicked.path))
                                 }
                                 refreshTree()
                             } else {
                                 onOpenFile(File(clicked.path))
                             }
-                        },
-                        onNodeLongClick = { clicked ->
-                            selectedNode = clicked
                         }
                     )
                 }
@@ -208,6 +269,8 @@ fun ExplorerPanel(
     if (showNewFileDialog && workspaceMgr.hasOpenWorkspace()) {
         val parentDir = if (selectedNode != null && selectedNode!!.isFolder) {
             File(selectedNode!!.path)
+        } else if (selectedNode != null && !selectedNode!!.isFolder) {
+            File(selectedNode!!.path).parentFile ?: workspaceMgr.currentProject.directory
         } else {
             workspaceMgr.currentProject.directory
         }
@@ -230,6 +293,8 @@ fun ExplorerPanel(
     if (showNewFolderDialog && workspaceMgr.hasOpenWorkspace()) {
         val parentDir = if (selectedNode != null && selectedNode!!.isFolder) {
             File(selectedNode!!.path)
+        } else if (selectedNode != null && !selectedNode!!.isFolder) {
+            File(selectedNode!!.path).parentFile ?: workspaceMgr.currentProject.directory
         } else {
             workspaceMgr.currentProject.directory
         }
@@ -247,27 +312,68 @@ fun ExplorerPanel(
             }
         )
     }
+
+    if (showRenameDialog && selectedNode != null) {
+        val target = File(selectedNode!!.path)
+        InputDialog(
+            title = "Rename ${selectedNode!!.name}",
+            label = "New Name",
+            initialValue = selectedNode!!.name,
+            onDismiss = { showRenameDialog = false },
+            onConfirm = { newName ->
+                try {
+                    fs.renameFile(target, newName)
+                    selectedNode = null
+                    showRenameDialog = false
+                    refreshTree()
+                } catch (e: Exception) {}
+            }
+        )
+    }
+
+    if (showDeleteDialog && selectedNode != null) {
+        val target = File(selectedNode!!.path)
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete ${selectedNode!!.name}?") },
+            text = { Text("Are you sure you want to delete '${selectedNode!!.name}'? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        try {
+                            fs.deleteFile(target)
+                            selectedNode = null
+                            showDeleteDialog = false
+                            refreshTree()
+                        } catch (e: Exception) {}
+                    }
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 @Composable
 private fun FileTreeItem(
     node: FileNode,
     depth: Int,
-    isSelected: Boolean,
-    onNodeClick: (FileNode) -> Unit,
-    onNodeLongClick: (FileNode) -> Unit
+    selectedPath: String?,
+    onNodeClick: (FileNode) -> Unit
 ) {
-    val fs = remember { LocalFileSystem.getInstance() }
-    val bg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface
+    val isSelected = selectedPath == node.path
+    val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
 
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = (depth * 12).dp)
-                .background(bg, RoundedCornerShape(4.dp))
+                .padding(start = (depth * 14).dp, top = 2.dp, bottom = 2.dp)
+                .background(bg, RoundedCornerShape(6.dp))
                 .clickable { onNodeClick(node) }
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (node.isFolder) {
@@ -275,25 +381,25 @@ private fun FileTreeItem(
                     imageVector = if (node.isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
                 Icon(
                     imageVector = if (node.isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .size(18.dp)
+                        .padding(horizontal = 6.dp)
+                        .size(20.dp)
                 )
             } else {
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(18.dp))
                 Icon(
                     imageVector = Icons.Default.Description,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary,
+                    tint = getFileIconColor(node.extension),
                     modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .size(18.dp)
+                        .padding(horizontal = 6.dp)
+                        .size(20.dp)
                 )
             }
 
@@ -301,7 +407,9 @@ private fun FileTreeItem(
                 text = node.name,
                 fontSize = 13.sp,
                 fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = if (node.isFolder) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
             )
         }
 
@@ -310,9 +418,8 @@ private fun FileTreeItem(
                 FileTreeItem(
                     node = child,
                     depth = depth + 1,
-                    isSelected = false,
-                    onNodeClick = onNodeClick,
-                    onNodeLongClick = onNodeLongClick
+                    selectedPath = selectedPath,
+                    onNodeClick = onNodeClick
                 )
             }
         }
@@ -320,30 +427,41 @@ private fun FileTreeItem(
 }
 
 @Composable
+private fun getFileIconColor(ext: String) = when (ext.lowercase()) {
+    "kt", "kts" -> MaterialTheme.colorScheme.primary
+    "java" -> MaterialTheme.colorScheme.secondary
+    "json", "xml" -> MaterialTheme.colorScheme.tertiary
+    "md", "txt" -> MaterialTheme.colorScheme.outline
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+@Composable
 private fun InputDialog(
     title: String,
     label: String,
+    initialValue: String = "",
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
-    var textValue by remember { mutableStateOf("") }
+    var textValue by remember { mutableStateOf(initialValue) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Text(
                     text = title,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = textValue,
                     onValueChange = { textValue = it },
@@ -351,7 +469,7 @@ private fun InputDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(20.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
@@ -364,7 +482,7 @@ private fun InputDialog(
                                 onConfirm(textValue.trim())
                             }
                         }
-                    ) { Text("Create") }
+                    ) { Text("Save") }
                 }
             }
         }
