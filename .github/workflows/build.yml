@@ -87,7 +87,7 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          if [ -f ./gradlew ]; then
+          if [ -s ./gradlew ]; then
             ./gradlew :app:assembleDebug --stacktrace
           else
             gradle :app:assembleDebug --stacktrace
@@ -96,6 +96,7 @@ jobs:
       - name: Locate Built APK Files
         run: |
           echo "Scanning for generated APKs..."
+          mkdir -p app/build/outputs/apk/
           find app/build/outputs/apk/ -type f -name "*.apk"
 
       - name: Upload APK Artifact
