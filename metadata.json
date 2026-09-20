@@ -1,0 +1,6 @@
+{
+  "name": "DroidCode",
+  "description": "Professional native Android IDE workstation powered by modular Java & Jetpack Compose architecture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

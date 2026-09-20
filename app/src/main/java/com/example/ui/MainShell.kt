@@ -1,0 +1,347 @@
+package com.example.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.core.Command
+import com.example.core.CommandRegistry
+import com.example.editor.EditorManager
+import com.example.project.WorkspaceManager
+import com.example.settings.SettingsManager
+import com.example.ui.theme.DroidCodeTheme
+import java.io.File
+
+@Composable
+fun MainShell() {
+    val context = LocalContext.current
+    val settingsMgr = remember { SettingsManager.getInstance(context) }
+    var settingsState by remember { mutableStateOf(settingsMgr.settings) }
+
+    val workspaceMgr = remember { WorkspaceManager.getInstance() }
+    val editorMgr = remember { EditorManager.getInstance() }
+    val commandRegistry = remember { CommandRegistry.getInstance() }
+
+    var isWorkspaceOpen by remember { mutableStateOf(workspaceMgr.hasOpenWorkspace()) }
+    var currentView by remember { mutableStateOf(if (isWorkspaceOpen) "IDE" else "HOME") }
+
+    var showExplorer by remember { mutableStateOf(true) }
+    var showBottomPanel by remember { mutableStateOf(true) }
+    var showCommandPalette by remember { mutableStateOf(false) }
+
+    // Quick Key Bar sticky modifiers
+    var ctrlActive by remember { mutableStateOf(false) }
+    var shiftActive by remember { mutableStateOf(false) }
+    var altActive by remember { mutableStateOf(false) }
+
+    // Register Commands in CommandRegistry
+    remember {
+        commandRegistry.registerCommand(Command("file.save", "Save Active File", "File", "Ctrl+S") {
+            try { editorMgr.saveActiveTab() } catch (e: Exception) {}
+        })
+        commandRegistry.registerCommand(Command("file.save_all", "Save All Files", "File", "Ctrl+Shift+S") {
+            try { editorMgr.saveAllTabs() } catch (e: Exception) {}
+        })
+        commandRegistry.registerCommand(Command("command.palette", "Open Command Palette", "View", "Ctrl+Shift+P") {
+            showCommandPalette = true
+        })
+        commandRegistry.registerCommand(Command("editor.undo", "Undo Edit", "Editor", "Ctrl+Z") {
+            editorMgr.undoActiveTab()
+        })
+        commandRegistry.registerCommand(Command("editor.redo", "Redo Edit", "Editor", "Ctrl+Y") {
+            editorMgr.redoActiveTab()
+        })
+        commandRegistry.registerCommand(Command("workspace.close", "Close Workspace", "Workspace", null) {
+            workspaceMgr.closeWorkspace()
+            editorMgr.closeAllTabs()
+            isWorkspaceOpen = false
+            currentView = "HOME"
+        })
+        commandRegistry.registerCommand(Command("settings.open", "Open Settings", "Preferences", null) {
+            currentView = "SETTINGS"
+        })
+    }
+
+    val triggerActionKey: (String) -> Unit = { action ->
+        when (action) {
+            "UNDO" -> editorMgr.undoActiveTab()
+            "REDO" -> editorMgr.redoActiveTab()
+            "ESC" -> {
+                ctrlActive = false
+                shiftActive = false
+                altActive = false
+            }
+        }
+    }
+
+    val insertText: (String) -> Unit = { text ->
+        val tab = editorMgr.activeTab
+        if (tab != null) {
+            // Check modifier shortcut triggers
+            if (ctrlActive && text.lowercase() == "s") {
+                try { editorMgr.saveActiveTab() } catch (e: Exception) {}
+                ctrlActive = false
+            } else if (ctrlActive && shiftActive && text.lowercase() == "p") {
+                showCommandPalette = true
+                ctrlActive = false
+                shiftActive = false
+            } else if (ctrlActive && text.lowercase() == "p") {
+                showCommandPalette = true
+                ctrlActive = false
+            } else if (ctrlActive && text.lowercase() == "z") {
+                editorMgr.undoActiveTab()
+                ctrlActive = false
+            } else if (ctrlActive && text.lowercase() == "y") {
+                editorMgr.redoActiveTab()
+                ctrlActive = false
+            } else {
+                val current = tab.content
+                val pos = tab.cursorPosition
+                val updated = current.substring(0, pos) + text + current.substring(pos)
+                editorMgr.updateActiveTabContent(updated)
+                tab.cursorPosition = pos + text.length
+            }
+        }
+    }
+
+    DroidCodeTheme(themeMode = settingsState.themeMode) {
+        Scaffold(
+            topBar = {
+                // Top App Bar Shell
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(1.dp, MaterialTheme.colorScheme.outline)
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "<D/> DroidCode",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable {
+                                    if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
+                                }
+                                .padding(end = 12.dp)
+                        )
+
+                        if (isWorkspaceOpen && workspaceMgr.currentProject != null) {
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceVariant,
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = workspaceMgr.currentProject.name,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    Row {
+                        IconButton(
+                            onClick = { showCommandPalette = true },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("top_bar_command_palette_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Command Palette",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        if (isWorkspaceOpen) {
+                            IconButton(
+                                onClick = { showExplorer = !showExplorer },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Folder,
+                                    contentDescription = "Toggle Explorer",
+                                    tint = if (showExplorer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { showBottomPanel = !showBottomPanel },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Terminal,
+                                    contentDescription = "Toggle Terminal",
+                                    tint = if (showBottomPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    workspaceMgr.closeWorkspace()
+                                    editorMgr.closeAllTabs()
+                                    isWorkspaceOpen = false
+                                    currentView = "HOME"
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Workspace",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { currentView = "SETTINGS" },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("top_bar_settings_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                when (currentView) {
+                    "HOME" -> {
+                        HomeView(
+                            onOpenWorkspace = { path, type ->
+                                workspaceMgr.openWorkspace(context, File(path), type)
+                                isWorkspaceOpen = true
+                                currentView = "IDE"
+                            },
+                            onOpenSettings = { currentView = "SETTINGS" }
+                        )
+                    }
+
+                    "SETTINGS" -> {
+                        SettingsView(
+                            onBack = {
+                                if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
+                            },
+                            onSettingsChanged = {
+                                settingsState = settingsMgr.settings
+                            }
+                        )
+                    }
+
+                    "IDE" -> {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Main Editor & Explorer Workstation Area
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            ) {
+                                if (showExplorer) {
+                                    ExplorerPanel(
+                                        onOpenFile = { file: File ->
+                                            try { editorMgr.openFile(file) } catch (e: Exception) {}
+                                        },
+                                        modifier = Modifier.width(220.dp)
+                                    )
+                                }
+
+                                EditorView(
+                                    settings = settingsState,
+                                    onSaveRequested = {},
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            // Developer Quick Key Bar
+                            if (settingsState.isQuickKeyBarEnabled) {
+                                DeveloperQuickKeyBar(
+                                    density = settingsState.quickKeyBarDensity,
+                                    ctrlActive = ctrlActive,
+                                    shiftActive = shiftActive,
+                                    altActive = altActive,
+                                    onToggleCtrl = { ctrlActive = !ctrlActive },
+                                    onToggleShift = { shiftActive = !shiftActive },
+                                    onToggleAlt = { altActive = !altActive },
+                                    onInsertText = insertText,
+                                    onActionKey = triggerActionKey
+                                )
+                            }
+
+                            // Bottom Panel (Git / Terminal / Database / Problems)
+                            if (showBottomPanel) {
+                                BottomPanel()
+                            }
+                        }
+                    }
+                }
+
+                // Command Palette Modal Dialog
+                if (showCommandPalette) {
+                    CommandPaletteDialog(
+                        onDismiss = { showCommandPalette = false },
+                        onExecuteCommand = { cmd ->
+                            cmd.execute()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
