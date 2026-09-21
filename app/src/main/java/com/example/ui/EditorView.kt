@@ -79,9 +79,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -653,6 +655,7 @@ private fun CodeCanvas(
     val verticalScroll = rememberScrollState()
     val horizontalScroll = rememberScrollState()
     val isDark = isSystemInDarkTheme()
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Find / Replace Bar Overlay
@@ -670,15 +673,34 @@ private fun CodeCanvas(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        OutlinedTextField(
-                            value = tab.findQuery,
-                            onValueChange = { tab.findQuery = it },
-                            placeholder = { Text("Find in code...", fontSize = 12.sp) },
-                            singleLine = true,
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(42.dp)
-                        )
+                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (tab.findQuery.isEmpty()) {
+                                Text(
+                                    text = "Find in code...",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                            BasicTextField(
+                                value = tab.findQuery,
+                                onValueChange = { tab.findQuery = it },
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
                         IconButton(
                             onClick = {
@@ -717,15 +739,34 @@ private fun CodeCanvas(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            OutlinedTextField(
-                                value = tab.replaceQuery,
-                                onValueChange = { tab.replaceQuery = it },
-                                placeholder = { Text("Replace with...", fontSize = 12.sp) },
-                                singleLine = true,
+                            Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(42.dp)
-                            )
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (tab.replaceQuery.isEmpty()) {
+                                    Text(
+                                        text = "Replace with...",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                                BasicTextField(
+                                    value = tab.replaceQuery,
+                                    onValueChange = { tab.replaceQuery = it },
+                                    singleLine = true,
+                                    textStyle = TextStyle(
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontFamily = FontFamily.Monospace
+                                    ),
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
 
                             Button(
                                 onClick = {
@@ -765,6 +806,9 @@ private fun CodeCanvas(
         ) {
             // Line Numbers Gutter
             if (settings.isLineNumbersEnabled) {
+                val density = LocalDensity.current
+                val layout = textLayoutResult
+
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -774,26 +818,68 @@ private fun CodeCanvas(
                         .padding(vertical = 8.dp, horizontal = 2.dp),
                     horizontalAlignment = Alignment.End
                 ) {
-                    for (i in 1..lineCount) {
-                        val isActiveLine = (i == tab.line)
-                        val bgColor = if (isActiveLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent
-                        val textColor = if (isActiveLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    if (layout != null && layout.lineCount > 0) {
+                        val fullText = textFieldValue.text
+                        var charOffset = 0
+                        for (i in 0 until lines.size) {
+                            val lineStr = lines[i]
+                            val startOffset = charOffset.coerceAtMost(fullText.length)
+                            val endOffset = (charOffset + lineStr.length).coerceAtMost(fullText.length)
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(bgColor, RoundedCornerShape(3.dp))
-                                .padding(horizontal = 4.dp),
-                            contentAlignment = Alignment.CenterEnd
-                        ) {
-                            Text(
-                                text = i.toString(),
-                                fontSize = settings.fontSizeSp.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
-                                color = textColor,
-                                lineHeight = (settings.fontSizeSp * 1.4).sp
-                            )
+                            val startVisualLine = layout.getLineForOffset(startOffset)
+                            val endVisualLine = layout.getLineForOffset(endOffset)
+
+                            val topPx = layout.getLineTop(startVisualLine)
+                            val bottomPx = layout.getLineBottom(endVisualLine)
+                            val lineDp = with(density) { (bottomPx - topPx).toDp() }
+
+                            val lineNumber = i + 1
+                            val isActiveLine = (lineNumber == tab.line)
+                            val bgColor = if (isActiveLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent
+                            val textColor = if (isActiveLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(if (lineDp > 0.dp) lineDp else (settings.fontSizeSp * 1.4).dp)
+                                    .background(bgColor, RoundedCornerShape(3.dp))
+                                    .padding(horizontal = 4.dp),
+                                contentAlignment = Alignment.TopEnd
+                            ) {
+                                Text(
+                                    text = lineNumber.toString(),
+                                    fontSize = settings.fontSizeSp.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
+                                    color = textColor,
+                                    lineHeight = (settings.fontSizeSp * 1.4).sp
+                                )
+                            }
+
+                            charOffset += lineStr.length + 1
+                        }
+                    } else {
+                        for (i in 1..lineCount) {
+                            val isActiveLine = (i == tab.line)
+                            val bgColor = if (isActiveLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent
+                            val textColor = if (isActiveLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(bgColor, RoundedCornerShape(3.dp))
+                                    .padding(horizontal = 4.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Text(
+                                    text = i.toString(),
+                                    fontSize = settings.fontSizeSp.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
+                                    color = textColor,
+                                    lineHeight = (settings.fontSizeSp * 1.4).sp
+                                )
+                            }
                         }
                     }
                 }
@@ -851,6 +937,7 @@ private fun CodeCanvas(
                             onCursorChange(newValue.selection.start)
                         }
                     },
+                    onTextLayout = { textLayoutResult = it },
                     textStyle = TextStyle(
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = settings.fontSizeSp.sp,

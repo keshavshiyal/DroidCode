@@ -27,7 +27,7 @@ import com.example.core.Command
 import com.example.core.CommandRegistry
 
 @Composable
-fun EditorContextMenuDialog(
+fun ProjectMenubarDialog(
     onDismiss: () -> Unit,
     onExecuteCommand: (Command) -> Unit
 ) {
@@ -36,35 +36,54 @@ fun EditorContextMenuDialog(
 
     val registry = remember { CommandRegistry.getInstance() }
 
-    // Categories in explicit IDE order requested
-    val ideCategories = listOf(
-        "Editing",
-        "Navigation",
-        "Code",
-        "Editor",
+    val projectCategories = listOf(
         "File",
-        "Developer Tools"
+        "Workspace",
+        "View",
+        "Build & Run",
+        "Git VCS",
+        "Preferences"
     )
 
-    // Gather all commands from registry grouped by category
     val commandsByCategory = remember(searchQuery, selectedCategoryFilter) {
         val results = mutableMapOf<String, List<Command>>()
         val query = searchQuery.trim().lowercase()
 
-        for (cat in ideCategories) {
-            val cmds = registry.getCommandsByCategory(cat)
-            val filtered = cmds.filter { cmd ->
+        val allCmds = registry.allCommands
+        for (cat in projectCategories) {
+            val filtered = allCmds.filter { cmd ->
+                val matchesCategory = cmd.category.contains(cat, ignoreCase = true) ||
+                        (cat == "File" && cmd.category.equals("File", ignoreCase = true)) ||
+                        (cat == "Preferences" && (cmd.category.equals("Preferences", ignoreCase = true) || cmd.category.equals("Settings", ignoreCase = true)))
+
+                val filterPass = selectedCategoryFilter == "ALL" ||
+                        selectedCategoryFilter.equals(cat, ignoreCase = true) ||
+                        cmd.category.equals(selectedCategoryFilter, ignoreCase = true)
+
                 val matchesQuery = query.isEmpty() ||
                         cmd.title.lowercase().contains(query) ||
                         cmd.id.lowercase().contains(query) ||
                         (cmd.shortcut != null && cmd.shortcut.lowercase().contains(query))
-                val matchesCategory = selectedCategoryFilter == "ALL" || selectedCategoryFilter.equals(cat, ignoreCase = true)
-                matchesQuery && matchesCategory
+
+                matchesCategory && filterPass && matchesQuery
             }
             if (filtered.isNotEmpty()) {
                 results[cat] = filtered
             }
         }
+        
+        // Also capture any other uncategorized project commands if filter is ALL
+        if (selectedCategoryFilter == "ALL") {
+            val categorizedIds = results.values.flatten().map { it.id }.toSet()
+            val remaining = allCmds.filter { cmd ->
+                !categorizedIds.contains(cmd.id) &&
+                        (query.isEmpty() || cmd.title.lowercase().contains(query) || cmd.id.lowercase().contains(query))
+            }
+            if (remaining.isNotEmpty()) {
+                results["General & Actions"] = remaining
+            }
+        }
+
         results
     }
 
@@ -90,14 +109,14 @@ fun EditorContextMenuDialog(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.MenuBook,
+                            imageVector = Icons.Default.Menu,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Editor Context Menu",
+                            text = "Project Menubar",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -121,7 +140,7 @@ fun EditorContextMenuDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search editor actions...", fontSize = 13.sp) },
+                    placeholder = { Text("Search project commands...", fontSize = 13.sp) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -143,12 +162,12 @@ fun EditorContextMenuDialog(
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("editor_context_menu_search_input")
+                        .testTag("project_menubar_search_input")
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Category Quick Filter Chips
+                // Category Quick Filter Chips with horizontal scrolling
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -156,13 +175,12 @@ fun EditorContextMenuDialog(
                         .padding(bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("ALL", "Editing", "Navigation", "Code", "Editor", "File", "Dev").forEach { filterLabel ->
-                        val targetCat = if (filterLabel == "Dev") "Developer Tools" else filterLabel
-                        val isSelected = (selectedCategoryFilter.equals(targetCat, ignoreCase = true))
+                    listOf("ALL", "File", "Workspace", "View", "Build & Run", "Git VCS", "Preferences").forEach { filterLabel ->
+                        val isSelected = (selectedCategoryFilter.equals(filterLabel, ignoreCase = true))
 
                         FilterChip(
                             selected = isSelected,
-                            onClick = { selectedCategoryFilter = targetCat },
+                            onClick = { selectedCategoryFilter = filterLabel },
                             label = { Text(filterLabel, fontSize = 11.sp) },
                             modifier = Modifier.height(28.dp)
                         )
@@ -182,7 +200,7 @@ fun EditorContextMenuDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No matching editor actions found.",
+                            text = "No matching project commands found.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp
                         )
@@ -207,7 +225,7 @@ fun EditorContextMenuDialog(
                             }
 
                             items(commandList) { command ->
-                                EditorContextMenuItem(
+                                ProjectMenubarItem(
                                     command = command,
                                     onClick = {
                                         if (command.isEnabled) {
@@ -233,7 +251,7 @@ fun EditorContextMenuDialog(
 }
 
 @Composable
-private fun EditorContextMenuItem(
+private fun ProjectMenubarItem(
     command: Command,
     onClick: () -> Unit
 ) {
@@ -244,47 +262,19 @@ private fun EditorContextMenuItem(
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
     }
 
-    val icon = when (command.category) {
-        "Editing" -> when {
-            command.title.contains("Cut", true) -> Icons.Default.ContentCut
-            command.title.contains("Copy", true) -> Icons.Default.ContentCopy
-            command.title.contains("Paste", true) -> Icons.Default.ContentPaste
-            command.title.contains("Undo", true) -> Icons.Default.Undo
-            command.title.contains("Redo", true) -> Icons.Default.Redo
-            command.title.contains("Select", true) -> Icons.Default.SelectAll
-            else -> Icons.Default.Edit
-        }
-        "Navigation" -> when {
-            command.title.contains("Find", true) -> Icons.Default.Search
-            command.title.contains("Line", true) -> Icons.Default.FormatListNumbered
-            else -> Icons.Default.Navigation
-        }
-        "Code" -> when {
-            command.title.contains("Format", true) -> Icons.Default.AutoFixHigh
-            command.title.contains("Comment", true) -> Icons.Default.Comment
-            command.title.contains("Fold", true) -> Icons.Default.UnfoldMore
-            else -> Icons.Default.Code
-        }
-        "Editor" -> when {
-            command.title.contains("Wrap", true) -> Icons.Default.WrapText
-            command.title.contains("Language", true) -> Icons.Default.Language
-            command.title.contains("Palette", true) -> Icons.Default.Palette
-            else -> Icons.Default.Settings
-        }
-        "File" -> when {
-            command.title.contains("Save", true) -> Icons.Default.Save
-            command.title.contains("Close", true) -> Icons.Default.Close
-            command.title.contains("Revert", true) -> Icons.Default.Refresh
-            else -> Icons.Default.InsertDriveFile
-        }
-        "Developer Tools" -> when {
-            command.title.contains("Run", true) -> Icons.Default.PlayArrow
-            command.title.contains("Debug", true) -> Icons.Default.BugReport
-            command.title.contains("Terminal", true) -> Icons.Default.Terminal
-            command.title.contains("Git", true) -> Icons.Default.AccountTree
-            else -> Icons.Default.Build
-        }
-        else -> Icons.Default.TouchApp
+    val icon = when {
+        command.title.contains("Save", true) -> Icons.Default.Save
+        command.title.contains("Workspace", true) -> Icons.Default.Workspaces
+        command.title.contains("Folder", true) || command.title.contains("Explorer", true) -> Icons.Default.Folder
+        command.title.contains("Terminal", true) -> Icons.Default.Terminal
+        command.title.contains("Database", true) -> Icons.Default.Storage
+        command.title.contains("Palette", true) -> Icons.Default.Search
+        command.title.contains("Run", true) -> Icons.Default.PlayArrow
+        command.title.contains("Build", true) -> Icons.Default.Build
+        command.title.contains("Git", true) -> Icons.Default.AccountTree
+        command.title.contains("Settings", true) || command.title.contains("Preferences", true) -> Icons.Default.Settings
+        command.title.contains("About", true) -> Icons.Default.Info
+        else -> Icons.Default.Widgets
     }
 
     Row(
