@@ -13,16 +13,30 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SettingsSystemDaydream
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -42,12 +57,12 @@ import com.example.BuildConfig
 import com.example.settings.AppSettings
 import com.example.settings.SettingsManager
 
-enum class SettingsCategory(val label: String) {
-    GENERAL("General"),
-    APPEARANCE("Appearance"),
-    EDITOR("Editor"),
-    QUICK_KEY_BAR("Quick Key Bar"),
-    ABOUT("About DroidCode")
+enum class SettingsCategory(val label: String, val icon: ImageVector) {
+    APPEARANCE("Appearance", Icons.Default.Palette),
+    EDITOR("Editor", Icons.Default.Code),
+    QUICK_KEY_BAR("Quick Key Bar", Icons.Default.Keyboard),
+    GENERAL("General", Icons.Default.Tune),
+    ABOUT("About DroidCode", Icons.Default.Info)
 }
 
 @Composable
@@ -66,14 +81,14 @@ fun SettingsView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
+        // Top Bar Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(52.dp)
                 .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outline)
-                .padding(horizontal = 8.dp),
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
@@ -87,57 +102,78 @@ fun SettingsView(
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Settings",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column {
+                Text(
+                    text = "Preferences & Settings",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Configure workstation theme, editor, and developer shortcuts",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        // Settings Body Split
+        // Settings Body Split View
         Row(modifier = Modifier.fillMaxSize()) {
-            // Category Sidebar
+            // Left Category Navigation Sidebar
             Column(
                 modifier = Modifier
-                    .width(160.dp)
+                    .width(180.dp)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outline)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    .padding(vertical = 8.dp)
             ) {
                 SettingsCategory.values().forEach { category ->
                     val isSelected = category == selectedCategory
-                    val bg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface
+                    val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surface
+                    val contentColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(bg)
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .background(bg, RoundedCornerShape(8.dp))
                             .clickable { selectedCategory = category }
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            imageVector = category.icon,
+                            contentDescription = null,
+                            tint = contentColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = category.label,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            color = contentColor
                         )
                     }
                 }
             }
 
-            // Category Details Content
-            Box(
+            // Right Category Content Details Pane
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                when (selectedCategory) {
-                    SettingsCategory.APPEARANCE -> AppearanceSettingsSection(settings, settingsMgr, context, onSettingsChanged)
-                    SettingsCategory.EDITOR -> EditorSettingsSection(settings, settingsMgr, context, onSettingsChanged)
-                    SettingsCategory.QUICK_KEY_BAR -> KeyBarSettingsSection(settings, settingsMgr, context, onSettingsChanged)
-                    SettingsCategory.ABOUT -> AboutSection()
-                    else -> GeneralSettingsSection()
+                item {
+                    when (selectedCategory) {
+                        SettingsCategory.APPEARANCE -> AppearanceSettingsSection(settings, settingsMgr, context, onSettingsChanged)
+                        SettingsCategory.EDITOR -> EditorSettingsSection(settings, settingsMgr, context, onSettingsChanged)
+                        SettingsCategory.QUICK_KEY_BAR -> KeyBarSettingsSection(settings, settingsMgr, context, onSettingsChanged)
+                        SettingsCategory.ABOUT -> AboutSection()
+                        else -> GeneralSettingsSection()
+                    }
                 }
             }
         }
@@ -153,40 +189,85 @@ private fun AppearanceSettingsSection(
 ) {
     Column {
         Text(
-            text = "Color Theme",
-            fontSize = 16.sp,
+            text = "Appearance & Theme",
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-
-        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Select your preferred color scheme for the DroidCode workstation",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
+        )
 
         AppSettings.ThemeMode.values().forEach { mode ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            val isSelected = settings.themeMode == mode
+            val modeIcon = when (mode) {
+                AppSettings.ThemeMode.DARK -> Icons.Default.DarkMode
+                AppSettings.ThemeMode.LIGHT -> Icons.Default.LightMode
+                AppSettings.ThemeMode.SYSTEM -> Icons.Default.SettingsSystemDaydream
+            }
+            val modeDesc = when (mode) {
+                AppSettings.ThemeMode.DARK -> "Deep neutral slate dark canvas with high contrast code syntax"
+                AppSettings.ThemeMode.LIGHT -> "Soft light canvas ideal for bright environments"
+                AppSettings.ThemeMode.SYSTEM -> "Automatically synchronize theme with Android system preferences"
+            }
+
+            OutlinedCard(
+                onClick = {
+                    settings.themeMode = mode
+                    settingsMgr.saveSettings(context)
+                    onSettingsChanged()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        settings.themeMode = mode
-                        settingsMgr.saveSettings(context)
-                        onSettingsChanged()
-                    }
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = if (isSelected) 2.dp else 1.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                )
             ) {
-                RadioButton(
-                    selected = settings.themeMode == mode,
-                    onClick = {
-                        settings.themeMode = mode
-                        settingsMgr.saveSettings(context)
-                        onSettingsChanged()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = {
+                            settings.themeMode = mode
+                            settingsMgr.saveSettings(context)
+                            onSettingsChanged()
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Icon(
+                        imageVector = modeIcon,
+                        contentDescription = null,
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = mode.label,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = modeDesc,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = mode.label,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                }
             }
         }
     }
@@ -205,69 +286,167 @@ private fun EditorSettingsSection(
 
     Column {
         Text(
-            text = "Editor Font Size (${fontSize.toInt()} sp)",
-            fontSize = 15.sp,
+            text = "Editor Preferences",
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-
-        Slider(
-            value = fontSize,
-            onValueChange = {
-                fontSize = it
-                settings.fontSizeSp = it.toInt()
-                settingsMgr.saveSettings(context)
-                onSettingsChanged()
-            },
-            valueRange = 10f..24f,
-            steps = 14,
-            modifier = Modifier.fillMaxWidth()
+        Text(
+            text = "Customize code font size, line numbers, and line wrapping",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
+        // Font Size Card
+        OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Text(
-                text = "Show Line Numbers",
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Switch(
-                checked = lineNumbers,
-                onCheckedChange = {
-                    lineNumbers = it
-                    settings.isLineNumbersEnabled = it
-                    settingsMgr.saveSettings(context)
-                    onSettingsChanged()
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Font Size",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${fontSize.toInt()} sp",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-            )
+
+                Slider(
+                    value = fontSize,
+                    onValueChange = {
+                        fontSize = it
+                        settings.fontSizeSp = it.toInt()
+                        settingsMgr.saveSettings(context)
+                        onSettingsChanged()
+                    },
+                    valueRange = 10f..24f,
+                    steps = 14,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Code Preview Box
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    Row(modifier = Modifier.padding(12.dp)) {
+                        if (lineNumbers) {
+                            Text(
+                                text = "1\n2\n3",
+                                fontSize = fontSize.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                lineHeight = (fontSize * 1.4).sp,
+                                modifier = Modifier.padding(end = 12.dp)
+                            )
+                        }
+                        Text(
+                            text = "fun main() {\n    println(\"Hello DroidCode!\")\n}",
+                            fontSize = fontSize.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = (fontSize * 1.4).sp
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
+        // Line Numbers Switch
+        OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Text(
-                text = "Word Wrap",
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Switch(
-                checked = wordWrap,
-                onCheckedChange = {
-                    wordWrap = it
-                    settings.isWordWrap = it
-                    settingsMgr.saveSettings(context)
-                    onSettingsChanged()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Show Line Numbers",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Display vertical gutter line numbering beside editor lines",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-            )
+                Switch(
+                    checked = lineNumbers,
+                    onCheckedChange = {
+                        lineNumbers = it
+                        settings.isLineNumbersEnabled = it
+                        settingsMgr.saveSettings(context)
+                        onSettingsChanged()
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Word Wrap Switch
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Word Wrap",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Wrap long code lines within editor viewport instead of horizontal scrolling",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = wordWrap,
+                    onCheckedChange = {
+                        wordWrap = it
+                        settings.isWordWrap = it
+                        settingsMgr.saveSettings(context)
+                        onSettingsChanged()
+                    }
+                )
+            }
         }
     }
 }
@@ -282,65 +461,113 @@ private fun KeyBarSettingsSection(
     var keyBarEnable by remember { mutableStateOf(settings.isQuickKeyBarEnabled) }
 
     Column {
-        Row(
+        Text(
+            text = "Developer Quick Key Bar",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Configure the touch key bar displayed above the soft keyboard",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
+        )
+
+        // Enable Toggle
+        OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Text(
-                text = "Enable Quick Key Bar",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Switch(
-                checked = keyBarEnable,
-                onCheckedChange = {
-                    keyBarEnable = it
-                    settings.isQuickKeyBarEnabled = it
-                    settingsMgr.saveSettings(context)
-                    onSettingsChanged()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Enable Quick Key Bar",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Quick access bar for Ctrl, Alt, brackets, symbols and navigation arrows",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-            )
+                Switch(
+                    checked = keyBarEnable,
+                    onCheckedChange = {
+                        keyBarEnable = it
+                        settings.isQuickKeyBarEnabled = it
+                        settingsMgr.saveSettings(context)
+                        onSettingsChanged()
+                    }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Density Height Selection
         Text(
-            text = "Bar Density / Height",
-            fontSize = 14.sp,
+            text = "Bar Height & Density",
+            fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-
         AppSettings.KeyBarDensity.values().forEach { density ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            val isSelected = settings.quickKeyBarDensity == density
+
+            OutlinedCard(
+                onClick = {
+                    settings.quickKeyBarDensity = density
+                    settingsMgr.saveSettings(context)
+                    onSettingsChanged()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        settings.quickKeyBarDensity = density
-                        settingsMgr.saveSettings(context)
-                        onSettingsChanged()
-                    }
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = if (isSelected) 2.dp else 1.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                )
             ) {
-                RadioButton(
-                    selected = settings.quickKeyBarDensity == density,
-                    onClick = {
-                        settings.quickKeyBarDensity = density
-                        settingsMgr.saveSettings(context)
-                        onSettingsChanged()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = {
+                            settings.quickKeyBarDensity = density
+                            settingsMgr.saveSettings(context)
+                            onSettingsChanged()
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${density.name.lowercase().capitalize()} (${density.heightDp} dp)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "${density.name} (${density.heightDp} dp)",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                }
             }
         }
     }
@@ -350,17 +577,38 @@ private fun KeyBarSettingsSection(
 private fun GeneralSettingsSection() {
     Column {
         Text(
-            text = "General Environment",
-            fontSize = 16.sp,
+            text = "General System Information",
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "Offline-first native storage and SAF permissions active.",
+            text = "Offline-first native workspace engine running on Android",
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
         )
+
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Storage Access Framework (SAF)",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Direct file system sync enabled for device internal storage and cloud locations.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
     }
 }
 
@@ -368,44 +616,60 @@ private fun GeneralSettingsSection() {
 private fun AboutSection() {
     Column {
         Text(
-            text = "<D/> DroidCode Workstation",
+            text = "About DroidCode Workstation",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-            fontSize = 13.sp,
-            fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurface
         )
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "Application ID: ${BuildConfig.APPLICATION_ID}",
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp)
-        )
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "<D/> DroidCode Workstation",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.primary
+                )
 
-        Text(
-            text = "Build Type: ${BuildConfig.BUILD_TYPE}",
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp)
-        )
+                Spacer(modifier = Modifier.height(12.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-        Text(
-            text = "Open Source Native Android IDE built with Java & Jetpack Compose.",
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+                Text(
+                    text = "Application ID: ${BuildConfig.APPLICATION_ID}",
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+
+                Text(
+                    text = "Build Type: ${BuildConfig.BUILD_TYPE}",
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Professional open-source native Android IDE workstation powered by Kotlin, Java, and Jetpack Compose.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }

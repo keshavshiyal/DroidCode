@@ -60,6 +60,17 @@ public class SettingsManager {
         return currentSettings;
     }
 
+    public AppSettings getSettingsCopy() {
+        return new AppSettings(
+                currentSettings.getThemeMode(),
+                currentSettings.getFontSizeSp(),
+                currentSettings.isWordWrap(),
+                currentSettings.isQuickKeyBarEnabled(),
+                currentSettings.getQuickKeyBarDensity(),
+                currentSettings.isLineNumbersEnabled()
+        );
+    }
+
     public void saveSettings(Context context) {
         SharedPreferences prefs = context.getApplicationContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         prefs.edit()

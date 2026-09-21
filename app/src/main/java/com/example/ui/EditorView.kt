@@ -348,6 +348,7 @@ private fun CodeCanvas(
     val lines = textFieldValue.text.split("\n")
     val lineCount = lines.size
     val verticalScroll = rememberScrollState()
+    val horizontalScroll = rememberScrollState()
     val isDark = isSystemInDarkTheme()
 
     Row(
@@ -383,6 +384,7 @@ private fun CodeCanvas(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(verticalScroll)
+                .then(if (!settings.isWordWrap) Modifier.horizontalScroll(horizontalScroll) else Modifier)
                 .padding(8.dp)
         ) {
             BasicTextField(
@@ -440,32 +442,43 @@ private fun CodeCanvas(
                     .fillMaxSize()
                     .onPreviewKeyEvent { keyEvent ->
                         if (keyEvent.type == KeyEventType.KeyDown) {
-                            val isCtrl = ctrlActive || keyEvent.isCtrlPressed
-                            if (isCtrl) {
-                                when (keyEvent.key) {
-                                    Key.S -> {
-                                        try { editorMgr.saveActiveTab(); onSaveRequested() } catch (e: Exception) {}
-                                        onResetModifiers()
-                                        true
+                            if (keyEvent.key == Key.Tab) {
+                                val currentText = textFieldValue.text
+                                val sel = textFieldValue.selection
+                                val newText = currentText.substring(0, sel.start) + " " + currentText.substring(sel.end)
+                                val newPos = sel.start + 1
+                                textFieldValue = TextFieldValue(newText, TextRange(newPos))
+                                onContentChange(newText)
+                                onCursorChange(newPos)
+                                true
+                            } else {
+                                val isCtrl = ctrlActive || keyEvent.isCtrlPressed
+                                if (isCtrl) {
+                                    when (keyEvent.key) {
+                                        Key.S -> {
+                                            try { editorMgr.saveActiveTab(); onSaveRequested() } catch (e: Exception) {}
+                                            onResetModifiers()
+                                            true
+                                        }
+                                        Key.Z -> {
+                                            editorMgr.undoActiveTab()
+                                            onResetModifiers()
+                                            true
+                                        }
+                                        Key.Y -> {
+                                            editorMgr.redoActiveTab()
+                                            onResetModifiers()
+                                            true
+                                        }
+                                        Key.P -> {
+                                            onOpenCommandPalette()
+                                            onResetModifiers()
+                                            true
+                                        }
+                                        else -> false
                                     }
-                                    Key.Z -> {
-                                        editorMgr.undoActiveTab()
-                                        onResetModifiers()
-                                        true
-                                    }
-                                    Key.Y -> {
-                                        editorMgr.redoActiveTab()
-                                        onResetModifiers()
-                                        true
-                                    }
-                                    Key.P -> {
-                                        onOpenCommandPalette()
-                                        onResetModifiers()
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            } else false
+                                } else false
+                            }
                         } else false
                     }
                     .testTag("code_editor_text_input")
@@ -475,30 +488,10 @@ private fun CodeCanvas(
 }
 
 @Composable
-private fun getEditorFileIcon(ext: String) = when (ext.lowercase()) {
-    "java" -> Icons.Default.Coffee
-    "kt", "kts" -> Icons.Default.Code
-    "py" -> Icons.Default.Terminal
-    "js", "ts", "jsx", "tsx" -> Icons.Default.DataObject
-    "html", "htm", "css" -> Icons.Default.Language
-    "json", "xml", "toml", "yaml", "yml", "gradle" -> Icons.Default.Settings
-    "md", "txt" -> Icons.Default.Article
-    "png", "jpg", "jpeg", "gif", "svg" -> Icons.Default.Image
-    else -> Icons.Default.Description
-}
+private fun getEditorFileIcon(ext: String) = FileIconUtils.getFileIcon(ext)
 
 @Composable
-private fun getEditorFileIconColor(ext: String) = when (ext.lowercase()) {
-    "java" -> Color(0xFFD84315) // Java Coffee Brown / Warm Amber
-    "kt", "kts" -> MaterialTheme.colorScheme.primary
-    "py" -> Color(0xFFFFC107) // Python Yellow
-    "js", "ts", "jsx", "tsx" -> Color(0xFF4CAF50) // JS Green
-    "html", "htm", "css" -> Color(0xFFE91E63) // HTML/CSS Pink
-    "json", "xml", "toml", "yaml", "yml", "gradle" -> MaterialTheme.colorScheme.tertiary
-    "md", "txt" -> MaterialTheme.colorScheme.outline
-    "png", "jpg", "jpeg", "gif", "svg" -> Color(0xFF9C27B0) // Image Purple
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
-}
+private fun getEditorFileIconColor(ext: String) = FileIconUtils.getFileIconColor(ext)
 
 class CodeSyntaxVisualTransformation(
     private val languageId: String,

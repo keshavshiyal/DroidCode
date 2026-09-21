@@ -333,7 +333,7 @@ fun MainShell() {
                                     if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
                                 },
                                 onSettingsChanged = {
-                                    settingsState = settingsMgr.settings
+                                    settingsState = settingsMgr.getSettingsCopy()
                                 }
                             )
                         }

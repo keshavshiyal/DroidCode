@@ -68,7 +68,7 @@ fun DeveloperQuickKeyBar(
         // Action Keys
         QuickActionButton("↶", { onActionKey("UNDO") }, "quick_key_undo")
         QuickActionButton("↷", { onActionKey("REDO") }, "quick_key_redo")
-        QuickActionButton("Tab", { onInsertText("\t") }, "quick_key_tab")
+        QuickActionButton("Tab", { onInsertText(" ") }, "quick_key_tab")
         QuickActionButton("Esc", { onActionKey("ESC") }, "quick_key_esc")
 
         // Arrow Keys

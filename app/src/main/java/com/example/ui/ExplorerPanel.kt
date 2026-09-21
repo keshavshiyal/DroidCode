@@ -494,30 +494,10 @@ private fun FileTreeItem(
 }
 
 @Composable
-private fun getFileIcon(ext: String) = when (ext.lowercase()) {
-    "java" -> Icons.Default.Coffee
-    "kt", "kts" -> Icons.Default.Code
-    "py" -> Icons.Default.Terminal
-    "js", "ts", "jsx", "tsx" -> Icons.Default.DataObject
-    "html", "htm", "css" -> Icons.Default.Language
-    "json", "xml", "toml", "yaml", "yml", "gradle" -> Icons.Default.Settings
-    "md", "txt" -> Icons.Default.Article
-    "png", "jpg", "jpeg", "gif", "svg" -> Icons.Default.Image
-    else -> Icons.Default.Description
-}
+private fun getFileIcon(ext: String) = FileIconUtils.getFileIcon(ext)
 
 @Composable
-private fun getFileIconColor(ext: String) = when (ext.lowercase()) {
-    "java" -> Color(0xFFD84315) // Java Coffee Brown / Warm Amber
-    "kt", "kts" -> MaterialTheme.colorScheme.primary
-    "py" -> Color(0xFFFFC107) // Python Yellow
-    "js", "ts", "jsx", "tsx" -> Color(0xFF4CAF50) // JS Green
-    "html", "htm", "css" -> Color(0xFFE91E63) // HTML/CSS Pink
-    "json", "xml", "toml", "yaml", "yml", "gradle" -> MaterialTheme.colorScheme.tertiary
-    "md", "txt" -> MaterialTheme.colorScheme.outline
-    "png", "jpg", "jpeg", "gif", "svg" -> Color(0xFF9C27B0) // Image Purple
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
-}
+private fun getFileIconColor(ext: String) = FileIconUtils.getFileIconColor(ext)
 
 @Composable
 private fun InputDialog(
