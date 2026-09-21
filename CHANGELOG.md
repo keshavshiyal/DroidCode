@@ -11,6 +11,8 @@ All notable changes to DroidCode will be documented in this file.
   - Cleaned up CI workflow (`.github/workflows/build.yml`) by removing fake Google Services JSON generation and adding automated unit test validation prior to debug APK packaging.
   - Unified project versioning to `0.1.0-alpha01` across `app/build.gradle.kts`, `DROIDCODE_PROJECT_STATUS.md`, and changelogs.
   - Expanded unit test coverage in `DroidCodeUnitTest.kt` for `CommandRegistry`, `EventBus`, `EditorTab`, `UndoManager`, `LocalFileSystem`, `ProjectTemplate`, `AppSettings`, and `Project`.
+  - Fixed Robolectric runner SDK configuration in `ExampleRobolectricTest.kt` (`@Config(sdk = [34])`) to resolve `UnsupportedOperationException` in `DefaultSdkProvider` on API 36.
+  - Resolved Material Icon deprecation warnings across `EditorView`, `ExplorerPanel`, `FileIconUtils`, and `SettingsView`.
   - Updated `ARCHITECTURE.md` to formally document the Kotlin/Compose UI and Java/Kotlin domain service architecture.
 
 ### Added

@@ -1,6 +1,8 @@
 package com.example.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -18,7 +20,7 @@ object FileIconUtils {
         "css", "scss", "less" -> Icons.Default.Palette
         "html", "htm" -> Icons.Default.Language
         "bat", "cmd", "sh", "bash", "zsh", "ps1" -> Icons.Default.Terminal
-        "md", "markdown" -> Icons.Default.Article
+        "md", "markdown" -> Icons.AutoMirrored.Filled.Article
         "json", "xml", "yaml", "yml", "toml", "properties", "gradle", "ini", "conf" -> Icons.Default.Settings
         "sql", "db", "sqlite", "sqlite3" -> Icons.Default.Storage
         "c", "cpp", "h", "hpp", "cc", "cs", "php" -> Icons.Default.Code
@@ -28,7 +30,7 @@ object FileIconUtils {
         "png", "jpg", "jpeg", "gif", "svg", "webp", "ico" -> Icons.Default.Image
         "zip", "tar", "gz", "7z", "rar" -> Icons.Default.FolderZip
         "txt", "log" -> Icons.Default.Description
-        else -> Icons.Default.InsertDriveFile
+        else -> Icons.AutoMirrored.Filled.InsertDriveFile
     }
 
     @Composable

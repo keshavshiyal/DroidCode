@@ -66,6 +66,8 @@ import com.example.filesystem.LocalFileSystem
 import com.example.project.WorkspaceManager
 import java.io.File
 
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
@@ -192,7 +194,7 @@ fun ExplorerPanel(
                         .testTag("explorer_new_file_btn")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.NoteAdd,
+                        imageVector = Icons.AutoMirrored.Filled.NoteAdd,
                         contentDescription = "New File",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
@@ -580,7 +582,7 @@ private fun FileTreeItem(
                 if (!node.isFolder) {
                     DropdownMenuItem(
                         text = { Text("Open File", fontSize = 13.sp) },
-                        leadingIcon = { Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(18.dp)) },
                         onClick = {
                             showContextMenu = false
                             onNodeClick(node)
@@ -589,7 +591,7 @@ private fun FileTreeItem(
                 }
                 DropdownMenuItem(
                     text = { Text("New File Here", fontSize = 13.sp) },
-                    leadingIcon = { Icon(Icons.Default.NoteAdd, null, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.NoteAdd, null, modifier = Modifier.size(18.dp)) },
                     onClick = {
                         showContextMenu = false
                         onNewFileRequested(node)

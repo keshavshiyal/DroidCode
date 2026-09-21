@@ -29,11 +29,12 @@ import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -230,7 +231,7 @@ fun EditorView(
                         modifier = Modifier.size(26.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Undo,
+                            imageVector = Icons.AutoMirrored.Filled.Undo,
                             contentDescription = "Undo",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
@@ -242,7 +243,7 @@ fun EditorView(
                         modifier = Modifier.size(26.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Redo,
+                            imageVector = Icons.AutoMirrored.Filled.Redo,
                             contentDescription = "Redo",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
