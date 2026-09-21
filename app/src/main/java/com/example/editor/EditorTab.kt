@@ -6,16 +6,33 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
 
+enum class FileViewerType {
+    TEXT,
+    IMAGE,
+    VIDEO,
+    PDF,
+    UNSUPPORTED
+}
+
 class EditorTab(
     val filePath: String,
     val fileName: String,
     initialContent: String?,
-    languageId: String? = null
+    languageId: String? = null,
+    initialViewerType: FileViewerType = detectViewerType(File(filePath))
 ) {
     val id: String = filePath
 
+    var viewerType: FileViewerType by mutableStateOf(initialViewerType)
+
     var content: String by mutableStateOf(initialContent ?: "")
         private set
+
+    fun forceOpenAsText(rawText: String) {
+        this.content = rawText
+        this.originalContent = rawText
+        this.viewerType = FileViewerType.TEXT
+    }
 
     var originalContent: String = content
         private set
@@ -70,6 +87,45 @@ class EditorTab(
     }
 
     companion object {
+        fun detectViewerType(file: File): FileViewerType {
+            if (!file.exists()) return FileViewerType.UNSUPPORTED
+            val ext = file.extension.lowercase()
+
+            if (ext in listOf("png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico")) {
+                return FileViewerType.IMAGE
+            }
+            if (ext in listOf("mp4", "mkv", "avi", "webm", "mov", "3gp")) {
+                return FileViewerType.VIDEO
+            }
+            if (ext == "pdf") {
+                return FileViewerType.PDF
+            }
+            if (ext in listOf(
+                    "zip", "apk", "exe", "bin", "db", "so", "aab", "class", "pyc", "dex", "tar", "gz",
+                    "7z", "rar", "aar", "jar", "iso", "dmg", "sqlite", "sqlite3", "doc", "docx", "xls",
+                    "xlsx", "ppt", "pptx", "ttf", "otf", "woff", "woff2", "eot", "mp3", "wav", "aac",
+                    "flac", "ogg", "m4a"
+                )
+            ) {
+                return FileViewerType.UNSUPPORTED
+            }
+
+            return try {
+                val bytes = file.inputStream().use { stream ->
+                    val buf = ByteArray(1024)
+                    val read = stream.read(buf, 0, 1024)
+                    if (read <= 0) ByteArray(0) else buf.copyOf(read)
+                }
+                if (bytes.contains(0.toByte())) {
+                    FileViewerType.UNSUPPORTED
+                } else {
+                    FileViewerType.TEXT
+                }
+            } catch (e: Exception) {
+                FileViewerType.UNSUPPORTED
+            }
+        }
+
         fun detectLanguage(name: String?): String {
             if (name == null) return "text"
             val lower = name.lowercase()

@@ -1,5 +1,17 @@
 package com.example.ui
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
+import android.os.ParcelFileDescriptor
+import android.webkit.MimeTypeMap
+import android.widget.MediaController
+import android.widget.Toast
+import android.widget.VideoView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,32 +29,38 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Article
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Coffee
-import androidx.compose.material.icons.filled.DataObject
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,12 +69,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -71,9 +92,16 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.FileProvider
 import com.example.editor.EditorManager
 import com.example.editor.EditorTab
+import com.example.editor.FileViewerType
+import com.example.filesystem.LocalFileSystem
 import com.example.settings.AppSettings
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun EditorView(
@@ -271,23 +299,31 @@ fun EditorView(
                 }
             }
 
-            // Code Canvas
-            CodeCanvas(
-                tab = activeTab,
-                settings = settings,
-                ctrlActive = ctrlActive,
-                shiftActive = shiftActive,
-                altActive = altActive,
-                onResetModifiers = onResetModifiers,
-                onOpenCommandPalette = onOpenCommandPalette,
-                onSaveRequested = onSaveRequested,
-                onContentChange = { newText: String ->
-                    editorMgr.updateActiveTabContent(newText)
-                },
-                onCursorChange = { pos: Int ->
-                    activeTab.updateCursor(pos)
+            // Code Canvas or Media Viewer
+            when (activeTab.viewerType) {
+                FileViewerType.IMAGE -> ImageViewer(file = activeTab.file)
+                FileViewerType.VIDEO -> VideoViewer(file = activeTab.file)
+                FileViewerType.PDF -> PdfViewer(file = activeTab.file)
+                FileViewerType.UNSUPPORTED -> UnsupportedFileViewer(file = activeTab.file)
+                FileViewerType.TEXT -> {
+                    CodeCanvas(
+                        tab = activeTab,
+                        settings = settings,
+                        ctrlActive = ctrlActive,
+                        shiftActive = shiftActive,
+                        altActive = altActive,
+                        onResetModifiers = onResetModifiers,
+                        onOpenCommandPalette = onOpenCommandPalette,
+                        onSaveRequested = onSaveRequested,
+                        onContentChange = { newText: String ->
+                            editorMgr.updateActiveTabContent(newText)
+                        },
+                        onCursorChange = { pos: Int ->
+                            activeTab.updateCursor(pos)
+                        }
+                    )
                 }
-            )
+            }
         } else {
             // Empty State
             Box(
@@ -337,13 +373,22 @@ private fun CodeCanvas(
 ) {
     val editorMgr = remember { EditorManager.getInstance() }
 
-    var textFieldValue by remember(tab.id, tab.content) {
+    var textFieldValue by remember(tab.id) {
         mutableStateOf(
             TextFieldValue(
                 text = tab.content,
-                selection = TextRange(tab.cursorPosition)
+                selection = TextRange(tab.cursorPosition.coerceIn(0, tab.content.length))
             )
         )
+    }
+
+    LaunchedEffect(tab.content) {
+        if (tab.content != textFieldValue.text) {
+            textFieldValue = TextFieldValue(
+                text = tab.content,
+                selection = TextRange(tab.cursorPosition.coerceIn(0, tab.content.length))
+            )
+        }
     }
 
     val lines = textFieldValue.text.split("\n")
@@ -362,20 +407,33 @@ private fun CodeCanvas(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(44.dp)
+                    .width(46.dp)
                     .background(MaterialTheme.colorScheme.surface)
                     .verticalScroll(verticalScroll)
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                    .padding(vertical = 8.dp, horizontal = 2.dp),
                 horizontalAlignment = Alignment.End
             ) {
                 for (i in 1..lineCount) {
-                    Text(
-                        text = i.toString(),
-                        fontSize = settings.fontSizeSp.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        lineHeight = (settings.fontSizeSp * 1.4).sp
-                    )
+                    val isActiveLine = (i == tab.line)
+                    val bgColor = if (isActiveLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent
+                    val textColor = if (isActiveLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(bgColor, RoundedCornerShape(3.dp))
+                            .padding(horizontal = 4.dp),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Text(
+                            text = i.toString(),
+                            fontSize = settings.fontSizeSp.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
+                            color = textColor,
+                            lineHeight = (settings.fontSizeSp * 1.4).sp
+                        )
+                    }
                 }
             }
         }
@@ -506,6 +564,458 @@ private fun getEditorFileIcon(nameOrExt: String) = FileIconUtils.getFileIcon(nam
 
 @Composable
 private fun getEditorFileIconColor(nameOrExt: String) = FileIconUtils.getFileIconColor(nameOrExt)
+
+@Composable
+private fun ImageViewer(file: File) {
+    val context = LocalContext.current
+    var bitmap by remember(file.absolutePath) { mutableStateOf<Bitmap?>(null) }
+    var isLoading by remember(file.absolutePath) { mutableStateOf(true) }
+    var errorMsg by remember(file.absolutePath) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(file.absolutePath) {
+        withContext(Dispatchers.IO) {
+            try {
+                bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                if (bitmap == null) {
+                    errorMsg = "Unable to decode image"
+                }
+            } catch (e: Exception) {
+                errorMsg = e.message
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = file.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (bitmap != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "(${bitmap!!.width} x ${bitmap!!.height} px • ${formatFileSize(file.length())})",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Button(
+                    onClick = { openFileWithSystemApp(context, file) },
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Open with System App", fontSize = 11.sp)
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator()
+            } else if (errorMsg != null || bitmap == null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Failed to load image: ${errorMsg ?: "Unknown error"}",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            } else {
+                Image(
+                    bitmap = bitmap!!.asImageBitmap(),
+                    contentDescription = file.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoViewer(file: File) {
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Movie,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = file.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "(${formatFileSize(file.length())})",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Button(
+                    onClick = { openFileWithSystemApp(context, file) },
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Open with System Player", fontSize = 11.sp)
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        setMediaController(MediaController(ctx).apply { setAnchorView(this@apply) })
+                        setVideoPath(file.absolutePath)
+                        requestFocus()
+                        start()
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+@Composable
+private fun PdfViewer(file: File) {
+    val context = LocalContext.current
+    var pages by remember(file.absolutePath) { mutableStateOf<List<Bitmap>>(emptyList()) }
+    var isLoading by remember(file.absolutePath) { mutableStateOf(true) }
+    var errorMsg by remember(file.absolutePath) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(file.absolutePath) {
+        withContext(Dispatchers.IO) {
+            try {
+                val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                val pdfRenderer = PdfRenderer(pfd)
+                val pageList = mutableListOf<Bitmap>()
+                val pageCount = pdfRenderer.pageCount
+                for (i in 0 until pageCount) {
+                    val page = pdfRenderer.openPage(i)
+                    val width = page.width * 2
+                    val height = page.height * 2
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    pageList.add(bitmap)
+                    page.close()
+                }
+                pdfRenderer.close()
+                pfd.close()
+                pages = pageList
+            } catch (e: Exception) {
+                errorMsg = e.message
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.PictureAsPdf,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = file.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (pages.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "(${pages.size} pages)",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Button(
+                    onClick = { openFileWithSystemApp(context, file) },
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Open in System Reader", fontSize = 11.sp)
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator()
+            } else if (errorMsg != null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Could not render PDF: $errorMsg",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = { openFileWithSystemApp(context, file) }) {
+                        Text("Open with External PDF Viewer")
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    itemsIndexed(pages) { index, pageBitmap ->
+                        Card(
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(8.dp)
+                            ) {
+                                Text(
+                                    text = "Page ${index + 1} of ${pages.size}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 6.dp)
+                                )
+                                Image(
+                                    bitmap = pageBitmap.asImageBitmap(),
+                                    contentDescription = "PDF Page ${index + 1}",
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnsupportedFileViewer(
+    tab: EditorTab,
+    onForceOpenAsText: () -> Unit
+) {
+    val context = LocalContext.current
+    val file = tab.file
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            modifier = Modifier.widthIn(max = 480.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = getEditorFileIcon(file.name),
+                    contentDescription = null,
+                    tint = getEditorFileIconColor(file.name),
+                    modifier = Modifier.size(56.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = file.name,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "File Format: ${if (file.extension.isNotEmpty()) file.extension.uppercase() else "BINARY"} • ${formatFileSize(file.length())}",
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "This file extension cannot be edited directly in text mode. You can open it using an external Android app selection.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = { openFileWithSystemApp(context, file) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Open with System App", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = onForceOpenAsText,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Force Open as Raw Text")
+                }
+            }
+        }
+    }
+}
+
+private fun openFileWithSystemApp(context: Context, file: File) {
+    try {
+        val uri: Uri = try {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        } catch (e: Exception) {
+            Uri.fromFile(file)
+        }
+        val ext = file.extension.lowercase()
+        val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: when (ext) {
+            "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg" -> "image/*"
+            "mp4", "mkv", "webm", "avi", "mov", "3gp" -> "video/*"
+            "pdf" -> "application/pdf"
+            "apk" -> "application/vnd.android.package-archive"
+            "zip", "rar", "7z", "tar", "gz" -> "application/zip"
+            else -> "*/*"
+        }
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val chooser = Intent.createChooser(intent, "Open with...")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+    } catch (e: Exception) {
+        Toast.makeText(context, "No application available to open this file (${e.message})", Toast.LENGTH_LONG).show()
+    }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceIn(0, units.size - 1)
+    return String.format("%.1f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
+}
 
 class CodeSyntaxVisualTransformation(
     private val languageId: String,

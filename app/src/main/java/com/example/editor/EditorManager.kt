@@ -31,8 +31,23 @@ class EditorManager private constructor() {
             }
         }
 
-        val content = fileSystem.readFileToString(file) ?: ""
-        val tab = EditorTab(path, file.name, content)
+        val viewerType = EditorTab.detectViewerType(file)
+        val content = if (viewerType == FileViewerType.TEXT) {
+            try {
+                fileSystem.readFileToString(file) ?: ""
+            } catch (e: Exception) {
+                ""
+            }
+        } else {
+            ""
+        }
+
+        val tab = EditorTab(
+            filePath = path,
+            fileName = file.name,
+            initialContent = content,
+            initialViewerType = viewerType
+        )
         tabs.add(tab)
         activeTabIndex = tabs.size - 1
 
