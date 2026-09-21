@@ -23,10 +23,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -56,7 +58,8 @@ import com.example.project.WorkspaceManager
 @Composable
 fun HomeView(
     onOpenWorkspace: (String, String) -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenGeneralMenu: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
@@ -149,6 +152,17 @@ fun HomeView(
                     onClick = onOpenSettings,
                     testTag = "home_settings_btn"
                 )
+
+                if (onOpenGeneralMenu != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ActionTile(
+                        title = "General Commands Menu",
+                        subtitle = "Global IDE commands, files & build actions",
+                        icon = Icons.Default.Menu,
+                        onClick = onOpenGeneralMenu,
+                        testTag = "home_general_menu_btn"
+                    )
+                }
             }
 
             // Recent Workspaces Column

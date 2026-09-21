@@ -123,6 +123,15 @@ fun MainShell() {
         commandRegistry.registerCommand(Command("settings.open", "Open Settings", "Preferences", "Ctrl+,") {
             currentView = "SETTINGS"
         })
+        commandRegistry.registerCommand(Command("settings.editor", "Editor Fonts & Preferences", "Preferences", null) {
+            currentView = "SETTINGS"
+        })
+        commandRegistry.registerCommand(Command("settings.keybar", "Quick Key Bar Settings", "Preferences", null) {
+            currentView = "SETTINGS"
+        })
+        commandRegistry.registerCommand(Command("app.developer", "Developer Profile (Keshu Shiyal)", "Preferences", null) {
+            currentView = "SETTINGS"
+        })
         commandRegistry.registerCommand(Command("project.run", "Run Active Workspace", "Build & Run", "Ctrl+R") {
             val tab = editorMgr.activeTab
             if (tab != null) {
@@ -142,63 +151,67 @@ fun MainShell() {
         commandRegistry.registerCommand(Command("git.pull", "Git Pull / Sync", "Git VCS", "Ctrl+G P") {
             Toast.makeText(context, "Workspace synchronized with git remote", Toast.LENGTH_SHORT).show()
         })
-        commandRegistry.registerCommand(Command("app.about", "About DroidCode IDE", "Preferences", null) {
-            Toast.makeText(context, "DroidCode Mobile IDE v2.5", Toast.LENGTH_LONG).show()
+        commandRegistry.registerCommand(Command("app.about", "About DroidCode Workstation", "Preferences", null) {
+            currentView = "SETTINGS"
         })
     }
 
     val triggerActionKey: (String) -> Unit = { action ->
-        val tab = editorMgr.activeTab
-        if (tab != null) {
-            val current = tab.content
-            val pos = tab.cursorPosition.coerceIn(0, current.length)
-            when (action) {
-                "UNDO" -> editorMgr.undoActiveTab()
-                "REDO" -> editorMgr.redoActiveTab()
-                "ESC" -> {
-                    ctrlActive = false
-                    shiftActive = false
-                    altActive = false
-                }
-                "LEFT" -> if (pos > 0) tab.updateCursor(pos - 1)
-                "RIGHT" -> if (pos < current.length) tab.updateCursor(pos + 1)
-                "UP" -> {
-                    val lastNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
-                    if (lastNewline >= 0) {
-                        val prevNewline = current.lastIndexOf('\n', (lastNewline - 1).coerceAtLeast(0))
-                        val col = pos - (lastNewline + 1)
-                        val targetLineStart = if (prevNewline >= 0) prevNewline + 1 else 0
-                        val targetLineLength = lastNewline - targetLineStart
-                        val newPos = targetLineStart + col.coerceAtMost(targetLineLength)
-                        tab.updateCursor(newPos)
+        if (action == "MENU") {
+            showProjectMenubar = true
+        } else {
+            val tab = editorMgr.activeTab
+            if (tab != null) {
+                val current = tab.content
+                val pos = tab.cursorPosition.coerceIn(0, current.length)
+                when (action) {
+                    "UNDO" -> editorMgr.undoActiveTab()
+                    "REDO" -> editorMgr.redoActiveTab()
+                    "ESC" -> {
+                        ctrlActive = false
+                        shiftActive = false
+                        altActive = false
                     }
-                }
-                "DOWN" -> {
-                    val nextNewline = current.indexOf('\n', pos)
-                    if (nextNewline >= 0) {
+                    "LEFT" -> if (pos > 0) tab.updateCursor(pos - 1)
+                    "RIGHT" -> if (pos < current.length) tab.updateCursor(pos + 1)
+                    "UP" -> {
+                        val lastNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
+                        if (lastNewline >= 0) {
+                            val prevNewline = current.lastIndexOf('\n', (lastNewline - 1).coerceAtLeast(0))
+                            val col = pos - (lastNewline + 1)
+                            val targetLineStart = if (prevNewline >= 0) prevNewline + 1 else 0
+                            val targetLineLength = lastNewline - targetLineStart
+                            val newPos = targetLineStart + col.coerceAtMost(targetLineLength)
+                            tab.updateCursor(newPos)
+                        }
+                    }
+                    "DOWN" -> {
+                        val nextNewline = current.indexOf('\n', pos)
+                        if (nextNewline >= 0) {
+                            val prevNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
+                            val col = if (prevNewline >= 0) pos - (prevNewline + 1) else pos
+                            val afterNext = current.indexOf('\n', nextNewline + 1)
+                            val targetLineEnd = if (afterNext >= 0) afterNext else current.length
+                            val targetLineLength = targetLineEnd - (nextNewline + 1)
+                            val newPos = (nextNewline + 1) + col.coerceAtMost(targetLineLength)
+                            tab.updateCursor(newPos)
+                        }
+                    }
+                    "HOME" -> {
                         val prevNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
-                        val col = if (prevNewline >= 0) pos - (prevNewline + 1) else pos
-                        val afterNext = current.indexOf('\n', nextNewline + 1)
-                        val targetLineEnd = if (afterNext >= 0) afterNext else current.length
-                        val targetLineLength = targetLineEnd - (nextNewline + 1)
-                        val newPos = (nextNewline + 1) + col.coerceAtMost(targetLineLength)
-                        tab.updateCursor(newPos)
+                        val lineStart = if (prevNewline >= 0) prevNewline + 1 else 0
+                        tab.updateCursor(lineStart)
                     }
-                }
-                "HOME" -> {
-                    val prevNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
-                    val lineStart = if (prevNewline >= 0) prevNewline + 1 else 0
-                    tab.updateCursor(lineStart)
-                }
-                "END" -> {
-                    val nextNewline = current.indexOf('\n', pos)
-                    val lineEnd = if (nextNewline >= 0) nextNewline else current.length
-                    tab.updateCursor(lineEnd)
-                }
-                "DELETE" -> {
-                    if (pos < current.length) {
-                        val updated = current.substring(0, pos) + current.substring(pos + 1)
-                        editorMgr.updateActiveTabContent(updated)
+                    "END" -> {
+                        val nextNewline = current.indexOf('\n', pos)
+                        val lineEnd = if (nextNewline >= 0) nextNewline else current.length
+                        tab.updateCursor(lineEnd)
+                    }
+                    "DELETE" -> {
+                        if (pos < current.length) {
+                            val updated = current.substring(0, pos) + current.substring(pos + 1)
+                            editorMgr.updateActiveTabContent(updated)
+                        }
                     }
                 }
             }
@@ -419,7 +432,8 @@ fun MainShell() {
                                     isWorkspaceOpen = true
                                     currentView = "IDE"
                                 },
-                                onOpenSettings = { currentView = "SETTINGS" }
+                                onOpenSettings = { currentView = "SETTINGS" },
+                                onOpenGeneralMenu = { showProjectMenubar = true }
                             )
                         }
 
@@ -430,7 +444,8 @@ fun MainShell() {
                                 },
                                 onSettingsChanged = {
                                     settingsState = settingsMgr.getSettingsCopy()
-                                }
+                                },
+                                onOpenGeneralMenu = { showProjectMenubar = true }
                             )
                         }
 

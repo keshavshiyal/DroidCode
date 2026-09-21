@@ -71,6 +71,9 @@ fun DeveloperQuickKeyBar(
         ModifierKeyButton("Shift", shiftActive, onToggleShift, btnHeight, btnFontSize, "quick_key_shift")
         ModifierKeyButton("Alt", altActive, onToggleAlt, btnHeight, btnFontSize, "quick_key_alt")
 
+        // General Menu Shortcut Button
+        QuickActionButton("☰ Menu", { onActionKey("MENU") }, btnHeight, btnFontSize, "quick_key_menu")
+
         // Editing & Navigation Actions
         QuickActionButton("↶", { onActionKey("UNDO") }, btnHeight, btnFontSize, "quick_key_undo")
         QuickActionButton("↷", { onActionKey("REDO") }, btnHeight, btnFontSize, "quick_key_redo")

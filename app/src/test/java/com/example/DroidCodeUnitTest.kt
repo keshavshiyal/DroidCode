@@ -151,15 +151,51 @@ class DroidCodeUnitTest {
             true,
             true,
             com.example.settings.AppSettings.KeyBarDensity.NORMAL,
-            true
+            true,
+            com.example.settings.AppSettings.EditorFontFamily.JETBRAINS_MONO
         )
         assertEquals(com.example.settings.AppSettings.ThemeMode.DARK, settings.themeMode)
         assertEquals(16, settings.fontSizeSp)
         assertTrue(settings.isWordWrap)
         assertTrue(settings.isQuickKeyBarEnabled)
+        assertEquals(com.example.settings.AppSettings.EditorFontFamily.JETBRAINS_MONO, settings.editorFontFamily)
 
         settings.fontSizeSp = 18
         assertEquals(18, settings.fontSizeSp)
+
+        settings.editorFontFamily = com.example.settings.AppSettings.EditorFontFamily.FIRA_CODE
+        assertEquals(com.example.settings.AppSettings.EditorFontFamily.FIRA_CODE, settings.editorFontFamily)
+    }
+
+    @Test
+    fun testEditorFontFamilyEnumValues() {
+        val fonts = com.example.settings.AppSettings.EditorFontFamily.values()
+        assertTrue(fonts.any { it == com.example.settings.AppSettings.EditorFontFamily.JETBRAINS_MONO })
+        assertTrue(fonts.any { it == com.example.settings.AppSettings.EditorFontFamily.FIRA_CODE })
+        assertTrue(fonts.any { it == com.example.settings.AppSettings.EditorFontFamily.ROBOTO_MONO })
+        assertTrue(fonts.any { it == com.example.settings.AppSettings.EditorFontFamily.SOURCE_CODE_PRO })
+
+        val jb = com.example.settings.AppSettings.EditorFontFamily.JETBRAINS_MONO
+        assertEquals("JetBrains Mono", jb.label)
+        assertNotNull(jb.description)
+    }
+
+    @Test
+    fun testKeyBarDensities() {
+        assertEquals(36, com.example.settings.AppSettings.KeyBarDensity.COMPACT.heightDp)
+        assertEquals(44, com.example.settings.AppSettings.KeyBarDensity.NORMAL.heightDp)
+        assertEquals(52, com.example.settings.AppSettings.KeyBarDensity.COMFORTABLE.heightDp)
+    }
+
+    @Test
+    fun testDeveloperInformationIntegrity() {
+        val devName = "Keshu Shiyal"
+        val devEmail = "keshushiyal@gmail.com"
+        val devGithub = "https://github.com/keshushiyal"
+
+        assertTrue(devGithub.contains("github.com/keshushiyal"))
+        assertTrue(devEmail.contains("@gmail.com"))
+        assertEquals("Keshu Shiyal", devName)
     }
 
     @Test
