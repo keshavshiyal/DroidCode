@@ -15,7 +15,7 @@ object FileIconUtils {
         "kt", "kts" -> Icons.Default.Code
         "py", "pyw" -> Icons.Default.Terminal
         "js", "jsx", "ts", "tsx", "mjs", "cjs" -> Icons.Default.DataObject
-        "css", "scss", "less" -> Icons.Default.Style
+        "css", "scss", "less" -> Icons.Default.Palette
         "html", "htm" -> Icons.Default.Language
         "bat", "cmd", "sh", "bash", "zsh", "ps1" -> Icons.Default.Terminal
         "md", "markdown" -> Icons.Default.Article

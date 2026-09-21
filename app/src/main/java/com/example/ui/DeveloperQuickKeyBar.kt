@@ -65,11 +65,14 @@ fun DeveloperQuickKeyBar(
         ModifierKeyButton("Shift", shiftActive, onToggleShift, "quick_key_shift")
         ModifierKeyButton("Alt", altActive, onToggleAlt, "quick_key_alt")
 
-        // Action Keys
+        // Editing & Navigation Actions
         QuickActionButton("↶", { onActionKey("UNDO") }, "quick_key_undo")
         QuickActionButton("↷", { onActionKey("REDO") }, "quick_key_redo")
-        QuickActionButton("Tab", { onInsertText(" ") }, "quick_key_tab")
+        QuickActionButton("Tab", { onInsertText("    ") }, "quick_key_tab")
         QuickActionButton("Esc", { onActionKey("ESC") }, "quick_key_esc")
+        QuickActionButton("Home", { onActionKey("HOME") }, "quick_key_home")
+        QuickActionButton("End", { onActionKey("END") }, "quick_key_end")
+        QuickActionButton("Del", { onActionKey("DELETE") }, "quick_key_delete")
 
         // Arrow Keys
         QuickActionButton("←", { onActionKey("LEFT") }, "quick_key_left")
@@ -77,7 +80,7 @@ fun DeveloperQuickKeyBar(
         QuickActionButton("↓", { onActionKey("DOWN") }, "quick_key_down")
         QuickActionButton("→", { onActionKey("RIGHT") }, "quick_key_right")
 
-        // Code Brackets & Symbols with Variations
+        // Code Brackets & Containers with Long-Press Variations
         SymbolKeyWithVariations("{", listOf("{", "}", "{}"), onInsertText, "quick_key_brace")
         SymbolKeyWithVariations("}", listOf("}", "{"), onInsertText, "quick_key_close_brace")
         SymbolKeyWithVariations("[", listOf("[", "]", "[]"), onInsertText, "quick_key_bracket")
@@ -87,23 +90,36 @@ fun DeveloperQuickKeyBar(
         SymbolKeyWithVariations("<", listOf("<", ">", "</>", "<="), onInsertText, "quick_key_lt")
         SymbolKeyWithVariations(">", listOf(">", "<", "=>", ">="), onInsertText, "quick_key_gt")
 
-        // Common Syntax Operators
-        SymbolKeyWithVariations("=", listOf("=", "==", "===", "=>", "!="), onInsertText, "quick_key_eq")
+        // Quotes & Strings
+        SymbolKeyWithVariations("\"", listOf("\"", "'", "`"), onInsertText, "quick_key_dquote")
+        SymbolKeyWithVariations("'", listOf("'", "\"", "`"), onInsertText, "quick_key_quote")
+        SymbolKeyWithVariations("`", listOf("`", "```"), onInsertText, "quick_key_backtick")
+        QuickKeyButton("\\", { onInsertText("\\") }, "quick_key_backslash")
+
+        // Syntax & Punctuation
         SymbolKeyWithVariations(";", listOf(";", ":"), onInsertText, "quick_key_semicolon")
         SymbolKeyWithVariations(":", listOf(":", ";"), onInsertText, "quick_key_colon")
-        SymbolKeyWithVariations("'", listOf("'", "\"", "`"), onInsertText, "quick_key_quote")
-        SymbolKeyWithVariations("\"", listOf("\"", "'", "`"), onInsertText, "quick_key_dquote")
-        SymbolKeyWithVariations("`", listOf("`", "```"), onInsertText, "quick_key_backtick")
+        QuickKeyButton(",", { onInsertText(",") }, "quick_key_comma")
+        SymbolKeyWithVariations(".", listOf(".", "..", "...", "?."), onInsertText, "quick_key_dot")
+        SymbolKeyWithVariations("?", listOf("?", "?.", "?:", "??"), onInsertText, "quick_key_question")
+        SymbolKeyWithVariations("!", listOf("!", "!=", "!!"), onInsertText, "quick_key_exclamation")
 
-        QuickKeyButton("/", { onInsertText("/") }, "quick_key_slash")
-        QuickKeyButton("\\", { onInsertText("\\") }, "quick_key_backslash")
-        QuickKeyButton("|", { onInsertText("|") }, "quick_key_pipe")
+        // Operators & Math
+        SymbolKeyWithVariations("=", listOf("=", "==", "===", "=>", "!=", "+="), onInsertText, "quick_key_eq")
         QuickKeyButton("+", { onInsertText("+") }, "quick_key_plus")
         QuickKeyButton("-", { onInsertText("-") }, "quick_key_minus")
         QuickKeyButton("*", { onInsertText("*") }, "quick_key_star")
+        QuickKeyButton("/", { onInsertText("/") }, "quick_key_slash")
         QuickKeyButton("%", { onInsertText("%") }, "quick_key_percent")
+        SymbolKeyWithVariations("|", listOf("|", "||"), onInsertText, "quick_key_pipe")
+        SymbolKeyWithVariations("&", listOf("&", "&&"), onInsertText, "quick_key_amp")
+        QuickKeyButton("^", { onInsertText("^") }, "quick_key_caret")
+        QuickKeyButton("~", { onInsertText("~") }, "quick_key_tilde")
+
+        // Special Symbols
         QuickKeyButton("#", { onInsertText("#") }, "quick_key_hash")
         QuickKeyButton("@", { onInsertText("@") }, "quick_key_at")
+        QuickKeyButton("$", { onInsertText("$") }, "quick_key_dollar")
         QuickKeyButton("_", { onInsertText("_") }, "quick_key_underscore")
     }
 }

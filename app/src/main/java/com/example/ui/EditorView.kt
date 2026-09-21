@@ -445,8 +445,21 @@ private fun CodeCanvas(
                             if (keyEvent.key == Key.Tab) {
                                 val currentText = textFieldValue.text
                                 val sel = textFieldValue.selection
-                                val newText = currentText.substring(0, sel.start) + " " + currentText.substring(sel.end)
-                                val newPos = sel.start + 1
+                                val indentStr = "    " // Standard 4 spaces
+                                val newText = currentText.substring(0, sel.start) + indentStr + currentText.substring(sel.end)
+                                val newPos = sel.start + indentStr.length
+                                textFieldValue = TextFieldValue(newText, TextRange(newPos))
+                                onContentChange(newText)
+                                onCursorChange(newPos)
+                                true
+                            } else if (keyEvent.key == Key.Enter) {
+                                val currentText = textFieldValue.text
+                                val sel = textFieldValue.selection
+                                val lineStart = currentText.lastIndexOf('\n', (sel.start - 1).coerceAtLeast(0)) + 1
+                                val currentLine = currentText.substring(lineStart, sel.start)
+                                val indent = currentLine.takeWhile { it == ' ' || it == '\t' }
+                                val newText = currentText.substring(0, sel.start) + "\n" + indent + currentText.substring(sel.end)
+                                val newPos = sel.start + 1 + indent.length
                                 textFieldValue = TextFieldValue(newText, TextRange(newPos))
                                 onContentChange(newText)
                                 onCursorChange(newPos)

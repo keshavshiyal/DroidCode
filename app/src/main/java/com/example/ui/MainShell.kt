@@ -111,13 +111,59 @@ fun MainShell() {
     }
 
     val triggerActionKey: (String) -> Unit = { action ->
-        when (action) {
-            "UNDO" -> editorMgr.undoActiveTab()
-            "REDO" -> editorMgr.redoActiveTab()
-            "ESC" -> {
-                ctrlActive = false
-                shiftActive = false
-                altActive = false
+        val tab = editorMgr.activeTab
+        if (tab != null) {
+            val current = tab.content
+            val pos = tab.cursorPosition.coerceIn(0, current.length)
+            when (action) {
+                "UNDO" -> editorMgr.undoActiveTab()
+                "REDO" -> editorMgr.redoActiveTab()
+                "ESC" -> {
+                    ctrlActive = false
+                    shiftActive = false
+                    altActive = false
+                }
+                "LEFT" -> if (pos > 0) tab.updateCursor(pos - 1)
+                "RIGHT" -> if (pos < current.length) tab.updateCursor(pos + 1)
+                "UP" -> {
+                    val lastNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
+                    if (lastNewline >= 0) {
+                        val prevNewline = current.lastIndexOf('\n', (lastNewline - 1).coerceAtLeast(0))
+                        val col = pos - (lastNewline + 1)
+                        val targetLineStart = if (prevNewline >= 0) prevNewline + 1 else 0
+                        val targetLineLength = lastNewline - targetLineStart
+                        val newPos = targetLineStart + col.coerceAtMost(targetLineLength)
+                        tab.updateCursor(newPos)
+                    }
+                }
+                "DOWN" -> {
+                    val nextNewline = current.indexOf('\n', pos)
+                    if (nextNewline >= 0) {
+                        val prevNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
+                        val col = if (prevNewline >= 0) pos - (prevNewline + 1) else pos
+                        val afterNext = current.indexOf('\n', nextNewline + 1)
+                        val targetLineEnd = if (afterNext >= 0) afterNext else current.length
+                        val targetLineLength = targetLineEnd - (nextNewline + 1)
+                        val newPos = (nextNewline + 1) + col.coerceAtMost(targetLineLength)
+                        tab.updateCursor(newPos)
+                    }
+                }
+                "HOME" -> {
+                    val prevNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
+                    val lineStart = if (prevNewline >= 0) prevNewline + 1 else 0
+                    tab.updateCursor(lineStart)
+                }
+                "END" -> {
+                    val nextNewline = current.indexOf('\n', pos)
+                    val lineEnd = if (nextNewline >= 0) nextNewline else current.length
+                    tab.updateCursor(lineEnd)
+                }
+                "DELETE" -> {
+                    if (pos < current.length) {
+                        val updated = current.substring(0, pos) + current.substring(pos + 1)
+                        editorMgr.updateActiveTabContent(updated)
+                    }
+                }
             }
         }
     }

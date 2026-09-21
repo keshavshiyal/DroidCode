@@ -66,9 +66,22 @@ import com.example.filesystem.LocalFileSystem
 import com.example.project.WorkspaceManager
 import java.io.File
 
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+
 @Composable
 fun ExplorerPanel(
     onOpenFile: (File) -> Unit,
+    onCloseProject: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -102,28 +115,66 @@ fun ExplorerPanel(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(52.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "PROJECT EXPLORER",
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     fontFamily = FontFamily.Monospace
                 )
                 if (workspaceMgr.hasOpenWorkspace()) {
-                    Text(
-                        text = workspaceMgr.currentProject.name,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 1.dp)
+                    ) {
+                        Text(
+                            text = workspaceMgr.currentProject.name,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        // Close Project button directly beside root folder name
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.clickable {
+                                onCloseProject?.invoke() ?: run {
+                                    workspaceMgr.closeWorkspace()
+                                    refreshTree()
+                                }
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Project",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Close",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -295,6 +346,22 @@ fun ExplorerPanel(
                             } else {
                                 onOpenFile(File(clicked.path))
                             }
+                        },
+                        onNewFileRequested = { targetNode ->
+                            selectedNode = targetNode
+                            showNewFileDialog = true
+                        },
+                        onNewFolderRequested = { targetNode ->
+                            selectedNode = targetNode
+                            showNewFolderDialog = true
+                        },
+                        onRenameRequested = { targetNode ->
+                            selectedNode = targetNode
+                            showRenameDialog = true
+                        },
+                        onDeleteRequested = { targetNode ->
+                            selectedNode = targetNode
+                            showDeleteDialog = true
                         }
                     )
                 }
@@ -423,59 +490,145 @@ private fun FileTreeItem(
     selectedPath: String?,
     expandedPaths: Set<String>,
     onFolderToggle: (FileNode) -> Unit,
-    onNodeClick: (FileNode) -> Unit
+    onNodeClick: (FileNode) -> Unit,
+    onNewFileRequested: (FileNode) -> Unit,
+    onNewFolderRequested: (FileNode) -> Unit,
+    onRenameRequested: (FileNode) -> Unit,
+    onDeleteRequested: (FileNode) -> Unit
 ) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val isSelected = selectedPath == node.path
     val isExpanded = expandedPaths.contains(node.path)
+    var showContextMenu by remember { mutableStateOf(false) }
+
     val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
 
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = (depth * 14).dp, top = 2.dp, bottom = 2.dp)
-                .background(bg, RoundedCornerShape(6.dp))
-                .clickable { onNodeClick(node) }
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (node.isFolder) {
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clickable { onFolderToggle(node) }
+        androidx.compose.foundation.layout.Box {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = (depth * 14).dp, top = 2.dp, bottom = 2.dp)
+                    .background(bg, RoundedCornerShape(6.dp))
+                    .pointerInput(node.path) {
+                        detectTapGestures(
+                            onTap = { onNodeClick(node) },
+                            onLongPress = { showContextMenu = true }
+                        )
+                    }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (node.isFolder) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onFolderToggle(node) }
+                    )
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp)
+                            .size(20.dp)
+                    )
+                } else {
+                    Spacer(modifier = Modifier.width(18.dp))
+                    Icon(
+                        imageVector = getFileIcon(node.extension),
+                        contentDescription = null,
+                        tint = getFileIconColor(node.extension),
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp)
+                            .size(20.dp)
+                    )
+                }
+
+                Text(
+                    text = node.name,
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = if (node.isFolder) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(horizontal = 6.dp)
-                        .size(20.dp)
-                )
-            } else {
-                Spacer(modifier = Modifier.width(18.dp))
-                Icon(
-                    imageVector = getFileIcon(node.extension),
-                    contentDescription = null,
-                    tint = getFileIconColor(node.extension),
-                    modifier = Modifier
-                        .padding(horizontal = 6.dp)
-                        .size(20.dp)
-                )
+
+                IconButton(
+                    onClick = { showContextMenu = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
-            Text(
-                text = node.name,
-                fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = if (node.isFolder) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
+            DropdownMenu(
+                expanded = showContextMenu,
+                onDismissRequest = { showContextMenu = false }
+            ) {
+                if (!node.isFolder) {
+                    DropdownMenuItem(
+                        text = { Text("Open File", fontSize = 13.sp) },
+                        leadingIcon = { Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(18.dp)) },
+                        onClick = {
+                            showContextMenu = false
+                            onNodeClick(node)
+                        }
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("New File Here", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.NoteAdd, null, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onNewFileRequested(node)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("New Folder Here", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.CreateNewFolder, null, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onNewFolderRequested(node)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Rename", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onRenameRequested(node)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Copy Path", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        clipboardManager.setText(AnnotatedString(node.path))
+                        Toast.makeText(context, "Path copied to clipboard", Toast.LENGTH_SHORT).show()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", fontSize = 13.sp, color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onDeleteRequested(node)
+                    }
+                )
+            }
         }
 
         if (node.isFolder && isExpanded) {
@@ -486,7 +639,11 @@ private fun FileTreeItem(
                     selectedPath = selectedPath,
                     expandedPaths = expandedPaths,
                     onFolderToggle = onFolderToggle,
-                    onNodeClick = onNodeClick
+                    onNodeClick = onNodeClick,
+                    onNewFileRequested = onNewFileRequested,
+                    onNewFolderRequested = onNewFolderRequested,
+                    onRenameRequested = onRenameRequested,
+                    onDeleteRequested = onDeleteRequested
                 )
             }
         }
