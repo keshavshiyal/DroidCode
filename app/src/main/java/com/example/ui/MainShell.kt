@@ -146,7 +146,7 @@ fun MainShell() {
                 val pos = tab.cursorPosition
                 val updated = current.substring(0, pos) + text + current.substring(pos)
                 editorMgr.updateActiveTabContent(updated)
-                tab.cursorPosition = pos + text.length
+                tab.updateCursor(pos + text.length)
             }
         }
     }

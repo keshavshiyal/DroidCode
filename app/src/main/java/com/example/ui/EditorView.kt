@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,13 +37,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.editor.EditorManager
@@ -70,7 +77,7 @@ fun EditorView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(36.dp)
+                    .height(38.dp)
                     .background(MaterialTheme.colorScheme.surface)
                     .horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically
@@ -78,7 +85,7 @@ fun EditorView(
                 tabs.forEachIndexed { index, tab ->
                     val isActive = index == editorMgr.activeTabIndex
                     val bg = if (isActive) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
-                    val border = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    val border = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
 
                     Row(
                         modifier = Modifier
@@ -86,7 +93,7 @@ fun EditorView(
                             .background(bg)
                             .border(1.dp, border)
                             .clickable { editorMgr.activeTabIndex = index }
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -112,14 +119,14 @@ fun EditorView(
             }
         }
 
-        // Editor Toolbar & Action Indicators
+        // Editor Toolbar & Language / Line Stats
         if (activeTab != null) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(32.dp)
                     .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outline)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                     .padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -141,10 +148,10 @@ fun EditorView(
                     )
                 }
 
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = { editorMgr.undoActiveTab() },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(26.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Undo,
@@ -156,7 +163,7 @@ fun EditorView(
 
                     IconButton(
                         onClick = { editorMgr.redoActiveTab() },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(26.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Redo,
@@ -174,7 +181,7 @@ fun EditorView(
                             } catch (e: Exception) {}
                         },
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(26.dp)
                             .testTag("editor_save_btn")
                     ) {
                         Icon(
@@ -187,7 +194,7 @@ fun EditorView(
                 }
             }
 
-            // Code Canvas with Line Numbers
+            // Code Canvas
             CodeCanvas(
                 tab = activeTab,
                 settings = settings,
@@ -195,11 +202,11 @@ fun EditorView(
                     editorMgr.updateActiveTabContent(newText)
                 },
                 onCursorChange = { pos: Int ->
-                    activeTab.cursorPosition = pos
+                    activeTab.updateCursor(pos)
                 }
             )
         } else {
-            // Empty State (No file open)
+            // Empty State
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -210,17 +217,18 @@ fun EditorView(
                     Icon(
                         imageVector = Icons.Default.Code,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.size(48.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "No file open",
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Select a file in Explorer or press Ctrl+P to search",
+                        text = "Open Project Explorer drawer to select a file",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.padding(top = 4.dp)
@@ -250,6 +258,7 @@ private fun CodeCanvas(
     val lines = textFieldValue.text.split("\n")
     val lineCount = lines.size
     val verticalScroll = rememberScrollState()
+    val isDark = isSystemInDarkTheme()
 
     Row(
         modifier = Modifier
@@ -299,11 +308,68 @@ private fun CodeCanvas(
                     fontFamily = FontFamily.Monospace,
                     lineHeight = (settings.fontSizeSp * 1.4).sp
                 ),
+                visualTransformation = CodeSyntaxVisualTransformation(tab.languageId, isDark),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("code_editor_text_input")
             )
         }
+    }
+}
+
+class CodeSyntaxVisualTransformation(
+    private val languageId: String,
+    private val isDarkTheme: Boolean
+) : VisualTransformation {
+
+    override fun filter(text: AnnotatedString): TransformedText {
+        val highlighted = buildAnnotatedString {
+            append(text.text)
+            val code = text.text
+            if (code.isEmpty()) return@buildAnnotatedString
+
+            val keywordColor = if (isDarkTheme) Color(0xFFCF92D7) else Color(0xFF8E24AA)
+            val stringColor = if (isDarkTheme) Color(0xFF81C784) else Color(0xFF2E7D32)
+            val numberColor = if (isDarkTheme) Color(0xFFFFB74D) else Color(0xFFE65100)
+            val commentColor = if (isDarkTheme) Color(0xFF78909C) else Color(0xFF546E7A)
+            val typeColor = if (isDarkTheme) Color(0xFF64B5F6) else Color(0xFF1565C0)
+
+            val keywords = when (languageId.lowercase()) {
+                "kotlin", "java" -> setOf("package", "import", "class", "interface", "fun", "val", "var", "public", "private", "protected", "return", "if", "else", "for", "while", "when", "try", "catch", "throw", "object", "sealed", "data", "override", "final", "static", "new", "null", "true", "false", "void")
+                "javascript", "typescript" -> setOf("import", "export", "from", "class", "function", "const", "let", "var", "return", "if", "else", "for", "while", "switch", "case", "async", "await", "try", "catch", "default", "null", "undefined", "true", "false")
+                "python" -> setOf("def", "class", "import", "from", "return", "if", "elif", "else", "for", "while", "try", "except", "with", "as", "pass", "None", "True", "False", "lambda", "yield")
+                "html", "xml" -> setOf("div", "span", "p", "a", "body", "head", "html", "script", "style", "link", "meta", "resources", "string", "layout", "manifest")
+                "sql" -> setOf("SELECT", "FROM", "WHERE", "INSERT", "INTO", "UPDATE", "DELETE", "JOIN", "LEFT", "RIGHT", "CREATE", "TABLE", "PRIMARY", "KEY", "ORDER", "BY", "GROUP", "LIMIT", "AND", "OR", "NOT")
+                else -> setOf("val", "var", "fun", "def", "class", "function", "return", "if", "else", "import", "public", "private")
+            }
+
+            val wordRegex = Regex("\\b[A-Za-z_][A-Za-z0-9_]*\\b")
+            val stringRegex = Regex("\"[^\"]*\"|'[^']*'|`[^`]*`")
+            val numberRegex = Regex("\\b\\d+(\\.\\d+)?\\b")
+            val commentRegex = Regex("//.*|/\\*[\\s\\S]*?\\*/|#.*")
+
+            for (match in commentRegex.findAll(code)) {
+                addStyle(SpanStyle(color = commentColor, fontWeight = FontWeight.Normal), match.range.first, match.range.last + 1)
+            }
+
+            for (match in stringRegex.findAll(code)) {
+                addStyle(SpanStyle(color = stringColor), match.range.first, match.range.last + 1)
+            }
+
+            for (match in numberRegex.findAll(code)) {
+                addStyle(SpanStyle(color = numberColor), match.range.first, match.range.last + 1)
+            }
+
+            for (match in wordRegex.findAll(code)) {
+                val word = match.value
+                if (keywords.contains(word) || keywords.contains(word.lowercase())) {
+                    addStyle(SpanStyle(color = keywordColor, fontWeight = FontWeight.Bold), match.range.first, match.range.last + 1)
+                } else if (word.first().isUpperCase()) {
+                    addStyle(SpanStyle(color = typeColor, fontWeight = FontWeight.Medium), match.range.first, match.range.last + 1)
+                }
+            }
+        }
+        return TransformedText(highlighted, OffsetMapping.Identity)
     }
 }
