@@ -32,7 +32,7 @@ class DroidCodeUnitTest {
 
         registry.registerCommand(cmd)
 
-        val found = registry.findCommand("test.save")
+        val found = registry.getCommand("test.save")
         assertNotNull(found)
         assertEquals("Save Workspace", found?.title)
 
@@ -49,19 +49,17 @@ class DroidCodeUnitTest {
         val eventBus = EventBus.getInstance()
         var receivedData: String? = null
 
-        val listener: (Any) -> Unit = { event ->
-            if (event is String) {
-                receivedData = event
-            }
+        val listener = EventBus.EventListener<String> { event ->
+            receivedData = event
         }
 
-        eventBus.subscribe("test_topic", listener)
-        eventBus.publish("test_topic", "Hello DroidCode")
+        eventBus.subscribe(String::class.java, listener)
+        eventBus.publish("Hello DroidCode")
 
         assertEquals("Hello DroidCode", receivedData)
 
-        eventBus.unsubscribe("test_topic", listener)
-        eventBus.publish("test_topic", "Should not receive")
+        eventBus.unsubscribe(String::class.java, listener)
+        eventBus.publish("Should not receive")
         assertEquals("Hello DroidCode", receivedData)
     }
 
@@ -75,7 +73,7 @@ class DroidCodeUnitTest {
         assertEquals(1, tab.column)
 
         // Move cursor to "line 2"
-        tab.cursorPosition = 8 // right after "line 1\nl"
+        tab.updateCursor(8) // right after "line 1\n"
         assertEquals(2, tab.line)
         assertEquals(2, tab.column)
 
@@ -143,5 +141,33 @@ class DroidCodeUnitTest {
         assertTrue(File(project.path, "index.html").exists())
         assertTrue(File(project.path, "style.css").exists())
         assertTrue(File(project.path, "app.js").exists())
+    }
+
+    @Test
+    fun testAppSettingsModel() {
+        val settings = com.example.settings.AppSettings(
+            com.example.settings.AppSettings.ThemeMode.DARK,
+            16,
+            true,
+            true,
+            com.example.settings.AppSettings.KeyBarDensity.NORMAL,
+            true
+        )
+        assertEquals(com.example.settings.AppSettings.ThemeMode.DARK, settings.themeMode)
+        assertEquals(16, settings.fontSizeSp)
+        assertTrue(settings.isWordWrap)
+        assertTrue(settings.isQuickKeyBarEnabled)
+
+        settings.fontSizeSp = 18
+        assertEquals(18, settings.fontSizeSp)
+    }
+
+    @Test
+    fun testProjectFromDirectory() {
+        val dir = tempFolder.newFolder("MyAwesomeProject")
+        val project = com.example.project.Project.fromDirectory(dir, "WEB")
+        assertNotNull(project)
+        assertEquals("MyAwesomeProject", project.name)
+        assertEquals(dir.absolutePath, project.path)
     }
 }

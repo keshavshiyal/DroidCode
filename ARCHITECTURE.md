@@ -1,6 +1,13 @@
 # DroidCode Architecture
 
-DroidCode is architected as a modular, production-ready, native Android IDE written in Java with Jetpack Compose UI.
+DroidCode is architected as a modular, production-ready, native Android IDE using Jetpack Compose (Kotlin) for UI components and Java/Kotlin service abstractions for core IDE subsystems.
+
+## Technical Architecture Stack
+
+- **UI & Presentation Layer**: Kotlin + Jetpack Compose (Material Design 3)
+- **Domain & Service Layer**: Java / Kotlin robust services (`CommandRegistry`, `WorkspaceManager`, `LocalFileSystem`, `EditorManager`, `SettingsManager`)
+- **Persistence Layer**: Android Room Database (SQLite) + SharedPreferences
+- **Asynchronous Execution**: Kotlin Coroutines & Java Concurrent Executores
 
 ## High-Level Component Topology
 
