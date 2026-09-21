@@ -122,9 +122,9 @@ fun EditorView(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = getEditorFileIcon(tab.extension),
+                            imageVector = getEditorFileIcon(tab.fileName),
                             contentDescription = null,
-                            tint = getEditorFileIconColor(tab.extension),
+                            tint = getEditorFileIconColor(tab.fileName),
                             modifier = Modifier
                                 .size(16.dp)
                                 .padding(end = 4.dp)
@@ -502,10 +502,10 @@ private fun CodeCanvas(
 }
 
 @Composable
-private fun getEditorFileIcon(ext: String) = FileIconUtils.getFileIcon(ext)
+private fun getEditorFileIcon(nameOrExt: String) = FileIconUtils.getFileIcon(nameOrExt)
 
 @Composable
-private fun getEditorFileIconColor(ext: String) = FileIconUtils.getFileIconColor(ext)
+private fun getEditorFileIconColor(nameOrExt: String) = FileIconUtils.getFileIconColor(nameOrExt)
 
 class CodeSyntaxVisualTransformation(
     private val languageId: String,

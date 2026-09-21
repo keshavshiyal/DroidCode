@@ -99,6 +99,108 @@ public class LocalFileSystem {
         return destination;
     }
 
+    public File copyFileOrDirectory(File source, File targetDir) throws Exception {
+        if (source == null || !source.exists()) {
+            throw new IllegalArgumentException("Source file does not exist");
+        }
+        if (targetDir == null || !targetDir.exists() || !targetDir.isDirectory()) {
+            throw new IllegalArgumentException("Target directory is invalid");
+        }
+
+        File dest = new File(targetDir, source.getName());
+        if (dest.exists()) {
+            String uniqueName = getUniqueCopyName(targetDir, source.getName());
+            dest = new File(targetDir, uniqueName);
+        }
+
+        copyRecursive(source, dest);
+        SafUtils.syncFileToSaf(dest);
+        return dest;
+    }
+
+    private void copyRecursive(File src, File dest) throws Exception {
+        if (src.isDirectory()) {
+            if (!dest.exists()) {
+                boolean created = dest.mkdirs();
+                if (!created && !dest.exists()) {
+                    throw new RuntimeException("Failed to create directory: " + dest.getAbsolutePath());
+                }
+            }
+            File[] children = src.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    copyRecursive(child, new File(dest, child.getName()));
+                }
+            }
+        } else {
+            File parent = dest.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            try (FileInputStream in = new FileInputStream(src);
+                 FileOutputStream out = new FileOutputStream(dest)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+            }
+        }
+    }
+
+    public File moveFileOrDirectory(File source, File targetDir) throws Exception {
+        if (source == null || !source.exists()) {
+            throw new IllegalArgumentException("Source file does not exist");
+        }
+        if (targetDir == null || !targetDir.exists() || !targetDir.isDirectory()) {
+            throw new IllegalArgumentException("Target directory is invalid");
+        }
+
+        // Prevent moving a folder into itself or its descendant
+        if (source.isDirectory() && targetDir.getAbsolutePath().startsWith(source.getAbsolutePath())) {
+            throw new IllegalArgumentException("Cannot move a folder into itself or a subfolder");
+        }
+
+        File dest = new File(targetDir, source.getName());
+        if (dest.exists()) {
+            String uniqueName = getUniqueCopyName(targetDir, source.getName());
+            dest = new File(targetDir, uniqueName);
+        }
+
+        if (source.renameTo(dest)) {
+            SafUtils.renameInSaf(source, dest.getName());
+            return dest;
+        } else {
+            copyRecursive(source, dest);
+            deleteFile(source);
+            SafUtils.syncFileToSaf(dest);
+            return dest;
+        }
+    }
+
+    private String getUniqueCopyName(File dir, String originalName) {
+        String baseName;
+        String extension;
+        int dotIndex = originalName.lastIndexOf('.');
+        if (dotIndex > 0 && !originalName.startsWith(".")) {
+            baseName = originalName.substring(0, dotIndex);
+            extension = originalName.substring(dotIndex);
+        } else {
+            baseName = originalName;
+            extension = "";
+        }
+
+        String candidate = baseName + "_copy" + extension;
+        File testFile = new File(dir, candidate);
+        int counter = 1;
+        while (testFile.exists()) {
+            candidate = baseName + "_copy" + counter + extension;
+            testFile = new File(dir, candidate);
+            counter++;
+        }
+        return candidate;
+    }
+
     public boolean deleteFile(File targetFile) {
         if (targetFile == null || !targetFile.exists()) {
             return false;

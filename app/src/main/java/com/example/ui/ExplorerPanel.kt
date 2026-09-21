@@ -4,7 +4,9 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,28 +20,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Coffee
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -50,14 +52,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -65,20 +72,14 @@ import com.example.filesystem.FileNode
 import com.example.filesystem.LocalFileSystem
 import com.example.project.WorkspaceManager
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-import androidx.compose.material.icons.automirrored.filled.NoteAdd
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
+data class FileClipboardItem(
+    val fileNode: FileNode,
+    val isCut: Boolean
+)
 
 @Composable
 fun ExplorerPanel(
@@ -89,18 +90,76 @@ fun ExplorerPanel(
     val context = LocalContext.current
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
     val fs = remember { LocalFileSystem.getInstance() }
+    val coroutineScope = rememberCoroutineScope()
 
     var treeNodes by remember { mutableStateOf(workspaceMgr.workspaceFileTree) }
     var expandedPaths by remember { mutableStateOf(setOf<String>()) }
+    var isLoadingTree by remember { mutableStateOf(false) }
 
     var selectedNode by remember { mutableStateOf<FileNode?>(null) }
+    var clipboardItem by remember { mutableStateOf<FileClipboardItem?>(null) }
+
     var showNewFileDialog by remember { mutableStateOf(false) }
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    val refreshTree = {
-        treeNodes = workspaceMgr.workspaceFileTree
+    val refreshTree: () -> Unit = {
+        coroutineScope.launch {
+            isLoadingTree = true
+            val nodes = withContext(Dispatchers.IO) {
+                workspaceMgr.workspaceFileTree
+            }
+            treeNodes = nodes
+            isLoadingTree = false
+        }
+    }
+
+    val handlePaste: (FileNode?) -> Unit = { targetFolderNode ->
+        val item = clipboardItem
+        if (item != null && workspaceMgr.hasOpenWorkspace()) {
+            val targetDir = if (targetFolderNode != null && targetFolderNode.isFolder) {
+                File(targetFolderNode.path)
+            } else if (targetFolderNode != null && !targetFolderNode.isFolder) {
+                File(targetFolderNode.path).parentFile ?: workspaceMgr.currentProject.directory
+            } else if (selectedNode != null && selectedNode!!.isFolder) {
+                File(selectedNode!!.path)
+            } else if (selectedNode != null && !selectedNode!!.isFolder) {
+                File(selectedNode!!.path).parentFile ?: workspaceMgr.currentProject.directory
+            } else {
+                workspaceMgr.currentProject.directory
+            }
+
+            coroutineScope.launch {
+                isLoadingTree = true
+                try {
+                    val sourceFile = File(item.fileNode.path)
+                    val resultFile = withContext(Dispatchers.IO) {
+                        if (item.isCut) {
+                            fs.moveFileOrDirectory(sourceFile, targetDir)
+                        } else {
+                            fs.copyFileOrDirectory(sourceFile, targetDir)
+                        }
+                    }
+                    if (item.isCut) {
+                        clipboardItem = null
+                        Toast.makeText(context, "Moved '${sourceFile.name}' into '${targetDir.name}'", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Copied '${sourceFile.name}' into '${targetDir.name}'", Toast.LENGTH_SHORT).show()
+                    }
+                    expandedPaths = expandedPaths + targetDir.absolutePath
+                    val nodes = withContext(Dispatchers.IO) {
+                        workspaceMgr.workspaceFileTree
+                    }
+                    treeNodes = nodes
+                    FileNode.fromFile(resultFile)?.let { selectedNode = it }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Operation failed: ${e.message}", Toast.LENGTH_LONG).show()
+                } finally {
+                    isLoadingTree = false
+                }
+            }
+        }
     }
 
     LaunchedEffect(workspaceMgr.currentProject) {
@@ -223,6 +282,36 @@ fun ExplorerPanel(
 
                 if (selectedNode != null) {
                     IconButton(
+                        onClick = {
+                            clipboardItem = FileClipboardItem(selectedNode!!, isCut = true)
+                            Toast.makeText(context, "Cut '${selectedNode!!.name}'", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCut,
+                            contentDescription = "Cut",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            clipboardItem = FileClipboardItem(selectedNode!!, isCut = false)
+                            Toast.makeText(context, "Copied '${selectedNode!!.name}'", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
                         onClick = { showRenameDialog = true },
                         modifier = Modifier.size(32.dp)
                     ) {
@@ -247,6 +336,20 @@ fun ExplorerPanel(
                     }
                 }
 
+                if (clipboardItem != null) {
+                    IconButton(
+                        onClick = { handlePaste(selectedNode) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentPaste,
+                            contentDescription = "Paste",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
                 IconButton(
                     onClick = { refreshTree() },
                     modifier = Modifier
@@ -259,6 +362,124 @@ fun ExplorerPanel(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
+                }
+            }
+        }
+
+        // Progress Indicator while reading large project
+        if (isLoadingTree) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Reading project files...",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text(
+                            text = "Scanning...",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+
+        // Clipboard Active Status Banner
+        if (clipboardItem != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = if (clipboardItem!!.isCut) Icons.Default.ContentCut else Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "${if (clipboardItem!!.isCut) "Cut" else "Copied"}: ${clipboardItem!!.fileNode.name}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable { handlePaste(selectedNode) }
+                        ) {
+                            Text(
+                                text = "Paste Here",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = { clipboardItem = null },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Clipboard",
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -304,7 +525,7 @@ fun ExplorerPanel(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        } else if (treeNodes.isEmpty()) {
+        } else if (treeNodes.isEmpty() && !isLoadingTree) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -329,6 +550,7 @@ fun ExplorerPanel(
                         node = node,
                         depth = 0,
                         selectedPath = selectedNode?.path,
+                        clipboardItem = clipboardItem,
                         expandedPaths = expandedPaths,
                         onFolderToggle = { folderNode ->
                             expandedPaths = if (expandedPaths.contains(folderNode.path)) {
@@ -348,6 +570,17 @@ fun ExplorerPanel(
                             } else {
                                 onOpenFile(File(clicked.path))
                             }
+                        },
+                        onCutRequested = { targetNode ->
+                            clipboardItem = FileClipboardItem(targetNode, isCut = true)
+                            Toast.makeText(context, "Cut '${targetNode.name}'", Toast.LENGTH_SHORT).show()
+                        },
+                        onCopyRequested = { targetNode ->
+                            clipboardItem = FileClipboardItem(targetNode, isCut = false)
+                            Toast.makeText(context, "Copied '${targetNode.name}'", Toast.LENGTH_SHORT).show()
+                        },
+                        onPasteRequested = { targetNode ->
+                            handlePaste(targetNode)
                         },
                         onNewFileRequested = { targetNode ->
                             selectedNode = targetNode
@@ -490,9 +723,13 @@ private fun FileTreeItem(
     node: FileNode,
     depth: Int,
     selectedPath: String?,
+    clipboardItem: FileClipboardItem?,
     expandedPaths: Set<String>,
     onFolderToggle: (FileNode) -> Unit,
     onNodeClick: (FileNode) -> Unit,
+    onCutRequested: (FileNode) -> Unit,
+    onCopyRequested: (FileNode) -> Unit,
+    onPasteRequested: (FileNode) -> Unit,
     onNewFileRequested: (FileNode) -> Unit,
     onNewFolderRequested: (FileNode) -> Unit,
     onRenameRequested: (FileNode) -> Unit,
@@ -502,17 +739,19 @@ private fun FileTreeItem(
     val clipboardManager = LocalClipboardManager.current
     val isSelected = selectedPath == node.path
     val isExpanded = expandedPaths.contains(node.path)
+    val isCutItem = clipboardItem?.fileNode?.path == node.path && clipboardItem.isCut
     var showContextMenu by remember { mutableStateOf(false) }
 
     val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
 
     Column {
-        androidx.compose.foundation.layout.Box {
+        Box {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = (depth * 14).dp, top = 2.dp, bottom = 2.dp)
                     .background(bg, RoundedCornerShape(6.dp))
+                    .alpha(if (isCutItem) 0.5f else 1.0f)
                     .pointerInput(node.path) {
                         detectTapGestures(
                             onTap = { onNodeClick(node) },
@@ -542,9 +781,9 @@ private fun FileTreeItem(
                 } else {
                     Spacer(modifier = Modifier.width(18.dp))
                     Icon(
-                        imageVector = getFileIcon(node.extension),
+                        imageVector = getFileIcon(node.name),
                         contentDescription = null,
-                        tint = getFileIconColor(node.extension),
+                        tint = getFileIconColor(node.name),
                         modifier = Modifier
                             .padding(horizontal = 6.dp)
                             .size(20.dp)
@@ -552,7 +791,7 @@ private fun FileTreeItem(
                 }
 
                 Text(
-                    text = node.name,
+                    text = node.name + (if (isCutItem) " [Cut]" else ""),
                     fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = if (node.isFolder) FontWeight.SemiBold else FontWeight.Normal,
@@ -586,6 +825,32 @@ private fun FileTreeItem(
                         onClick = {
                             showContextMenu = false
                             onNodeClick(node)
+                        }
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Cut", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.ContentCut, null, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onCutRequested(node)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Copy", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onCopyRequested(node)
+                    }
+                )
+                if (clipboardItem != null) {
+                    DropdownMenuItem(
+                        text = { Text("Paste Here", fontSize = 13.sp) },
+                        leadingIcon = { Icon(Icons.Default.ContentPaste, null, modifier = Modifier.size(18.dp)) },
+                        onClick = {
+                            showContextMenu = false
+                            onPasteRequested(node)
                         }
                     )
                 }
@@ -639,9 +904,13 @@ private fun FileTreeItem(
                     node = child,
                     depth = depth + 1,
                     selectedPath = selectedPath,
+                    clipboardItem = clipboardItem,
                     expandedPaths = expandedPaths,
                     onFolderToggle = onFolderToggle,
                     onNodeClick = onNodeClick,
+                    onCutRequested = onCutRequested,
+                    onCopyRequested = onCopyRequested,
+                    onPasteRequested = onPasteRequested,
                     onNewFileRequested = onNewFileRequested,
                     onNewFolderRequested = onNewFolderRequested,
                     onRenameRequested = onRenameRequested,
@@ -653,10 +922,10 @@ private fun FileTreeItem(
 }
 
 @Composable
-private fun getFileIcon(ext: String) = FileIconUtils.getFileIcon(ext)
+private fun getFileIcon(nameOrExt: String) = FileIconUtils.getFileIcon(nameOrExt)
 
 @Composable
-private fun getFileIconColor(ext: String) = FileIconUtils.getFileIconColor(ext)
+private fun getFileIconColor(nameOrExt: String) = FileIconUtils.getFileIconColor(nameOrExt)
 
 @Composable
 private fun InputDialog(
@@ -711,3 +980,4 @@ private fun InputDialog(
         }
     }
 }
+
