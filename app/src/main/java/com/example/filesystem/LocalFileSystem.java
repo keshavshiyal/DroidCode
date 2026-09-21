@@ -63,6 +63,7 @@ public class LocalFileSystem {
         if (!created) {
             throw new RuntimeException("Could not create file: " + fileName);
         }
+        SafUtils.syncFileToSaf(newFile);
         return newFile;
     }
 
@@ -78,6 +79,7 @@ public class LocalFileSystem {
         if (!created) {
             throw new RuntimeException("Could not create directory: " + dirName);
         }
+        SafUtils.syncFileToSaf(newDir);
         return newDir;
     }
 
@@ -89,6 +91,7 @@ public class LocalFileSystem {
         if (destination.exists()) {
             throw new IllegalArgumentException("Destination name already exists: " + newName);
         }
+        SafUtils.renameInSaf(targetFile, newName);
         boolean renamed = targetFile.renameTo(destination);
         if (!renamed) {
             throw new RuntimeException("Failed to rename file");
@@ -100,6 +103,7 @@ public class LocalFileSystem {
         if (targetFile == null || !targetFile.exists()) {
             return false;
         }
+        SafUtils.deleteFromSaf(targetFile);
         if (targetFile.isDirectory()) {
             File[] contents = targetFile.listFiles();
             if (contents != null) {
@@ -144,5 +148,6 @@ public class LocalFileSystem {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file, false), StandardCharsets.UTF_8))) {
             writer.write(content != null ? content : "");
         }
+        SafUtils.syncFileToSaf(file);
     }
 }
