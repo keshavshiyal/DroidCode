@@ -48,6 +48,12 @@ fun DeveloperQuickKeyBar(
 ) {
     val scrollState = rememberScrollState()
     val barHeight = density.heightDp.dp
+    val btnHeight = (barHeight - 8.dp).coerceAtLeast(28.dp)
+    val btnFontSize = when (density) {
+        AppSettings.KeyBarDensity.COMPACT -> 11.sp
+        AppSettings.KeyBarDensity.NORMAL -> 13.sp
+        AppSettings.KeyBarDensity.COMFORTABLE -> 15.sp
+    }
 
     Row(
         modifier = modifier
@@ -61,66 +67,66 @@ fun DeveloperQuickKeyBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Sticky Modifiers
-        ModifierKeyButton("Ctrl", ctrlActive, onToggleCtrl, "quick_key_ctrl")
-        ModifierKeyButton("Shift", shiftActive, onToggleShift, "quick_key_shift")
-        ModifierKeyButton("Alt", altActive, onToggleAlt, "quick_key_alt")
+        ModifierKeyButton("Ctrl", ctrlActive, onToggleCtrl, btnHeight, btnFontSize, "quick_key_ctrl")
+        ModifierKeyButton("Shift", shiftActive, onToggleShift, btnHeight, btnFontSize, "quick_key_shift")
+        ModifierKeyButton("Alt", altActive, onToggleAlt, btnHeight, btnFontSize, "quick_key_alt")
 
         // Editing & Navigation Actions
-        QuickActionButton("↶", { onActionKey("UNDO") }, "quick_key_undo")
-        QuickActionButton("↷", { onActionKey("REDO") }, "quick_key_redo")
-        QuickActionButton("Tab", { onInsertText("    ") }, "quick_key_tab")
-        QuickActionButton("Esc", { onActionKey("ESC") }, "quick_key_esc")
-        QuickActionButton("Home", { onActionKey("HOME") }, "quick_key_home")
-        QuickActionButton("End", { onActionKey("END") }, "quick_key_end")
-        QuickActionButton("Del", { onActionKey("DELETE") }, "quick_key_delete")
+        QuickActionButton("↶", { onActionKey("UNDO") }, btnHeight, btnFontSize, "quick_key_undo")
+        QuickActionButton("↷", { onActionKey("REDO") }, btnHeight, btnFontSize, "quick_key_redo")
+        QuickActionButton("Tab", { onInsertText("    ") }, btnHeight, btnFontSize, "quick_key_tab")
+        QuickActionButton("Esc", { onActionKey("ESC") }, btnHeight, btnFontSize, "quick_key_esc")
+        QuickActionButton("Home", { onActionKey("HOME") }, btnHeight, btnFontSize, "quick_key_home")
+        QuickActionButton("End", { onActionKey("END") }, btnHeight, btnFontSize, "quick_key_end")
+        QuickActionButton("Del", { onActionKey("DELETE") }, btnHeight, btnFontSize, "quick_key_delete")
 
         // Arrow Keys
-        QuickActionButton("←", { onActionKey("LEFT") }, "quick_key_left")
-        QuickActionButton("↑", { onActionKey("UP") }, "quick_key_up")
-        QuickActionButton("↓", { onActionKey("DOWN") }, "quick_key_down")
-        QuickActionButton("→", { onActionKey("RIGHT") }, "quick_key_right")
+        QuickActionButton("←", { onActionKey("LEFT") }, btnHeight, btnFontSize, "quick_key_left")
+        QuickActionButton("↑", { onActionKey("UP") }, btnHeight, btnFontSize, "quick_key_up")
+        QuickActionButton("↓", { onActionKey("DOWN") }, btnHeight, btnFontSize, "quick_key_down")
+        QuickActionButton("→", { onActionKey("RIGHT") }, btnHeight, btnFontSize, "quick_key_right")
 
         // Code Brackets & Containers with Long-Press Variations
-        SymbolKeyWithVariations("{", listOf("{", "}", "{}"), onInsertText, "quick_key_brace")
-        SymbolKeyWithVariations("}", listOf("}", "{"), onInsertText, "quick_key_close_brace")
-        SymbolKeyWithVariations("[", listOf("[", "]", "[]"), onInsertText, "quick_key_bracket")
-        SymbolKeyWithVariations("]", listOf("]", "["), onInsertText, "quick_key_close_bracket")
-        SymbolKeyWithVariations("(", listOf("(", ")", "()"), onInsertText, "quick_key_paren")
-        SymbolKeyWithVariations(")", listOf(")", "("), onInsertText, "quick_key_close_paren")
-        SymbolKeyWithVariations("<", listOf("<", ">", "</>", "<="), onInsertText, "quick_key_lt")
-        SymbolKeyWithVariations(">", listOf(">", "<", "=>", ">="), onInsertText, "quick_key_gt")
+        SymbolKeyWithVariations("{", listOf("{", "}", "{}"), onInsertText, btnHeight, btnFontSize, "quick_key_brace")
+        SymbolKeyWithVariations("}", listOf("}", "{"), onInsertText, btnHeight, btnFontSize, "quick_key_close_brace")
+        SymbolKeyWithVariations("[", listOf("[", "]", "[]"), onInsertText, btnHeight, btnFontSize, "quick_key_bracket")
+        SymbolKeyWithVariations("]", listOf("]", "["), onInsertText, btnHeight, btnFontSize, "quick_key_close_bracket")
+        SymbolKeyWithVariations("(", listOf("(", ")", "()"), onInsertText, btnHeight, btnFontSize, "quick_key_paren")
+        SymbolKeyWithVariations(")", listOf(")", "("), onInsertText, btnHeight, btnFontSize, "quick_key_close_paren")
+        SymbolKeyWithVariations("<", listOf("<", ">", "</>", "<="), onInsertText, btnHeight, btnFontSize, "quick_key_lt")
+        SymbolKeyWithVariations(">", listOf(">", "<", "=>", ">="), onInsertText, btnHeight, btnFontSize, "quick_key_gt")
 
         // Quotes & Strings
-        SymbolKeyWithVariations("\"", listOf("\"", "'", "`"), onInsertText, "quick_key_dquote")
-        SymbolKeyWithVariations("'", listOf("'", "\"", "`"), onInsertText, "quick_key_quote")
-        SymbolKeyWithVariations("`", listOf("`", "```"), onInsertText, "quick_key_backtick")
-        QuickKeyButton("\\", { onInsertText("\\") }, "quick_key_backslash")
+        SymbolKeyWithVariations("\"", listOf("\"", "'", "`"), onInsertText, btnHeight, btnFontSize, "quick_key_dquote")
+        SymbolKeyWithVariations("'", listOf("'", "\"", "`"), onInsertText, btnHeight, btnFontSize, "quick_key_quote")
+        SymbolKeyWithVariations("`", listOf("`", "```"), onInsertText, btnHeight, btnFontSize, "quick_key_backtick")
+        QuickKeyButton("\\", { onInsertText("\\") }, btnHeight, btnFontSize, "quick_key_backslash")
 
         // Syntax & Punctuation
-        SymbolKeyWithVariations(";", listOf(";", ":"), onInsertText, "quick_key_semicolon")
-        SymbolKeyWithVariations(":", listOf(":", ";"), onInsertText, "quick_key_colon")
-        QuickKeyButton(",", { onInsertText(",") }, "quick_key_comma")
-        SymbolKeyWithVariations(".", listOf(".", "..", "...", "?."), onInsertText, "quick_key_dot")
-        SymbolKeyWithVariations("?", listOf("?", "?.", "?:", "??"), onInsertText, "quick_key_question")
-        SymbolKeyWithVariations("!", listOf("!", "!=", "!!"), onInsertText, "quick_key_exclamation")
+        SymbolKeyWithVariations(";", listOf(";", ":"), onInsertText, btnHeight, btnFontSize, "quick_key_semicolon")
+        SymbolKeyWithVariations(":", listOf(":", ";"), onInsertText, btnHeight, btnFontSize, "quick_key_colon")
+        QuickKeyButton(",", { onInsertText(",") }, btnHeight, btnFontSize, "quick_key_comma")
+        SymbolKeyWithVariations(".", listOf(".", "..", "...", "?."), onInsertText, btnHeight, btnFontSize, "quick_key_dot")
+        SymbolKeyWithVariations("?", listOf("?", "?.", "?:", "??"), onInsertText, btnHeight, btnFontSize, "quick_key_question")
+        SymbolKeyWithVariations("!", listOf("!", "!=", "!!"), onInsertText, btnHeight, btnFontSize, "quick_key_exclamation")
 
         // Operators & Math
-        SymbolKeyWithVariations("=", listOf("=", "==", "===", "=>", "!=", "+="), onInsertText, "quick_key_eq")
-        QuickKeyButton("+", { onInsertText("+") }, "quick_key_plus")
-        QuickKeyButton("-", { onInsertText("-") }, "quick_key_minus")
-        QuickKeyButton("*", { onInsertText("*") }, "quick_key_star")
-        QuickKeyButton("/", { onInsertText("/") }, "quick_key_slash")
-        QuickKeyButton("%", { onInsertText("%") }, "quick_key_percent")
-        SymbolKeyWithVariations("|", listOf("|", "||"), onInsertText, "quick_key_pipe")
-        SymbolKeyWithVariations("&", listOf("&", "&&"), onInsertText, "quick_key_amp")
-        QuickKeyButton("^", { onInsertText("^") }, "quick_key_caret")
-        QuickKeyButton("~", { onInsertText("~") }, "quick_key_tilde")
+        SymbolKeyWithVariations("=", listOf("=", "==", "===", "=>", "!=", "+="), onInsertText, btnHeight, btnFontSize, "quick_key_eq")
+        QuickKeyButton("+", { onInsertText("+") }, btnHeight, btnFontSize, "quick_key_plus")
+        QuickKeyButton("-", { onInsertText("-") }, btnHeight, btnFontSize, "quick_key_minus")
+        QuickKeyButton("*", { onInsertText("*") }, btnHeight, btnFontSize, "quick_key_star")
+        QuickKeyButton("/", { onInsertText("/") }, btnHeight, btnFontSize, "quick_key_slash")
+        QuickKeyButton("%", { onInsertText("%") }, btnHeight, btnFontSize, "quick_key_percent")
+        SymbolKeyWithVariations("|", listOf("|", "||"), onInsertText, btnHeight, btnFontSize, "quick_key_pipe")
+        SymbolKeyWithVariations("&", listOf("&", "&&"), onInsertText, btnHeight, btnFontSize, "quick_key_amp")
+        QuickKeyButton("^", { onInsertText("^") }, btnHeight, btnFontSize, "quick_key_caret")
+        QuickKeyButton("~", { onInsertText("~") }, btnHeight, btnFontSize, "quick_key_tilde")
 
         // Special Symbols
-        QuickKeyButton("#", { onInsertText("#") }, "quick_key_hash")
-        QuickKeyButton("@", { onInsertText("@") }, "quick_key_at")
-        QuickKeyButton("$", { onInsertText("$") }, "quick_key_dollar")
-        QuickKeyButton("_", { onInsertText("_") }, "quick_key_underscore")
+        QuickKeyButton("#", { onInsertText("#") }, btnHeight, btnFontSize, "quick_key_hash")
+        QuickKeyButton("@", { onInsertText("@") }, btnHeight, btnFontSize, "quick_key_at")
+        QuickKeyButton("$", { onInsertText("$") }, btnHeight, btnFontSize, "quick_key_dollar")
+        QuickKeyButton("_", { onInsertText("_") }, btnHeight, btnFontSize, "quick_key_underscore")
     }
 }
 
@@ -129,6 +135,8 @@ private fun ModifierKeyButton(
     label: String,
     isActive: Boolean,
     onClick: () -> Unit,
+    btnHeight: androidx.compose.ui.unit.Dp,
+    btnFontSize: androidx.compose.ui.unit.TextUnit,
     testTag: String
 ) {
     val bg = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
@@ -136,7 +144,7 @@ private fun ModifierKeyButton(
 
     Box(
         modifier = Modifier
-            .height(32.dp)
+            .height(btnHeight)
             .widthIn(min = 40.dp)
             .background(bg, RoundedCornerShape(4.dp))
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
@@ -148,7 +156,7 @@ private fun ModifierKeyButton(
         Text(
             text = label,
             color = text,
-            fontSize = 12.sp,
+            fontSize = btnFontSize,
             fontWeight = FontWeight.Bold
         )
     }
@@ -158,11 +166,13 @@ private fun ModifierKeyButton(
 private fun QuickActionButton(
     label: String,
     onClick: () -> Unit,
+    btnHeight: androidx.compose.ui.unit.Dp,
+    btnFontSize: androidx.compose.ui.unit.TextUnit,
     testTag: String
 ) {
     Box(
         modifier = Modifier
-            .height(32.dp)
+            .height(btnHeight)
             .widthIn(min = 34.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
@@ -174,7 +184,7 @@ private fun QuickActionButton(
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
+            fontSize = btnFontSize,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Medium
         )
@@ -185,11 +195,13 @@ private fun QuickActionButton(
 private fun QuickKeyButton(
     label: String,
     onClick: () -> Unit,
+    btnHeight: androidx.compose.ui.unit.Dp,
+    btnFontSize: androidx.compose.ui.unit.TextUnit,
     testTag: String
 ) {
     Box(
         modifier = Modifier
-            .height(32.dp)
+            .height(btnHeight)
             .widthIn(min = 32.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
@@ -201,7 +213,7 @@ private fun QuickKeyButton(
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp,
+            fontSize = btnFontSize,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.SemiBold
         )
@@ -213,13 +225,15 @@ private fun SymbolKeyWithVariations(
     defaultLabel: String,
     variations: List<String>,
     onSelect: (String) -> Unit,
+    btnHeight: androidx.compose.ui.unit.Dp,
+    btnFontSize: androidx.compose.ui.unit.TextUnit,
     testTag: String
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
-            .height(32.dp)
+            .height(btnHeight)
             .widthIn(min = 32.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
@@ -236,7 +250,7 @@ private fun SymbolKeyWithVariations(
         Text(
             text = defaultLabel,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp,
+            fontSize = btnFontSize,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
         )

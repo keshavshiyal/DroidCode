@@ -458,6 +458,7 @@ fun MainShell() {
                                             altActive = false
                                         },
                                         onOpenCommandPalette = { showCommandPalette = true },
+                                        onOpenGeneralMenu = { showProjectMenubar = true },
                                         onSaveRequested = {},
                                         modifier = Modifier.fillMaxSize()
                                     )

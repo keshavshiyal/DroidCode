@@ -12,6 +12,7 @@ public class SettingsManager {
     private static final String KEY_KEYBAR_ENABLE = "keybar_enable";
     private static final String KEY_KEYBAR_DENSITY = "keybar_density";
     private static final String KEY_LINE_NUMBERS = "line_numbers";
+    private static final String KEY_FONT_FAMILY = "font_family";
 
     private static volatile SettingsManager INSTANCE;
 
@@ -42,7 +43,15 @@ public class SettingsManager {
 
         boolean lineNumbers = prefs.getBoolean(KEY_LINE_NUMBERS, true);
 
-        this.currentSettings = new AppSettings(themeMode, fontSize, wordWrap, keyBarEnable, density, lineNumbers);
+        String fontFamStr = prefs.getString(KEY_FONT_FAMILY, AppSettings.EditorFontFamily.JETBRAINS_MONO.name());
+        AppSettings.EditorFontFamily fontFamily;
+        try {
+            fontFamily = AppSettings.EditorFontFamily.valueOf(fontFamStr);
+        } catch (Exception e) {
+            fontFamily = AppSettings.EditorFontFamily.JETBRAINS_MONO;
+        }
+
+        this.currentSettings = new AppSettings(themeMode, fontSize, wordWrap, keyBarEnable, density, lineNumbers, fontFamily);
     }
 
     public static SettingsManager getInstance(Context context) {
@@ -67,7 +76,8 @@ public class SettingsManager {
                 currentSettings.isWordWrap(),
                 currentSettings.isQuickKeyBarEnabled(),
                 currentSettings.getQuickKeyBarDensity(),
-                currentSettings.isLineNumbersEnabled()
+                currentSettings.isLineNumbersEnabled(),
+                currentSettings.getEditorFontFamily()
         );
     }
 
@@ -80,6 +90,7 @@ public class SettingsManager {
                 .putBoolean(KEY_KEYBAR_ENABLE, currentSettings.isQuickKeyBarEnabled())
                 .putString(KEY_KEYBAR_DENSITY, currentSettings.getQuickKeyBarDensity().name())
                 .putBoolean(KEY_LINE_NUMBERS, currentSettings.isLineNumbersEnabled())
+                .putString(KEY_FONT_FAMILY, currentSettings.getEditorFontFamily().name())
                 .apply();
     }
 }

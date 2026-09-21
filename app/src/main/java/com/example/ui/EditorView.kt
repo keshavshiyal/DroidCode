@@ -43,6 +43,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
@@ -121,6 +123,7 @@ fun EditorView(
     altActive: Boolean = false,
     onResetModifiers: () -> Unit = {},
     onOpenCommandPalette: () -> Unit = {},
+    onOpenGeneralMenu: (() -> Unit)? = null,
     onSaveRequested: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -369,6 +372,20 @@ fun EditorView(
                     }
 
                     IconButton(
+                        onClick = { onOpenGeneralMenu?.invoke() ?: run { showContextMenu = true } },
+                        modifier = Modifier
+                            .size(26.dp)
+                            .testTag("editor_general_menu_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "General Menu",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
                         onClick = { showContextMenu = true },
                         modifier = Modifier
                             .size(26.dp)
@@ -553,6 +570,9 @@ private fun CodeCanvas(
 ) {
     val context = LocalContext.current
     val editorMgr = remember { EditorManager.getInstance() }
+    val activeFontFamily = remember(settings.editorFontFamily) {
+        EditorFontHelper.getFontFamily(settings.editorFontFamily)
+    }
 
     var textFieldValue by remember(tab.id) {
         mutableStateOf(
@@ -695,7 +715,7 @@ private fun CodeCanvas(
                                 textStyle = TextStyle(
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurface,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = activeFontFamily
                                 ),
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                 modifier = Modifier.fillMaxWidth()
@@ -761,7 +781,7 @@ private fun CodeCanvas(
                                     textStyle = TextStyle(
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurface,
-                                        fontFamily = FontFamily.Monospace
+                                        fontFamily = activeFontFamily
                                     ),
                                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                     modifier = Modifier.fillMaxWidth()
@@ -849,7 +869,7 @@ private fun CodeCanvas(
                                 Text(
                                     text = lineNumber.toString(),
                                     fontSize = settings.fontSizeSp.sp,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = activeFontFamily,
                                     fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
                                     color = textColor,
                                     lineHeight = (settings.fontSizeSp * 1.4).sp
@@ -874,7 +894,7 @@ private fun CodeCanvas(
                                 Text(
                                     text = i.toString(),
                                     fontSize = settings.fontSizeSp.sp,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = activeFontFamily,
                                     fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
                                     color = textColor,
                                     lineHeight = (settings.fontSizeSp * 1.4).sp
@@ -941,7 +961,7 @@ private fun CodeCanvas(
                     textStyle = TextStyle(
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = settings.fontSizeSp.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = activeFontFamily,
                         lineHeight = (settings.fontSizeSp * 1.4).sp
                     ),
                     visualTransformation = CodeSyntaxVisualTransformation(tab.languageId, isDark),
