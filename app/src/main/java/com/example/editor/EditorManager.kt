@@ -51,6 +51,10 @@ class EditorManager private constructor() {
 
     fun saveActiveTab() {
         val tab = activeTab ?: return
+        saveTab(tab)
+    }
+
+    fun saveTab(tab: EditorTab) {
         if (tab.isModified) {
             fileSystem.writeStringToFile(tab.file, tab.content)
             tab.markSaved()

@@ -52,6 +52,9 @@ class EditorTab(
     val file: File
         get() = File(filePath)
 
+    val extension: String
+        get() = file.extension
+
     private fun calculateLineColumn() {
         val pos = cursorPosition.coerceIn(0, content.length)
         var currentLine = 1

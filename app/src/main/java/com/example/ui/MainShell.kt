@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
@@ -125,22 +126,29 @@ fun MainShell() {
         val tab = editorMgr.activeTab
         if (tab != null) {
             // Check modifier shortcut triggers
-            if (ctrlActive && text.lowercase() == "s") {
-                try { editorMgr.saveActiveTab() } catch (e: Exception) {}
-                ctrlActive = false
-            } else if (ctrlActive && shiftActive && text.lowercase() == "p") {
-                showCommandPalette = true
-                ctrlActive = false
-                shiftActive = false
-            } else if (ctrlActive && text.lowercase() == "p") {
-                showCommandPalette = true
-                ctrlActive = false
-            } else if (ctrlActive && text.lowercase() == "z") {
-                editorMgr.undoActiveTab()
-                ctrlActive = false
-            } else if (ctrlActive && text.lowercase() == "y") {
-                editorMgr.redoActiveTab()
-                ctrlActive = false
+            if (ctrlActive) {
+                when (text.lowercase()) {
+                    "s" -> {
+                        try { editorMgr.saveActiveTab() } catch (e: Exception) {}
+                        ctrlActive = false
+                    }
+                    "p" -> {
+                        showCommandPalette = true
+                        ctrlActive = false
+                        shiftActive = false
+                    }
+                    "z" -> {
+                        editorMgr.undoActiveTab()
+                        ctrlActive = false
+                    }
+                    "y" -> {
+                        editorMgr.redoActiveTab()
+                        ctrlActive = false
+                    }
+                    else -> {
+                        ctrlActive = false
+                    }
+                }
             } else {
                 val current = tab.content
                 val pos = tab.cursorPosition
@@ -331,7 +339,12 @@ fun MainShell() {
                         }
 
                         "IDE" -> {
-                            Column(modifier = Modifier.fillMaxSize()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .imePadding()
+                                    .navigationBarsPadding()
+                            ) {
                                 // Main Editor Workstation Area
                                 Box(
                                     modifier = Modifier
@@ -340,6 +353,15 @@ fun MainShell() {
                                 ) {
                                     EditorView(
                                         settings = settingsState,
+                                        ctrlActive = ctrlActive,
+                                        shiftActive = shiftActive,
+                                        altActive = altActive,
+                                        onResetModifiers = {
+                                            ctrlActive = false
+                                            shiftActive = false
+                                            altActive = false
+                                        },
+                                        onOpenCommandPalette = { showCommandPalette = true },
                                         onSaveRequested = {},
                                         modifier = Modifier.fillMaxSize()
                                     )

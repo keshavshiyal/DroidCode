@@ -18,16 +18,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -451,7 +459,7 @@ private fun FileTreeItem(
             } else {
                 Spacer(modifier = Modifier.width(18.dp))
                 Icon(
-                    imageVector = Icons.Default.Description,
+                    imageVector = getFileIcon(node.extension),
                     contentDescription = null,
                     tint = getFileIconColor(node.extension),
                     modifier = Modifier
@@ -486,14 +494,28 @@ private fun FileTreeItem(
 }
 
 @Composable
+private fun getFileIcon(ext: String) = when (ext.lowercase()) {
+    "java" -> Icons.Default.Coffee
+    "kt", "kts" -> Icons.Default.Code
+    "py" -> Icons.Default.Terminal
+    "js", "ts", "jsx", "tsx" -> Icons.Default.DataObject
+    "html", "htm", "css" -> Icons.Default.Language
+    "json", "xml", "toml", "yaml", "yml", "gradle" -> Icons.Default.Settings
+    "md", "txt" -> Icons.Default.Article
+    "png", "jpg", "jpeg", "gif", "svg" -> Icons.Default.Image
+    else -> Icons.Default.Description
+}
+
+@Composable
 private fun getFileIconColor(ext: String) = when (ext.lowercase()) {
+    "java" -> Color(0xFFD84315) // Java Coffee Brown / Warm Amber
     "kt", "kts" -> MaterialTheme.colorScheme.primary
-    "java" -> MaterialTheme.colorScheme.secondary
     "py" -> Color(0xFFFFC107) // Python Yellow
-    "js", "ts", "jsx", "tsx" -> Color(0xFF4CAF50) // Green
-    "html", "css" -> Color(0xFFE91E63) // Pink
-    "json", "xml", "toml", "yaml", "yml" -> MaterialTheme.colorScheme.tertiary
+    "js", "ts", "jsx", "tsx" -> Color(0xFF4CAF50) // JS Green
+    "html", "htm", "css" -> Color(0xFFE91E63) // HTML/CSS Pink
+    "json", "xml", "toml", "yaml", "yml", "gradle" -> MaterialTheme.colorScheme.tertiary
     "md", "txt" -> MaterialTheme.colorScheme.outline
+    "png", "jpg", "jpeg", "gif", "svg" -> Color(0xFF9C27B0) // Image Purple
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 

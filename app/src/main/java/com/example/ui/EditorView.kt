@@ -21,15 +21,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Coffee
+import androidx.compose.material.icons.filled.DataObject
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +50,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -60,12 +77,19 @@ import com.example.settings.AppSettings
 @Composable
 fun EditorView(
     settings: AppSettings,
+    ctrlActive: Boolean = false,
+    shiftActive: Boolean = false,
+    altActive: Boolean = false,
+    onResetModifiers: () -> Unit = {},
+    onOpenCommandPalette: () -> Unit = {},
     onSaveRequested: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val editorMgr = remember { EditorManager.getInstance() }
     val tabs = editorMgr.tabs
     val activeTab = editorMgr.activeTab
+
+    var tabToPromptCloseIndex by remember { mutableStateOf<Int?>(null) }
 
     Column(
         modifier = modifier
@@ -93,9 +117,18 @@ fun EditorView(
                             .background(bg)
                             .border(1.dp, border)
                             .clickable { editorMgr.activeTabIndex = index }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            imageVector = getEditorFileIcon(tab.extension),
+                            contentDescription = null,
+                            tint = getEditorFileIconColor(tab.extension),
+                            modifier = Modifier
+                                .size(16.dp)
+                                .padding(end = 4.dp)
+                        )
+
                         Text(
                             text = tab.fileName + (if (tab.isModified) " *" else ""),
                             fontSize = 12.sp,
@@ -112,11 +145,54 @@ fun EditorView(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .size(14.dp)
-                                .clickable { editorMgr.closeTab(index) }
+                                .clickable {
+                                    val tabToClose = tabs[index]
+                                    if (tabToClose.isModified) {
+                                        tabToPromptCloseIndex = index
+                                    } else {
+                                        editorMgr.closeTab(index)
+                                    }
+                                }
                         )
                     }
                 }
             }
+        }
+
+        // Unsaved Changes Confirmation Dialog
+        if (tabToPromptCloseIndex != null && tabToPromptCloseIndex!! in tabs.indices) {
+            val tabToClose = tabs[tabToPromptCloseIndex!!]
+            AlertDialog(
+                onDismissRequest = { tabToPromptCloseIndex = null },
+                title = { Text("Unsaved Changes") },
+                text = { Text("Do you want to save changes to '${tabToClose.fileName}' before closing?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            try {
+                                editorMgr.saveTab(tabToClose)
+                                onSaveRequested()
+                            } catch (e: Exception) {}
+                            editorMgr.closeTab(tabToPromptCloseIndex!!)
+                            tabToPromptCloseIndex = null
+                        }
+                    ) { Text("Save") }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(
+                            onClick = {
+                                editorMgr.closeTab(tabToPromptCloseIndex!!)
+                                tabToPromptCloseIndex = null
+                            }
+                        ) { Text("Don't Save") }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        TextButton(
+                            onClick = { tabToPromptCloseIndex = null }
+                        ) { Text("Cancel") }
+                    }
+                }
+            )
         }
 
         // Editor Toolbar & Language / Line Stats
@@ -198,6 +274,12 @@ fun EditorView(
             CodeCanvas(
                 tab = activeTab,
                 settings = settings,
+                ctrlActive = ctrlActive,
+                shiftActive = shiftActive,
+                altActive = altActive,
+                onResetModifiers = onResetModifiers,
+                onOpenCommandPalette = onOpenCommandPalette,
+                onSaveRequested = onSaveRequested,
                 onContentChange = { newText: String ->
                     editorMgr.updateActiveTabContent(newText)
                 },
@@ -243,9 +325,17 @@ fun EditorView(
 private fun CodeCanvas(
     tab: EditorTab,
     settings: AppSettings,
+    ctrlActive: Boolean,
+    shiftActive: Boolean,
+    altActive: Boolean,
+    onResetModifiers: () -> Unit,
+    onOpenCommandPalette: () -> Unit,
+    onSaveRequested: () -> Unit,
     onContentChange: (String) -> Unit,
     onCursorChange: (Int) -> Unit
 ) {
+    val editorMgr = remember { EditorManager.getInstance() }
+
     var textFieldValue by remember(tab.id, tab.content) {
         mutableStateOf(
             TextFieldValue(
@@ -298,9 +388,45 @@ private fun CodeCanvas(
             BasicTextField(
                 value = textFieldValue,
                 onValueChange = { newValue ->
-                    textFieldValue = newValue
-                    onContentChange(newValue.text)
-                    onCursorChange(newValue.selection.start)
+                    if (ctrlActive) {
+                        val oldText = textFieldValue.text
+                        val newText = newValue.text
+                        val addedChar = if (newText.length > oldText.length) {
+                            val selStart = newValue.selection.start
+                            if (selStart > 0 && selStart <= newText.length) {
+                                newText.substring(selStart - 1, selStart)
+                            } else ""
+                        } else ""
+
+                        when (addedChar.lowercase()) {
+                            "s" -> {
+                                try {
+                                    editorMgr.saveActiveTab()
+                                    onSaveRequested()
+                                } catch (e: Exception) {}
+                                onResetModifiers()
+                            }
+                            "z" -> {
+                                editorMgr.undoActiveTab()
+                                onResetModifiers()
+                            }
+                            "y" -> {
+                                editorMgr.redoActiveTab()
+                                onResetModifiers()
+                            }
+                            "p" -> {
+                                onOpenCommandPalette()
+                                onResetModifiers()
+                            }
+                            else -> {
+                                onResetModifiers()
+                            }
+                        }
+                    } else {
+                        textFieldValue = newValue
+                        onContentChange(newValue.text)
+                        onCursorChange(newValue.selection.start)
+                    }
                 },
                 textStyle = TextStyle(
                     color = MaterialTheme.colorScheme.onSurface,
@@ -312,10 +438,66 @@ private fun CodeCanvas(
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier
                     .fillMaxSize()
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown) {
+                            val isCtrl = ctrlActive || keyEvent.isCtrlPressed
+                            if (isCtrl) {
+                                when (keyEvent.key) {
+                                    Key.S -> {
+                                        try { editorMgr.saveActiveTab(); onSaveRequested() } catch (e: Exception) {}
+                                        onResetModifiers()
+                                        true
+                                    }
+                                    Key.Z -> {
+                                        editorMgr.undoActiveTab()
+                                        onResetModifiers()
+                                        true
+                                    }
+                                    Key.Y -> {
+                                        editorMgr.redoActiveTab()
+                                        onResetModifiers()
+                                        true
+                                    }
+                                    Key.P -> {
+                                        onOpenCommandPalette()
+                                        onResetModifiers()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
+                        } else false
+                    }
                     .testTag("code_editor_text_input")
             )
         }
     }
+}
+
+@Composable
+private fun getEditorFileIcon(ext: String) = when (ext.lowercase()) {
+    "java" -> Icons.Default.Coffee
+    "kt", "kts" -> Icons.Default.Code
+    "py" -> Icons.Default.Terminal
+    "js", "ts", "jsx", "tsx" -> Icons.Default.DataObject
+    "html", "htm", "css" -> Icons.Default.Language
+    "json", "xml", "toml", "yaml", "yml", "gradle" -> Icons.Default.Settings
+    "md", "txt" -> Icons.Default.Article
+    "png", "jpg", "jpeg", "gif", "svg" -> Icons.Default.Image
+    else -> Icons.Default.Description
+}
+
+@Composable
+private fun getEditorFileIconColor(ext: String) = when (ext.lowercase()) {
+    "java" -> Color(0xFFD84315) // Java Coffee Brown / Warm Amber
+    "kt", "kts" -> MaterialTheme.colorScheme.primary
+    "py" -> Color(0xFFFFC107) // Python Yellow
+    "js", "ts", "jsx", "tsx" -> Color(0xFF4CAF50) // JS Green
+    "html", "htm", "css" -> Color(0xFFE91E63) // HTML/CSS Pink
+    "json", "xml", "toml", "yaml", "yml", "gradle" -> MaterialTheme.colorScheme.tertiary
+    "md", "txt" -> MaterialTheme.colorScheme.outline
+    "png", "jpg", "jpeg", "gif", "svg" -> Color(0xFF9C27B0) // Image Purple
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 class CodeSyntaxVisualTransformation(
