@@ -56,6 +56,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -103,6 +104,13 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.FindReplace
+import androidx.compose.material.icons.filled.MoreVert
+import com.example.project.WorkspaceManager
+
 @Composable
 fun EditorView(
     settings: AppSettings,
@@ -114,11 +122,49 @@ fun EditorView(
     onSaveRequested: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val editorMgr = remember { EditorManager.getInstance() }
+    val workspaceMgr = remember { WorkspaceManager.getInstance() }
     val tabs = editorMgr.tabs
     val activeTab = editorMgr.activeTab
 
     var tabToPromptCloseIndex by remember { mutableStateOf<Int?>(null) }
+
+    var showContextMenu by remember { mutableStateOf(false) }
+    var showGoToLineDialog by remember { mutableStateOf(false) }
+    var showChangeLanguageDialog by remember { mutableStateOf(false) }
+    var showChangeEncodingDialog by remember { mutableStateOf(false) }
+    var showChangeLineEndingDialog by remember { mutableStateOf(false) }
+    var showSaveAsDialog by remember { mutableStateOf(false) }
+    var infoDialogTitle by remember { mutableStateOf<String?>(null) }
+    var infoDialogText by remember { mutableStateOf<String?>(null) }
+    var pendingActionType by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        EditorCommandRegistration.registerAllCommands(
+            context = context,
+            editorMgr = editorMgr,
+            workspaceMgr = workspaceMgr,
+            settings = settings,
+            onOpenCommandPalette = onOpenCommandPalette,
+            onShowGoToLineDialog = { showGoToLineDialog = true },
+            onShowChangeLanguageDialog = { showChangeLanguageDialog = true },
+            onShowChangeEncodingDialog = { showChangeEncodingDialog = true },
+            onShowChangeLineEndingDialog = { showChangeLineEndingDialog = true },
+            onShowSaveAsDialog = { showSaveAsDialog = true },
+            onShowInfoDialog = { title, text ->
+                infoDialogTitle = title
+                infoDialogText = text
+            },
+            onOpenTerminalPanel = {
+                infoDialogTitle = "Terminal Panel"
+                infoDialogText = "Terminal Session Opened at ${activeTab?.filePath ?: workspaceMgr.currentProject?.path ?: "~"}\n$ "
+            },
+            onExecuteAction = { actionType ->
+                pendingActionType = actionType
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -229,7 +275,7 @@ fun EditorView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(32.dp)
+                    .height(34.dp)
                     .background(MaterialTheme.colorScheme.surface)
                     .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                     .padding(horizontal = 8.dp),
@@ -242,9 +288,32 @@ fun EditorView(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.secondary,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .clickable { showChangeLanguageDialog = true }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = activeTab.encoding,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .clickable { showChangeEncodingDialog = true }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = activeTab.lineEnding,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .clickable { showChangeLineEndingDialog = true }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "Ln ${activeTab.line}, Col ${activeTab.column}",
                         fontSize = 11.sp,
@@ -296,6 +365,20 @@ fun EditorView(
                             modifier = Modifier.size(16.dp)
                         )
                     }
+
+                    IconButton(
+                        onClick = { showContextMenu = true },
+                        modifier = Modifier
+                            .size(26.dp)
+                            .testTag("editor_context_menu_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "IDE Context Menu",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
@@ -304,7 +387,17 @@ fun EditorView(
                 FileViewerType.IMAGE -> ImageViewer(file = activeTab.file)
                 FileViewerType.VIDEO -> VideoViewer(file = activeTab.file)
                 FileViewerType.PDF -> PdfViewer(file = activeTab.file)
-                FileViewerType.UNSUPPORTED -> UnsupportedFileViewer(file = activeTab.file)
+                FileViewerType.UNSUPPORTED -> UnsupportedFileViewer(
+                    tab = activeTab,
+                    onForceOpenAsText = {
+                        try {
+                            val text = activeTab.file.readText()
+                            activeTab.forceOpenAsText(text)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Cannot read file as text: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
                 FileViewerType.TEXT -> {
                     CodeCanvas(
                         tab = activeTab,
@@ -312,8 +405,15 @@ fun EditorView(
                         ctrlActive = ctrlActive,
                         shiftActive = shiftActive,
                         altActive = altActive,
+                        pendingActionType = pendingActionType,
+                        onClearPendingAction = { pendingActionType = null },
                         onResetModifiers = onResetModifiers,
                         onOpenCommandPalette = onOpenCommandPalette,
+                        onOpenContextMenu = { showContextMenu = true },
+                        onShowInfoDialog = { title, text ->
+                            infoDialogTitle = title
+                            infoDialogText = text
+                        },
                         onSaveRequested = onSaveRequested,
                         onContentChange = { newText: String ->
                             editorMgr.updateActiveTabContent(newText)
@@ -356,6 +456,80 @@ fun EditorView(
             }
         }
     }
+
+    // --- Dialogs ---
+    if (showContextMenu) {
+        EditorContextMenuDialog(
+            onDismiss = { showContextMenu = false },
+            onExecuteCommand = { cmd -> cmd.execute() }
+        )
+    }
+
+    if (showGoToLineDialog && activeTab != null) {
+        val totalLines = activeTab.content.split("\n").size
+        GoToLineDialog(
+            currentLine = activeTab.line,
+            totalLines = totalLines,
+            onDismiss = { showGoToLineDialog = false },
+            onJumpToLine = { target ->
+                pendingActionType = "GO_TO_LINE:$target"
+            }
+        )
+    }
+
+    if (showChangeLanguageDialog && activeTab != null) {
+        ChangeLanguageDialog(
+            currentLanguage = activeTab.languageId,
+            onDismiss = { showChangeLanguageDialog = false },
+            onLanguageSelected = { newLang ->
+                activeTab.languageId = newLang
+            }
+        )
+    }
+
+    if (showChangeEncodingDialog && activeTab != null) {
+        ChangeEncodingDialog(
+            currentEncoding = activeTab.encoding,
+            onDismiss = { showChangeEncodingDialog = false },
+            onEncodingSelected = { enc ->
+                activeTab.encoding = enc
+            }
+        )
+    }
+
+    if (showChangeLineEndingDialog && activeTab != null) {
+        ChangeLineEndingDialog(
+            currentEnding = activeTab.lineEnding,
+            onDismiss = { showChangeLineEndingDialog = false },
+            onEndingSelected = { ending ->
+                activeTab.lineEnding = ending
+            }
+        )
+    }
+
+    if (showSaveAsDialog && activeTab != null) {
+        SaveAsDialog(
+            currentFilePath = activeTab.filePath,
+            onDismiss = { showSaveAsDialog = false },
+            onSaveAs = { newPath ->
+                val f = File(newPath)
+                f.parentFile?.mkdirs()
+                f.writeText(activeTab.content)
+                Toast.makeText(context, "Saved as ${f.name}", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    if (infoDialogTitle != null && infoDialogText != null) {
+        InfoDetailDialog(
+            title = infoDialogTitle!!,
+            content = infoDialogText!!,
+            onDismiss = {
+                infoDialogTitle = null
+                infoDialogText = null
+            }
+        )
+    }
 }
 
 @Composable
@@ -365,12 +539,17 @@ private fun CodeCanvas(
     ctrlActive: Boolean,
     shiftActive: Boolean,
     altActive: Boolean,
+    pendingActionType: String?,
+    onClearPendingAction: () -> Unit,
     onResetModifiers: () -> Unit,
     onOpenCommandPalette: () -> Unit,
+    onOpenContextMenu: () -> Unit,
+    onShowInfoDialog: (String, String) -> Unit,
     onSaveRequested: () -> Unit,
     onContentChange: (String) -> Unit,
     onCursorChange: (Int) -> Unit
 ) {
+    val context = LocalContext.current
     val editorMgr = remember { EditorManager.getInstance() }
 
     var textFieldValue by remember(tab.id) {
@@ -391,170 +570,366 @@ private fun CodeCanvas(
         }
     }
 
+    LaunchedEffect(pendingActionType) {
+        if (pendingActionType != null) {
+            val act = pendingActionType
+            onClearPendingAction()
+
+            when {
+                act == "CUT" -> EditorActionsHandler.cut(context, tab, textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "COPY" -> EditorActionsHandler.copy(context, tab, textFieldValue)
+                act == "PASTE" -> EditorActionsHandler.paste(context, textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "PASTE_PLAIN" -> EditorActionsHandler.pastePlain(context, textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "SELECT_ALL" -> EditorActionsHandler.selectAll(textFieldValue) {
+                    textFieldValue = it
+                }
+                act == "SELECT_LINE" -> EditorActionsHandler.selectLine(textFieldValue) {
+                    textFieldValue = it
+                }
+                act == "DUPLICATE_LINE" -> EditorActionsHandler.duplicateLineOrSelection(textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "DELETE_LINE" -> EditorActionsHandler.deleteLine(textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "JOIN_LINES" -> EditorActionsHandler.joinLines(textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act.startsWith("GO_TO_LINE:") -> {
+                    val lineNum = act.removePrefix("GO_TO_LINE:").toIntOrNull() ?: 1
+                    EditorActionsHandler.goToLine(tab, lineNum) {
+                        textFieldValue = it; onCursorChange(it.selection.start)
+                    }
+                }
+                act == "GO_DEFINITION" || act == "GO_DECLARATION" -> {
+                    EditorActionsHandler.goToDefinition(context, tab, textFieldValue) {
+                        textFieldValue = it; onCursorChange(it.selection.start)
+                    }
+                }
+                act == "FORMAT_DOC" -> EditorActionsHandler.formatDocument(tab) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "TOGGLE_COMMENT" -> EditorActionsHandler.toggleCommentLine(tab, textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "INDENT" -> EditorActionsHandler.indent(textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "OUTDENT" -> EditorActionsHandler.outdent(textFieldValue) {
+                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                }
+                act == "SHOW_FIND" -> {
+                    tab.showFindBar = true
+                    tab.showReplaceBar = false
+                }
+                act == "SHOW_REPLACE" -> {
+                    tab.showFindBar = true
+                    tab.showReplaceBar = true
+                }
+                act == "RUN" -> EditorActionsHandler.runFile(context, tab) { title, res ->
+                    onShowInfoDialog(title, res)
+                }
+                act == "GIT_DIFF" -> EditorActionsHandler.gitDiff(context, tab) { title, res ->
+                    onShowInfoDialog(title, res)
+                }
+                act == "GIT_BLAME" -> EditorActionsHandler.gitBlame(context, tab) { title, res ->
+                    onShowInfoDialog(title, res)
+                }
+                act == "GIT_HISTORY" -> EditorActionsHandler.gitHistory(context, tab) { title, res ->
+                    onShowInfoDialog(title, res)
+                }
+            }
+        }
+    }
+
     val lines = textFieldValue.text.split("\n")
     val lineCount = lines.size
     val verticalScroll = rememberScrollState()
     val horizontalScroll = rememberScrollState()
     val isDark = isSystemInDarkTheme()
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        // Line Numbers Gutter
-        if (settings.isLineNumbersEnabled) {
-            Column(
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Find / Replace Bar Overlay
+        if (tab.showFindBar) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 4.dp,
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .width(46.dp)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .verticalScroll(verticalScroll)
-                    .padding(vertical = 8.dp, horizontal = 2.dp),
-                horizontalAlignment = Alignment.End
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                    .padding(6.dp)
             ) {
-                for (i in 1..lineCount) {
-                    val isActiveLine = (i == tab.line)
-                    val bgColor = if (isActiveLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent
-                    val textColor = if (isActiveLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(bgColor, RoundedCornerShape(3.dp))
-                            .padding(horizontal = 4.dp),
-                        contentAlignment = Alignment.CenterEnd
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = i.toString(),
-                            fontSize = settings.fontSizeSp.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
-                            color = textColor,
-                            lineHeight = (settings.fontSizeSp * 1.4).sp
+                        OutlinedTextField(
+                            value = tab.findQuery,
+                            onValueChange = { tab.findQuery = it },
+                            placeholder = { Text("Find in code...", fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp)
                         )
+
+                        IconButton(
+                            onClick = {
+                                if (tab.findQuery.isNotEmpty() && textFieldValue.text.contains(tab.findQuery, true)) {
+                                    val nextPos = textFieldValue.text.indexOf(tab.findQuery, textFieldValue.selection.start + 1, true)
+                                        .let { if (it < 0) textFieldValue.text.indexOf(tab.findQuery, ignoreCase = true) else it }
+                                    if (nextPos >= 0) {
+                                        textFieldValue = textFieldValue.copy(selection = TextRange(nextPos, nextPos + tab.findQuery.length))
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = "Next", modifier = Modifier.size(16.dp))
+                        }
+
+                        IconButton(
+                            onClick = {
+                                if (!tab.showReplaceBar) tab.showReplaceBar = true
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.FindReplace, contentDescription = "Replace Mode", modifier = Modifier.size(16.dp))
+                        }
+
+                        IconButton(
+                            onClick = { tab.showFindBar = false },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    if (tab.showReplaceBar) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = tab.replaceQuery,
+                                onValueChange = { tab.replaceQuery = it },
+                                placeholder = { Text("Replace with...", fontSize = 12.sp) },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp)
+                            )
+
+                            Button(
+                                onClick = {
+                                    if (tab.findQuery.isNotEmpty()) {
+                                        val newText = textFieldValue.text.replaceFirst(tab.findQuery, tab.replaceQuery, ignoreCase = true)
+                                        textFieldValue = TextFieldValue(newText, TextRange(textFieldValue.selection.start))
+                                        onContentChange(newText)
+                                    }
+                                },
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Text("Replace", fontSize = 11.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (tab.findQuery.isNotEmpty()) {
+                                        val newText = textFieldValue.text.replace(tab.findQuery, tab.replaceQuery, ignoreCase = true)
+                                        textFieldValue = TextFieldValue(newText, TextRange(0))
+                                        onContentChange(newText)
+                                    }
+                                },
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Text("All", fontSize = 11.sp)
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Main Editor Canvas Input
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(verticalScroll)
-                .then(if (!settings.isWordWrap) Modifier.horizontalScroll(horizontalScroll) else Modifier)
-                .padding(8.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            BasicTextField(
-                value = textFieldValue,
-                onValueChange = { newValue ->
-                    if (ctrlActive) {
-                        val oldText = textFieldValue.text
-                        val newText = newValue.text
-                        val addedChar = if (newText.length > oldText.length) {
-                            val selStart = newValue.selection.start
-                            if (selStart > 0 && selStart <= newText.length) {
-                                newText.substring(selStart - 1, selStart)
-                            } else ""
-                        } else ""
+            // Line Numbers Gutter
+            if (settings.isLineNumbersEnabled) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(46.dp)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .verticalScroll(verticalScroll)
+                        .padding(vertical = 8.dp, horizontal = 2.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    for (i in 1..lineCount) {
+                        val isActiveLine = (i == tab.line)
+                        val bgColor = if (isActiveLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent
+                        val textColor = if (isActiveLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
-                        when (addedChar.lowercase()) {
-                            "s" -> {
-                                try {
-                                    editorMgr.saveActiveTab()
-                                    onSaveRequested()
-                                } catch (e: Exception) {}
-                                onResetModifiers()
-                            }
-                            "z" -> {
-                                editorMgr.undoActiveTab()
-                                onResetModifiers()
-                            }
-                            "y" -> {
-                                editorMgr.redoActiveTab()
-                                onResetModifiers()
-                            }
-                            "p" -> {
-                                onOpenCommandPalette()
-                                onResetModifiers()
-                            }
-                            else -> {
-                                onResetModifiers()
-                            }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(bgColor, RoundedCornerShape(3.dp))
+                                .padding(horizontal = 4.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Text(
+                                text = i.toString(),
+                                fontSize = settings.fontSizeSp.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
+                                color = textColor,
+                                lineHeight = (settings.fontSizeSp * 1.4).sp
+                            )
                         }
-                    } else {
-                        textFieldValue = newValue
-                        onContentChange(newValue.text)
-                        onCursorChange(newValue.selection.start)
                     }
-                },
-                textStyle = TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = settings.fontSizeSp.sp,
-                    fontFamily = FontFamily.Monospace,
-                    lineHeight = (settings.fontSizeSp * 1.4).sp
-                ),
-                visualTransformation = CodeSyntaxVisualTransformation(tab.languageId, isDark),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                }
+            }
+
+            // Main Editor Canvas Input
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .onPreviewKeyEvent { keyEvent ->
-                        if (keyEvent.type == KeyEventType.KeyDown) {
-                            if (keyEvent.key == Key.Tab) {
-                                val currentText = textFieldValue.text
-                                val sel = textFieldValue.selection
-                                val indentStr = "    " // Standard 4 spaces
-                                val newText = currentText.substring(0, sel.start) + indentStr + currentText.substring(sel.end)
-                                val newPos = sel.start + indentStr.length
-                                textFieldValue = TextFieldValue(newText, TextRange(newPos))
-                                onContentChange(newText)
-                                onCursorChange(newPos)
-                                true
-                            } else if (keyEvent.key == Key.Enter) {
-                                val currentText = textFieldValue.text
-                                val sel = textFieldValue.selection
-                                val lineStart = currentText.lastIndexOf('\n', (sel.start - 1).coerceAtLeast(0)) + 1
-                                val currentLine = currentText.substring(lineStart, sel.start)
-                                val indent = currentLine.takeWhile { it == ' ' || it == '\t' }
-                                val newText = currentText.substring(0, sel.start) + "\n" + indent + currentText.substring(sel.end)
-                                val newPos = sel.start + 1 + indent.length
-                                textFieldValue = TextFieldValue(newText, TextRange(newPos))
-                                onContentChange(newText)
-                                onCursorChange(newPos)
-                                true
-                            } else {
-                                val isCtrl = ctrlActive || keyEvent.isCtrlPressed
-                                if (isCtrl) {
-                                    when (keyEvent.key) {
-                                        Key.S -> {
-                                            try { editorMgr.saveActiveTab(); onSaveRequested() } catch (e: Exception) {}
-                                            onResetModifiers()
-                                            true
-                                        }
-                                        Key.Z -> {
-                                            editorMgr.undoActiveTab()
-                                            onResetModifiers()
-                                            true
-                                        }
-                                        Key.Y -> {
-                                            editorMgr.redoActiveTab()
-                                            onResetModifiers()
-                                            true
-                                        }
-                                        Key.P -> {
-                                            onOpenCommandPalette()
-                                            onResetModifiers()
-                                            true
-                                        }
-                                        else -> false
-                                    }
-                                } else false
+                    .verticalScroll(verticalScroll)
+                    .then(if (!settings.isWordWrap) Modifier.horizontalScroll(horizontalScroll) else Modifier)
+                    .padding(8.dp)
+            ) {
+                BasicTextField(
+                    value = textFieldValue,
+                    onValueChange = { newValue ->
+                        if (ctrlActive) {
+                            val oldText = textFieldValue.text
+                            val newText = newValue.text
+                            val addedChar = if (newText.length > oldText.length) {
+                                val selStart = newValue.selection.start
+                                if (selStart > 0 && selStart <= newText.length) {
+                                    newText.substring(selStart - 1, selStart)
+                                } else ""
+                            } else ""
+
+                            when (addedChar.lowercase()) {
+                                "s" -> {
+                                    try {
+                                        editorMgr.saveActiveTab()
+                                        onSaveRequested()
+                                    } catch (e: Exception) {}
+                                    onResetModifiers()
+                                }
+                                "z" -> {
+                                    editorMgr.undoActiveTab()
+                                    onResetModifiers()
+                                }
+                                "y" -> {
+                                    editorMgr.redoActiveTab()
+                                    onResetModifiers()
+                                }
+                                "p" -> {
+                                    onOpenCommandPalette()
+                                    onResetModifiers()
+                                }
+                                else -> {
+                                    onResetModifiers()
+                                }
                             }
-                        } else false
-                    }
-                    .testTag("code_editor_text_input")
-            )
+                        } else {
+                            textFieldValue = newValue
+                            tab.updateSelection(newValue.selection.start, newValue.selection.end)
+                            onContentChange(newValue.text)
+                            onCursorChange(newValue.selection.start)
+                        }
+                    },
+                    textStyle = TextStyle(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = settings.fontSizeSp.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = (settings.fontSizeSp * 1.4).sp
+                    ),
+                    visualTransformation = CodeSyntaxVisualTransformation(tab.languageId, isDark),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                if (keyEvent.key == Key.Tab) {
+                                    val currentText = textFieldValue.text
+                                    val sel = textFieldValue.selection
+                                    val indentStr = "    " // Standard 4 spaces
+                                    val newText = currentText.substring(0, sel.start) + indentStr + currentText.substring(sel.end)
+                                    val newPos = sel.start + indentStr.length
+                                    textFieldValue = TextFieldValue(newText, TextRange(newPos))
+                                    onContentChange(newText)
+                                    onCursorChange(newPos)
+                                    true
+                                } else if (keyEvent.key == Key.Enter) {
+                                    val currentText = textFieldValue.text
+                                    val sel = textFieldValue.selection
+                                    val lineStart = currentText.lastIndexOf('\n', (sel.start - 1).coerceAtLeast(0)) + 1
+                                    val currentLine = currentText.substring(lineStart, sel.start)
+                                    val indent = currentLine.takeWhile { it == ' ' || it == '\t' }
+                                    val newText = currentText.substring(0, sel.start) + "\n" + indent + currentText.substring(sel.end)
+                                    val newPos = sel.start + 1 + indent.length
+                                    textFieldValue = TextFieldValue(newText, TextRange(newPos))
+                                    onContentChange(newText)
+                                    onCursorChange(newPos)
+                                    true
+                                } else {
+                                    val isCtrl = ctrlActive || keyEvent.isCtrlPressed
+                                    if (isCtrl) {
+                                        when (keyEvent.key) {
+                                            Key.S -> {
+                                                try { editorMgr.saveActiveTab(); onSaveRequested() } catch (e: Exception) {}
+                                                onResetModifiers()
+                                                true
+                                            }
+                                            Key.Z -> {
+                                                editorMgr.undoActiveTab()
+                                                onResetModifiers()
+                                                true
+                                            }
+                                            Key.Y -> {
+                                                editorMgr.redoActiveTab()
+                                                onResetModifiers()
+                                                true
+                                            }
+                                            Key.P -> {
+                                                onOpenCommandPalette()
+                                                onResetModifiers()
+                                                true
+                                            }
+                                            Key.F -> {
+                                                tab.showFindBar = true
+                                                tab.showReplaceBar = false
+                                                onResetModifiers()
+                                                true
+                                            }
+                                            Key.H -> {
+                                                tab.showFindBar = true
+                                                tab.showReplaceBar = true
+                                                onResetModifiers()
+                                                true
+                                            }
+                                            else -> false
+                                        }
+                                    } else false
+                                }
+                            } else false
+                        }
+                        .testTag("code_editor_text_input")
+                )
+            }
         }
     }
 }

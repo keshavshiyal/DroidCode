@@ -1,6 +1,7 @@
 package com.example.core;
 
 import androidx.annotation.NonNull;
+import java.util.function.Supplier;
 
 public class Command {
 
@@ -9,6 +10,7 @@ public class Command {
     private final String category;
     private final String shortcut;
     private final boolean enabled;
+    private final Supplier<Boolean> enabledSupplier;
     private final Runnable action;
 
     public Command(@NonNull String id, @NonNull String title, @NonNull String category, String shortcut, boolean enabled, Runnable action) {
@@ -17,6 +19,17 @@ public class Command {
         this.category = category;
         this.shortcut = shortcut;
         this.enabled = enabled;
+        this.enabledSupplier = null;
+        this.action = action;
+    }
+
+    public Command(@NonNull String id, @NonNull String title, @NonNull String category, String shortcut, Supplier<Boolean> enabledSupplier, Runnable action) {
+        this.id = id;
+        this.title = title;
+        this.category = category;
+        this.shortcut = shortcut;
+        this.enabled = true;
+        this.enabledSupplier = enabledSupplier;
         this.action = action;
     }
 
@@ -44,11 +57,19 @@ public class Command {
     }
 
     public boolean isEnabled() {
+        if (enabledSupplier != null) {
+            try {
+                Boolean val = enabledSupplier.get();
+                return val != null && val;
+            } catch (Exception e) {
+                return false;
+            }
+        }
         return enabled;
     }
 
     public void execute() {
-        if (enabled && action != null) {
+        if (isEnabled() && action != null) {
             action.run();
         }
     }

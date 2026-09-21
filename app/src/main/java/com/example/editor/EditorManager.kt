@@ -85,6 +85,18 @@ class EditorManager private constructor() {
         }
     }
 
+    fun canUndoActiveTab(): Boolean {
+        val tab = activeTab ?: return false
+        val undoMgr = undoManagers[tab.filePath] ?: return false
+        return undoMgr.canUndo()
+    }
+
+    fun canRedoActiveTab(): Boolean {
+        val tab = activeTab ?: return false
+        val undoMgr = undoManagers[tab.filePath] ?: return false
+        return undoMgr.canRedo()
+    }
+
     fun undoActiveTab() {
         val tab = activeTab ?: return
         val undoMgr = undoManagers[tab.filePath] ?: return
@@ -117,6 +129,24 @@ class EditorManager private constructor() {
         tabs.clear()
         undoManagers.clear()
         activeTabIndex = -1
+    }
+
+    fun reloadActiveTab() {
+        val tab = activeTab ?: return
+        if (tab.file.exists()) {
+            val fresh = fileSystem.readFileToString(tab.file) ?: ""
+            tab.forceOpenAsText(fresh)
+            tab.markSaved()
+        }
+    }
+
+    fun closeTabsToRight(fromIndex: Int) {
+        if (fromIndex in 0 until tabs.size) {
+            val lastIdx = tabs.size - 1
+            for (i in lastIdx downTo (fromIndex + 1)) {
+                closeTab(i)
+            }
+        }
     }
 
     fun closeOtherTabs(keepIndex: Int) {

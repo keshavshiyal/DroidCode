@@ -2,6 +2,7 @@ package com.example.editor
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
@@ -48,7 +49,29 @@ class EditorTab(
     var column: Int by mutableIntStateOf(1)
         private set
 
-    val languageId: String = languageId ?: detectLanguage(fileName)
+    var languageId: String by mutableStateOf(languageId ?: detectLanguage(fileName))
+
+    var encoding: String by mutableStateOf("UTF-8")
+
+    var lineEnding: String by mutableStateOf(if (initialContent?.contains("\r\n") == true) "CRLF" else "LF")
+
+    var selectionStart: Int by mutableIntStateOf(0)
+    var selectionEnd: Int by mutableIntStateOf(0)
+
+    var findQuery: String by mutableStateOf("")
+    var replaceQuery: String by mutableStateOf("")
+    var showFindBar: Boolean by mutableStateOf(false)
+    var showReplaceBar: Boolean by mutableStateOf(false)
+    var currentMatchIndex: Int by mutableIntStateOf(0)
+
+    val foldedLines = mutableStateListOf<Int>()
+
+    fun updateSelection(start: Int, end: Int) {
+        this.selectionStart = start.coerceIn(0, content.length)
+        this.selectionEnd = end.coerceIn(0, content.length)
+        this.cursorPosition = this.selectionEnd
+        calculateLineColumn()
+    }
 
     fun updateContent(newContent: String) {
         this.content = newContent

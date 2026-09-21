@@ -58,6 +58,16 @@ public class CommandRegistry {
         return results;
     }
 
+    public List<Command> getCommandsByCategory(String category) {
+        List<Command> list = new ArrayList<>();
+        for (Command cmd : commands.values()) {
+            if (cmd.getCategory().equalsIgnoreCase(category)) {
+                list.add(cmd);
+            }
+        }
+        return list;
+    }
+
     public boolean executeCommand(String id) {
         Command cmd = commands.get(id);
         if (cmd != null && cmd.isEnabled()) {
