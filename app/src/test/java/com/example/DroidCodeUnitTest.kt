@@ -189,13 +189,11 @@ class DroidCodeUnitTest {
 
     @Test
     fun testDeveloperInformationIntegrity() {
-        val devName = "Keshu Shiyal"
-        val devEmail = "keshushiyal@gmail.com"
-        val devGithub = "https://github.com/keshushiyal"
+        val devName = "Keshav Shiyal"
+        val devGithub = "https://github.com/keshavshiyal"
 
-        assertTrue(devGithub.contains("github.com/keshushiyal"))
-        assertTrue(devEmail.contains("@gmail.com"))
-        assertEquals("Keshu Shiyal", devName)
+        assertTrue(devGithub.contains("github.com/keshavshiyal"))
+        assertEquals("Keshav Shiyal", devName)
     }
 
     @Test

@@ -156,17 +156,6 @@ fun HomeView(
                     onClick = onOpenSettings,
                     testTag = "home_settings_btn"
                 )
-
-                if (onOpenGeneralMenu != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ActionTile(
-                        title = "General Commands Menu",
-                        subtitle = "Global IDE commands, files & build actions",
-                        icon = Icons.Default.Menu,
-                        onClick = onOpenGeneralMenu,
-                        testTag = "home_general_menu_btn"
-                    )
-                }
             }
 
             // Recent Workspaces Column

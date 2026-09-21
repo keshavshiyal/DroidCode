@@ -31,23 +31,14 @@ jobs:
             chmod +x gradlew
           fi
 
-      - name: Gracefully Setup Signing Keystore
+      - name: Setup Debug Keystore
         run: |
-          # Priority 1: Restore from repository debug.keystore.base64 if present
           if [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
             echo "Decoding debug.keystore.base64..."
             base64 -d debug.keystore.base64 > debug.keystore
           fi
-
-          # Priority 2: Restore release keystore if RELEASE_KEYSTORE_BASE64 secret is provided
-          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
-            echo "Decoding RELEASE_KEYSTORE_BASE64 secret..."
-            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
-          fi
-
-          # Priority 3: Fallback generate debug.keystore if still missing
           if [ ! -f ./debug.keystore ]; then
-            echo "Generating new debug keystore via keytool..."
+            echo "Generating fallback debug.keystore via keytool..."
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
@@ -66,12 +57,6 @@ jobs:
           else
             gradle :app:assembleDebug --stacktrace
           fi
-
-      - name: Locate Built APK Files
-        run: |
-          echo "Scanning for generated APKs..."
-          mkdir -p app/build/outputs/apk/
-          find app/build/outputs/apk/ -type f -name "*.apk"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

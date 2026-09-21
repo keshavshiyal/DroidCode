@@ -800,8 +800,7 @@ private fun GeneralSettingsSection() {
 private fun AboutSection() {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    val githubUrl = "https://github.com/keshushiyal"
-    val developerEmail = "keshushiyal@gmail.com"
+    val githubUrl = "https://github.com/keshavshiyal"
 
     Column {
         Text(
@@ -812,7 +811,7 @@ private fun AboutSection() {
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Developer Information Card (Keshu Shiyal)
+        // Developer Information Card (Keshav Shiyal)
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -843,7 +842,7 @@ private fun AboutSection() {
 
                     Column {
                         Text(
-                            text = "Keshu Shiyal",
+                            text = "Keshav Shiyal",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -868,7 +867,7 @@ private fun AboutSection() {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // GitHub Profile & Email Details
+                // GitHub Profile Details
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -887,32 +886,11 @@ private fun AboutSection() {
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "GitHub: github.com/keshushiyal",
+                                text = "GitHub: github.com/keshavshiyal",
                                 fontSize = 13.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Email,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = developerEmail,
-                                fontSize = 13.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -959,29 +937,6 @@ private fun AboutSection() {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "Copy GitHub URL",
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:$developerEmail")
-                                    putExtra(Intent.EXTRA_SUBJECT, "DroidCode IDE Feedback")
-                                }
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                clipboardManager.setText(AnnotatedString(developerEmail))
-                                Toast.makeText(context, "Email copied to clipboard!", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.testTag("about_send_email_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Email,
-                            contentDescription = "Send Email",
                             modifier = Modifier.size(16.dp)
                         )
                     }
