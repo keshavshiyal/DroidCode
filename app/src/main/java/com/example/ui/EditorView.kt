@@ -252,7 +252,10 @@ fun EditorView(
                             try {
                                 editorMgr.saveTab(tabToClose)
                                 onSaveRequested()
-                            } catch (e: Exception) {}
+                            } catch (e: Exception) {
+                                android.util.Log.e("EditorView", "Failed saving tab: ${tabToClose.fileName}", e)
+                                Toast.makeText(context, "Failed to save ${tabToClose.fileName}: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
                             editorMgr.closeTab(tabToPromptCloseIndex!!)
                             tabToPromptCloseIndex = null
                         }
@@ -357,7 +360,10 @@ fun EditorView(
                             try {
                                 editorMgr.saveActiveTab()
                                 onSaveRequested()
-                            } catch (e: Exception) {}
+                            } catch (e: Exception) {
+                                android.util.Log.e("EditorView", "Failed saving active tab", e)
+                                Toast.makeText(context, "Failed to save file: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
                         },
                         modifier = Modifier
                             .size(26.dp)
@@ -657,6 +663,9 @@ private fun CodeCanvas(
                 act == "RUN" -> EditorActionsHandler.runFile(context, tab) { title, res ->
                     onShowInfoDialog(title, res)
                 }
+                act == "DEBUG" -> EditorActionsHandler.debugFile(context, tab) { title, res ->
+                    onShowInfoDialog(title, res)
+                }
                 act == "GIT_DIFF" -> EditorActionsHandler.gitDiff(context, tab) { title, res ->
                     onShowInfoDialog(title, res)
                 }
@@ -931,7 +940,10 @@ private fun CodeCanvas(
                                     try {
                                         editorMgr.saveActiveTab()
                                         onSaveRequested()
-                                    } catch (e: Exception) {}
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("EditorView", "Failed saving file from quick bar", e)
+                                        Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
                                     onResetModifiers()
                                 }
                                 "z" -> {
@@ -997,7 +1009,13 @@ private fun CodeCanvas(
                                     if (isCtrl) {
                                         when (keyEvent.key) {
                                             Key.S -> {
-                                                try { editorMgr.saveActiveTab(); onSaveRequested() } catch (e: Exception) {}
+                                                try {
+                                                    editorMgr.saveActiveTab()
+                                                    onSaveRequested()
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("EditorView", "Failed saving file from shortcut", e)
+                                                    Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                }
                                                 onResetModifiers()
                                                 true
                                             }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
@@ -47,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -54,6 +57,7 @@ import com.example.db.WorkspaceEntity
 import com.example.filesystem.SafUtils
 import com.example.project.ProjectTemplate
 import com.example.project.WorkspaceManager
+import java.io.File
 
 @Composable
 fun HomeView(
@@ -63,7 +67,7 @@ fun HomeView(
 ) {
     val context = LocalContext.current
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
-    val recentWorkspaces = remember { workspaceMgr.getRecentWorkspaces(context) }
+    var recentWorkspaces by remember { mutableStateOf(workspaceMgr.getRecentWorkspaces(context)) }
 
     var showNewProjectDialog by remember { mutableStateOf(false) }
     var showOpenDirDialog by remember { mutableStateOf(false) }
@@ -212,7 +216,21 @@ fun HomeView(
                         items(recentWorkspaces) { workspace ->
                             RecentWorkspaceTile(
                                 workspace = workspace,
-                                onClick = { onOpenWorkspace(workspace.path, workspace.type) }
+                                onClick = {
+                                    if (File(workspace.path).exists()) {
+                                        onOpenWorkspace(workspace.path, workspace.type)
+                                    } else {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Workspace directory '${workspace.path}' is unavailable or moved.",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                },
+                                onRemove = {
+                                    workspaceMgr.removeWorkspace(context, workspace.path)
+                                    recentWorkspaces = workspaceMgr.getRecentWorkspaces(context)
+                                }
                             )
                         }
                     }
@@ -291,30 +309,61 @@ private fun ActionTile(
 @Composable
 private fun RecentWorkspaceTile(
     workspace: WorkspaceEntity,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onRemove: () -> Unit
 ) {
-    Column(
+    val exists = remember(workspace.path) { File(workspace.path).exists() }
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                if (exists) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
                 RoundedCornerShape(6.dp)
             )
             .clickable { onClick() }
-            .padding(10.dp)
+            .padding(10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = workspace.name,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = workspace.path,
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = workspace.name,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (exists) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
+                )
+                if (!exists) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "(Moved/Unavailable)",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            Text(
+                text = workspace.path,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier.size(28.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Remove from recents",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 

@@ -219,15 +219,22 @@ object EditorActionsHandler {
 
     fun runFile(context: Context, tab: EditorTab, onShowResult: (String, String) -> Unit) {
         val file = tab.file
-        val title = "Run Execution: ${file.name}"
+        val title = "Run Configuration: ${file.name}"
         val ext = file.extension.lowercase()
-        val resultText = when (ext) {
-            "py" -> "python ${file.name}\n>>> Process completed successfully with return code 0."
-            "sh", "bash" -> "bash ${file.name}\n>>> Execution output logged."
-            "js" -> "node ${file.name}\n>>> Script completed."
-            "kt", "kts", "java" -> "kotlinc / javac build output:\n>>> Compilation successful."
-            else -> "Executing ${file.name}...\n>>> Script execution supported for script files."
-        }
+        val resultText = "No execution runtime is currently configured for '.${ext.ifEmpty { "plain" }}' files.\n\n" +
+                "Language execution environments, SDK toolchains, and runners are planned for Milestone 3.\n\n" +
+                "File: ${file.absolutePath}\n" +
+                "Size: ${file.length()} bytes"
+        onShowResult(title, resultText)
+    }
+
+    fun debugFile(context: Context, tab: EditorTab, onShowResult: (String, String) -> Unit) {
+        val file = tab.file
+        val title = "Debug Configuration: ${file.name}"
+        val ext = file.extension.lowercase()
+        val resultText = "No debugger runtime is currently configured for '.${ext.ifEmpty { "plain" }}' files.\n\n" +
+                "DAP (Debug Adapter Protocol) and debugger runners are planned for Milestone 3.\n\n" +
+                "File: ${file.absolutePath}"
         onShowResult(title, resultText)
     }
 
@@ -243,9 +250,30 @@ object EditorActionsHandler {
         }
 
         val diffText = if (tab.isModified) {
-            "--- a/${tab.fileName}\n+++ b/${tab.fileName}\n@@ -1,5 +1,5 @@\n- ${tab.originalContent.take(120)}...\n+ ${tab.content.take(120)}..."
+            val origLines = tab.originalContent.lines()
+            val curLines = tab.content.lines()
+            val diffBuilder = StringBuilder()
+            diffBuilder.append("--- a/${tab.fileName} (Disk)\n")
+            diffBuilder.append("+++ b/${tab.fileName} (Buffer)\n")
+            val maxLines = max(origLines.size, curLines.size)
+            var changesFound = 0
+            for (i in 0 until maxLines) {
+                val orig = origLines.getOrNull(i)
+                val cur = curLines.getOrNull(i)
+                if (orig != cur) {
+                    changesFound++
+                    diffBuilder.append("@@ line ${i + 1} @@\n")
+                    if (orig != null) diffBuilder.append("- $orig\n")
+                    if (cur != null) diffBuilder.append("+ $cur\n")
+                }
+                if (changesFound >= 100) {
+                    diffBuilder.append("... [diff truncated after 100 changes]\n")
+                    break
+                }
+            }
+            diffBuilder.toString()
         } else {
-            "No uncommitted changes in ${tab.fileName} (clean working tree)."
+            "Clean working tree: No uncommitted buffer changes in '${tab.fileName}'."
         }
         onShowResult("Git Diff - ${tab.fileName} [${gitStatus.currentBranch}]", diffText)
     }
@@ -260,14 +288,11 @@ object EditorActionsHandler {
             return
         }
 
-        val lines = tab.content.split("\n")
-        val blameBuilder = StringBuilder()
-        blameBuilder.append("Git Blame for ${tab.fileName}:\n\n")
-        lines.take(20).forEachIndexed { idx, l ->
-            val commit = "a3f890e${idx}"
-            blameBuilder.append("$commit (Developer, 2026-09-21) ${idx + 1}: $l\n")
-        }
-        onShowResult("Git Blame - ${tab.fileName}", blameBuilder.toString())
+        val text = "Git Blame analysis requires JGit integration (planned for Milestone 3).\n\n" +
+                "Repository: ${proj?.name ?: "Unknown"}\n" +
+                "Active Branch: ${gitStatus.currentBranch}\n" +
+                "Target File: ${tab.fileName}"
+        onShowResult("Git Blame - ${tab.fileName}", text)
     }
 
     fun gitHistory(context: Context, tab: EditorTab, onShowResult: (String, String) -> Unit) {
@@ -280,20 +305,11 @@ object EditorActionsHandler {
             return
         }
 
-        val history = """
-            commit c189df4a (HEAD -> ${gitStatus.currentBranch})
-            Author: Developer <dev@droidcode.app>
-            Date:   2026-09-21 05:48:00
-            
-                Update ${tab.fileName} with IDE context menu enhancements
-                
-            commit f7832a10
-            Author: Developer <dev@droidcode.app>
-            Date:   2026-09-20 18:22:10
-            
-                Initial commit for ${tab.fileName}
-        """.trimIndent()
-        onShowResult("Git History - ${tab.fileName}", history)
+        val text = "Git commit history requires JGit integration (planned for Milestone 3).\n\n" +
+                "Repository: ${proj?.name ?: "Unknown"}\n" +
+                "Active Branch: ${gitStatus.currentBranch}\n" +
+                "Target File: ${tab.fileName}"
+        onShowResult("Git History - ${tab.fileName}", text)
     }
 
     private fun insertTextAtSelection(value: TextFieldValue, textToInsert: String, onUpdate: (TextFieldValue) -> Unit) {

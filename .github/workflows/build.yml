@@ -31,15 +31,6 @@ jobs:
             chmod +x gradlew
           fi
 
-      - name: Restore Google Services Config if Secret Provided
-        run: |
-          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
-            echo "Restoring google-services.json from repository secret..."
-            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > ./app/google-services.json
-          else
-            echo "No GOOGLE_SERVICES_JSON secret found. Build system will handle missing services via MissingGoogleServicesStrategy.WARN."
-          fi
-
       - name: Gracefully Setup Signing Keystore
         run: |
           # Priority 1: Restore from repository debug.keystore.base64 if present

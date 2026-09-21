@@ -43,7 +43,9 @@ public class GitService {
                 } else if (line != null && line.length() >= 7) {
                     branch = line.substring(0, 7); // Detached HEAD commit hash
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                android.util.Log.w("GitService", "Failed to parse git HEAD ref", e);
+            }
         }
 
         return new GitStatus(true, branch, 0, 0, 0);

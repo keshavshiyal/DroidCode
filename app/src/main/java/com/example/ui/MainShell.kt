@@ -89,10 +89,18 @@ fun MainShell() {
     // Register Commands in CommandRegistry
     remember {
         commandRegistry.registerCommand(Command("file.save", "Save Active File", "File", "Ctrl+S") {
-            try { editorMgr.saveActiveTab() } catch (e: Exception) {}
+            try {
+                editorMgr.saveActiveTab()
+            } catch (e: Exception) {
+                android.util.Log.e("MainShell", "Failed to save active file", e)
+            }
         })
         commandRegistry.registerCommand(Command("file.save_all", "Save All Files", "File", "Ctrl+Shift+S") {
-            try { editorMgr.saveAllTabs() } catch (e: Exception) {}
+            try {
+                editorMgr.saveAllTabs()
+            } catch (e: Exception) {
+                android.util.Log.e("MainShell", "Failed to save all files", e)
+            }
         })
         commandRegistry.registerCommand(Command("command.palette", "Open Command Palette", "View", "Ctrl+Shift+P") {
             showCommandPalette = true

@@ -114,7 +114,7 @@ class EditorTab(
             if (!file.exists()) return FileViewerType.UNSUPPORTED
             val ext = file.extension.lowercase()
 
-            if (ext in listOf("png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico")) {
+            if (ext in listOf("png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif", "heic", "heif", "tif", "tiff")) {
                 return FileViewerType.IMAGE
             }
             if (ext in listOf("mp4", "mkv", "avi", "webm", "mov", "3gp")) {

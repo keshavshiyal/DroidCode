@@ -1,5 +1,6 @@
 package com.example.db;
 
+import androidx.annotation.NonNull;
 import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
@@ -12,9 +13,11 @@ import kotlinx.coroutines.flow.Flow;
 @Dao
 public interface WorkspaceDao {
 
+    @NonNull
     @Query("SELECT * FROM workspaces ORDER BY lastOpenedTimestamp DESC")
     Flow<List<WorkspaceEntity>> getAllWorkspacesFlow();
 
+    @NonNull
     @Query("SELECT * FROM workspaces ORDER BY lastOpenedTimestamp DESC")
     List<WorkspaceEntity> getAllWorkspacesSync();
 

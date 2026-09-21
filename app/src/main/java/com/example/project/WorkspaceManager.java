@@ -78,18 +78,13 @@ public class WorkspaceManager {
     public List<WorkspaceEntity> getRecentWorkspaces(Context context) {
         AppDatabase db = AppDatabase.getInstance(context);
         List<WorkspaceEntity> list = db.workspaceDao().getAllWorkspacesSync();
-        // Filter out non-existent directories to remain strictly truthful
-        List<WorkspaceEntity> validList = new ArrayList<>();
-        if (list != null) {
-            for (WorkspaceEntity entity : list) {
-                if (new File(entity.getPath()).exists()) {
-                    validList.add(entity);
-                } else {
-                    // Remove stale record from database
-                    db.workspaceDao().deleteWorkspaceByPath(entity.getPath());
-                }
-            }
+        return list != null ? list : new ArrayList<>();
+    }
+
+    public void removeWorkspace(Context context, String path) {
+        if (path != null && context != null) {
+            AppDatabase db = AppDatabase.getInstance(context);
+            db.workspaceDao().deleteWorkspaceByPath(path);
         }
-        return validList;
     }
 }

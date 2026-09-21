@@ -54,6 +54,10 @@ public class FileNode {
         return isFolder;
     }
 
+    public boolean isDirectory() {
+        return isFolder;
+    }
+
     public long getSize() {
         return size;
     }

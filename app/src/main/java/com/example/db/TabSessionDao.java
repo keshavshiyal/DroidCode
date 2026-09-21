@@ -1,5 +1,6 @@
 package com.example.db;
 
+import androidx.annotation.NonNull;
 import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
@@ -12,9 +13,11 @@ import kotlinx.coroutines.flow.Flow;
 @Dao
 public interface TabSessionDao {
 
+    @NonNull
     @Query("SELECT * FROM tab_sessions WHERE workspacePath = :workspacePath ORDER BY tabOrder ASC")
     Flow<List<TabSessionEntity>> getTabsForWorkspaceFlow(String workspacePath);
 
+    @NonNull
     @Query("SELECT * FROM tab_sessions WHERE workspacePath = :workspacePath ORDER BY tabOrder ASC")
     List<TabSessionEntity> getTabsForWorkspaceSync(String workspacePath);
 

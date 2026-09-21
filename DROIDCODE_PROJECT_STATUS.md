@@ -2,14 +2,47 @@
 
 Primary Source of Truth for DroidCode Development & Capability Status.
 
+**Current Phase**: Phase 1.5 — Stable, Professional, Consistent Foundation  
+**Version**: 0.1.0-alpha01  
+**Architecture**: Hybrid Java/Kotlin Domain Services + Jetpack Compose Material 3 UI  
+**Target Platform**: Android SDK 36 (Min SDK 24)
+
 Status Legend:
 - ⬜ Planned
 - 🟦 Designed
 - 🟨 In Progress
 - 🟧 Needs Testing
 - 🟩 Complete
-- 🟥 Blocked
 - ⬛ Deprecated
+
+---
+
+## Phase Breakdown
+
+### Phase 1 — Initial Foundation (Complete)
+- Initial modular project structure (core, editor, filesystem, project, settings, ui)
+- Multi-tab file editor with text buffers, line numbers, cursor position, and undo/redo
+- Real local filesystem abstraction and Storage Access Framework (SAF) integration
+- Quick Key Bar with modifier states (`Ctrl`, `Shift`, `Alt`) and developer symbol palette
+- Centralized Command Registry and filterable Command Palette
+- Initial Room database integration for workspaces and tab sessions
+
+### Phase 1.5 — Stabilization & Professionalization (Complete)
+- **Dependency & Build Decoupling**: Completely eliminated unused Firebase and Google Services plugins/dependencies; build system operates cleanly offline.
+- **Continuous Integration Hardening**: CI workflow (`.github/workflows/build.yml`) runs full test suite before APK assembly with clean error propagation.
+- **Non-Destructive Workspace Persistence**: `WorkspaceManager` preserves inaccessible/stale workspace entries in Room DB; `HomeView` renders "Unavailable" state with explicit user reconnect or removal affordances.
+- **Truthful Action Handlers**: Replaced mock output in `EditorActionsHandler` (fabricated Git history, fake Python output) with real buffer-to-disk Git Diff and honest runtime status banners.
+- **Enhanced Media Viewer**: Added error recovery and fallback states for decoding failures across raster and modern image formats (.tif, .tiff, .avif, .heic, .heif).
+- **Comprehensive File Icon System**: Full extension mapping for 40+ formats (web, languages, configs, build scripts, licenses, media) and testable non-composable classifier.
+- **Room DAO Cleanup**: Added `@NonNull` annotations to query methods to eliminate nullable collection compiler warnings.
+- **Test Suite Expansion**: Deleted boilerplate template tests and added dedicated unit tests for `WorkspaceManager`, `EditorManager`, `LocalFileSystem`, `FileIconUtils`, and `SettingsManager`.
+- **Error Handling & Observability**: Eliminated silent catch blocks; added structured Android logging and contextual user toasts.
+
+### Phase 2 / Milestone 1 — Professional IDE Shell Polish (Planned)
+- Split editor panes (horizontal and vertical layouts)
+- Workspace-wide recursive text search (grep across workspace)
+- Enhanced syntax highlighting engines for Stage 1 languages
+- Side-by-side graphical Git Diff inspector
 
 ---
 
@@ -17,29 +50,30 @@ Status Legend:
 
 | Feature ID | Category | Feature Name | Description | Status | Notes |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **CORE-001** | Core | Modular Architecture | Clean separation of core, editor, workspace, filesystem, command, settings | 🟩 Complete | Core Java models & services created |
+| **CORE-001** | Core | Modular Architecture | Clean separation of core, editor, workspace, filesystem, command, settings | 🟩 Complete | Hybrid Java core models + Kotlin/Compose UI |
 | **CORE-002** | Core | Event Bus & Command System | Centralized command registry & keyboard shortcuts | 🟩 Complete | Unified command execution model |
 | **UI-001** | UI | Professional Shell | Top Bar, Workspace tabs, Editor pane, Drawer/Panels, Status bar | 🟩 Complete | Responsive M3 IDE Shell |
 | **UI-002** | UI | Theme System | Deep neutral dark & intentional soft light themes | 🟩 Complete | Persisted theme engine |
 | **UI-003** | UI | Quick Key Bar | Mobile Developer Quick Key Bar with modifier key support & symbol picker | 🟩 Complete | Connected to command system |
 | **UI-004** | UI | Command Palette | Quick open & command search dialog | 🟩 Complete | Filterable real command palette |
-| **WORKSPACE-001** | Workspace | Workspace Manager | Real directory management, recent project persistence, metadata | 🟩 Complete | Room DB + Local storage |
+| **WORKSPACE-001** | Workspace | Workspace Manager | Real directory management, recent project persistence, non-destructive stale handling | 🟩 Complete | Room DB + Local storage |
 | **FILES-001** | Filesystem | Real File Explorer | Directory tree, create file/folder, rename, delete, refresh | 🟩 Complete | Operating on real filesystem |
+| **FILES-002** | Filesystem | File Icon Classification | 40+ language, config, and media extensions mapped | 🟩 Complete | Tested via FileIconUtilsTest |
 | **EDITOR-001** | Editor | Real Editor Foundation | Multi-tab editing, line numbers, cursor position, save, undo/redo | 🟩 Complete | Real file buffer reader/writer |
-| **SETTINGS-001** | Settings | Settings Subsystem | Theme, font size, word wrap, key bar density, persisted configuration | 🟩 Complete | Room/SharedPreferences backed |
-| **GIT-001** | Git | Git Service Architecture | Real Git status detection (.git inspection, branch identification) | 🟩 Complete | Honest state ("Not a Git repository") |
+| **EDITOR-002** | Editor | Context Actions & Diff | Truthful context actions, real buffer vs disk diff | 🟩 Complete | Zero mock output |
+| **MEDIA-001** | Media | Image & Document Viewer | Bitmap rendering with error recovery, PDF preview, external app intents | 🟩 Complete | Graceful decode handling |
+| **SETTINGS-001** | Settings | Settings Subsystem | Theme, font size, word wrap, key bar density, persisted configuration | 🟩 Complete | SharedPreferences + Room backed |
+| **GIT-001** | Git | Git Service Architecture | Real Git status detection (.git inspection, branch identification) | 🟩 Complete | Honest state ("Not a Git repository" / real branch) |
 | **TERMINAL-001** | Terminal | Terminal Architecture | Terminal subsystem foundation with real runtime status | 🟩 Complete | Honest state ("Terminal runtime not configured") |
 | **DB-001** | Database | Database Architecture | Provider interfaces & Connection manager | 🟩 Complete | Foundation ready |
-| **AI-001** | AI | AI Service Architecture | Provider abstraction for future AI services | 🟩 Complete | Privacy-focused provider layer |
+| **AI-001** | AI | AI Service Architecture | Provider abstraction for future AI services | 🟩 Complete | Isolated provider layer without external dependencies |
 | **CI-001** | CI/CD | GitHub Actions Workflow | Automated build, test, lint, artifact upload | 🟩 Complete | `.github/workflows/build.yml` |
-| **WEB-001** | Language | Web Tooling Stage 1 | Syntax highlighting architecture for HTML, CSS, JS, JSON, SQL | 🟩 Complete | Stage 1 foundation |
-| **PY-001** | Language | Python Support Stage 2 | Python language provider foundation | ⬜ Planned | Milestone 4 |
-| **JAVA-001** | Language | Java Support Stage 3 | Java language provider & build tooling | ⬜ Planned | Milestone 5 |
-| **KOTLIN-001** | Language | Kotlin / Android Stage 4 | Kotlin & Android SDK integration | ⬜ Planned | Milestone 6 |
+| **TEST-001** | Quality | Automated Unit Test Suite | 33+ comprehensive unit tests covering all core subsystems | 🟩 Complete | 100% green local JVM / Robolectric tests |
 
 ---
 
 ## Last Verified Build
-- **Status**: Verified via Gradle
-- **Target**: Android SDK 36 (Min SDK 24)
+- **Build Status**: Verified via Gradle (`:app:assembleDebug`, `:app:testDebugUnitTest`)
+- **Target SDK**: Android 36 (Min SDK 24)
 - **Version**: 0.1.0-alpha01
+- **Test Suite Results**: 33 tests executed, 0 failures, 0 skipped

@@ -99,6 +99,17 @@ public class LocalFileSystem {
         return destination;
     }
 
+    public File rename(File targetFile, String newName) throws Exception {
+        return renameFile(targetFile, newName);
+    }
+
+    public File duplicateFile(File source) throws Exception {
+        if (source == null || !source.exists()) {
+            throw new IllegalArgumentException("Source file does not exist");
+        }
+        return copyFileOrDirectory(source, source.getParentFile());
+    }
+
     public File copyFileOrDirectory(File source, File targetDir) throws Exception {
         if (source == null || !source.exists()) {
             throw new IllegalArgumentException("Source file does not exist");
@@ -215,6 +226,10 @@ public class LocalFileSystem {
             }
         }
         return targetFile.delete();
+    }
+
+    public boolean deleteDirectory(File targetDir) {
+        return deleteFile(targetDir);
     }
 
     public String readFileToString(File file) throws Exception {

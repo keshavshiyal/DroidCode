@@ -206,4 +206,151 @@ class DroidCodeUnitTest {
         assertEquals("MyAwesomeProject", project.name)
         assertEquals(dir.absolutePath, project.path)
     }
+
+    @Test
+    fun testFileIconClassificationCompleteness() {
+        // Special files
+        assertEquals("DOCKER", com.example.ui.FileIconUtils.classifyFile("Dockerfile"))
+        assertEquals("DOCKER", com.example.ui.FileIconUtils.classifyFile("Dockerfile.dev"))
+        assertEquals("BUILD", com.example.ui.FileIconUtils.classifyFile("Makefile"))
+        assertEquals("MAVEN", com.example.ui.FileIconUtils.classifyFile("pom.xml"))
+        assertEquals("ENV", com.example.ui.FileIconUtils.classifyFile(".env"))
+        assertEquals("ENV", com.example.ui.FileIconUtils.classifyFile(".env.local"))
+        assertEquals("LICENSE", com.example.ui.FileIconUtils.classifyFile("LICENSE"))
+        assertEquals("LICENSE", com.example.ui.FileIconUtils.classifyFile("LICENSE.txt"))
+        assertEquals("CONFIG", com.example.ui.FileIconUtils.classifyFile(".editorconfig"))
+        assertEquals("README", com.example.ui.FileIconUtils.classifyFile("README.md"))
+        assertEquals("GIT", com.example.ui.FileIconUtils.classifyFile(".gitignore"))
+
+        // Stage 1 languages
+        assertEquals("HTML", com.example.ui.FileIconUtils.classifyFile("index.html"))
+        assertEquals("CSS", com.example.ui.FileIconUtils.classifyFile("styles.css"))
+        assertEquals("CSS", com.example.ui.FileIconUtils.classifyFile("theme.scss"))
+        assertEquals("CSS", com.example.ui.FileIconUtils.classifyFile("vars.sass"))
+        assertEquals("JAVASCRIPT", com.example.ui.FileIconUtils.classifyFile("bundle.js"))
+        assertEquals("TYPESCRIPT", com.example.ui.FileIconUtils.classifyFile("app.ts"))
+        assertEquals("TYPESCRIPT", com.example.ui.FileIconUtils.classifyFile("Component.tsx"))
+        assertEquals("JSON", com.example.ui.FileIconUtils.classifyFile("package.json"))
+        assertEquals("MARKDOWN", com.example.ui.FileIconUtils.classifyFile("NOTES.md"))
+        assertEquals("SQL", com.example.ui.FileIconUtils.classifyFile("schema.sql"))
+        assertEquals("SQL", com.example.ui.FileIconUtils.classifyFile("database.sqlite"))
+
+        // Programming languages
+        assertEquals("PYTHON", com.example.ui.FileIconUtils.classifyFile("script.py"))
+        assertEquals("JAVA", com.example.ui.FileIconUtils.classifyFile("Main.java"))
+        assertEquals("KOTLIN", com.example.ui.FileIconUtils.classifyFile("App.kt"))
+        assertEquals("KOTLIN", com.example.ui.FileIconUtils.classifyFile("build.gradle.kts"))
+        assertEquals("RUST", com.example.ui.FileIconUtils.classifyFile("main.rs"))
+        assertEquals("GO", com.example.ui.FileIconUtils.classifyFile("server.go"))
+
+        // Config & Data
+        assertEquals("CONFIG", com.example.ui.FileIconUtils.classifyFile("settings.ini"))
+        assertEquals("TOML", com.example.ui.FileIconUtils.classifyFile("Cargo.toml"))
+        assertEquals("YAML", com.example.ui.FileIconUtils.classifyFile("ci.yml"))
+        assertEquals("DATA", com.example.ui.FileIconUtils.classifyFile("data.csv"))
+        assertEquals("GRADLE", com.example.ui.FileIconUtils.classifyFile("build.gradle"))
+
+        // Media formats
+        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("icon.png"))
+        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("photo.jpg"))
+        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("vector.svg"))
+        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("modern.avif"))
+        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("highres.heic"))
+        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("photo.tiff"))
+        assertEquals("PDF", com.example.ui.FileIconUtils.classifyFile("manual.pdf"))
+        assertEquals("VIDEO", com.example.ui.FileIconUtils.classifyFile("demo.mp4"))
+        assertEquals("ARCHIVE", com.example.ui.FileIconUtils.classifyFile("backup.zip"))
+        assertEquals("SHELL", com.example.ui.FileIconUtils.classifyFile("deploy.sh"))
+    }
+
+    @Test
+    fun testEditorTabViewerTypeDetection() {
+        val txtFile = tempFolder.newFile("sample.txt")
+        assertEquals(com.example.editor.FileViewerType.TEXT, com.example.editor.EditorTab.detectViewerType(txtFile))
+
+        val pngFile = tempFolder.newFile("logo.png")
+        assertEquals(com.example.editor.FileViewerType.IMAGE, com.example.editor.EditorTab.detectViewerType(pngFile))
+
+        val avifFile = tempFolder.newFile("banner.avif")
+        assertEquals(com.example.editor.FileViewerType.IMAGE, com.example.editor.EditorTab.detectViewerType(avifFile))
+
+        val mp4File = tempFolder.newFile("video.mp4")
+        assertEquals(com.example.editor.FileViewerType.VIDEO, com.example.editor.EditorTab.detectViewerType(mp4File))
+
+        val pdfFile = tempFolder.newFile("document.pdf")
+        assertEquals(com.example.editor.FileViewerType.PDF, com.example.editor.EditorTab.detectViewerType(pdfFile))
+    }
+
+    @Test
+    fun testCommandRegistryConditionEvaluation() {
+        val registry = CommandRegistry.getInstance()
+        var conditionMet = false
+        val cmd = Command(
+            "conditional.cmd",
+            "Conditional Command",
+            "Test",
+            null,
+            { conditionMet },
+            { }
+        )
+        registry.registerCommand(cmd)
+
+        val retrieved = registry.getCommand("conditional.cmd")
+        assertNotNull(retrieved)
+        assertFalse(retrieved!!.isEnabled)
+
+        conditionMet = true
+        assertTrue(retrieved.isEnabled)
+    }
+
+    @Test
+    fun testLocalFileSystemCopyAndRename() {
+        val root = tempFolder.newFolder("fs_test")
+        val fs = LocalFileSystem.getInstance()
+
+        val origFile = fs.createFile(root, "source.txt")
+        fs.writeStringToFile(origFile, "Original Content")
+
+        // Rename
+        val renamedFile = fs.renameFile(origFile, "renamed.txt")
+        assertNotNull(renamedFile)
+        assertTrue(renamedFile.exists())
+        assertFalse(origFile.exists())
+        assertEquals("Original Content", fs.readFileToString(renamedFile))
+
+        // Duplicate
+        val duplicate = fs.copyFileOrDirectory(renamedFile, renamedFile.parentFile)
+        assertNotNull(duplicate)
+        assertTrue(duplicate.exists())
+        assertEquals("Original Content", fs.readFileToString(duplicate))
+    }
+
+    @Test
+    fun testEditorManagerLifecycle() {
+        val root = tempFolder.newFolder("editor_mgr_test")
+        val testFile = File(root, "test.kt")
+        testFile.writeText("fun main() {}")
+
+        val editorMgr = com.example.editor.EditorManager.getInstance()
+        val tab = editorMgr.openFile(testFile)
+        assertNotNull(tab)
+        assertEquals("test.kt", tab.fileName)
+        assertEquals("fun main() {}", tab.content)
+        assertFalse(tab.isModified)
+
+        // Modify
+        editorMgr.updateActiveTabContent("fun main() { println(1) }")
+        assertTrue(tab.isModified)
+        assertTrue(editorMgr.canUndoActiveTab())
+
+        // Save
+        editorMgr.saveActiveTab()
+        assertFalse(tab.isModified)
+        assertEquals("fun main() { println(1) }", testFile.readText())
+
+        // Close
+        val activeIdx = editorMgr.activeTabIndex
+        editorMgr.closeTab(activeIdx)
+        assertTrue(editorMgr.tabs.none { it.filePath == testFile.absolutePath })
+    }
 }

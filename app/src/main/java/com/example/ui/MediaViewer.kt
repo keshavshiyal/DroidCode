@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -96,6 +97,7 @@ fun openWithExternalApp(context: Context, file: File) {
 fun ImageViewer(file: File, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var bitmapDimensions by remember(file.path) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var hasLoadError by remember(file.path) { mutableStateOf(false) }
 
     LaunchedEffect(file.path) {
         try {
@@ -103,8 +105,12 @@ fun ImageViewer(file: File, modifier: Modifier = Modifier) {
             BitmapFactory.decodeFile(file.absolutePath, options)
             if (options.outWidth > 0 && options.outHeight > 0) {
                 bitmapDimensions = Pair(options.outWidth, options.outHeight)
+            } else {
+                android.util.Log.w("MediaViewer", "Image dimensions non-positive or unsupported for ${file.name}")
             }
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            android.util.Log.w("MediaViewer", "Failed to decode image bounds for ${file.name}", e)
+        }
     }
 
     val fileSizeKb = file.length() / 1024
@@ -158,14 +164,51 @@ fun ImageViewer(file: File, modifier: Modifier = Modifier) {
                 .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
-            AsyncImage(
-                model = file,
-                contentDescription = file.name,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-            )
+            if (hasLoadError) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Image preview unavailable",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Unable to render image preview",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "This file may be corrupted, too large for memory, or uses a format unsupported by the system decoder.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { openWithExternalApp(context, file) },
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text("Open with External Viewer", fontSize = 12.sp)
+                    }
+                }
+            } else {
+                AsyncImage(
+                    model = file,
+                    contentDescription = file.name,
+                    contentScale = ContentScale.Fit,
+                    onError = { hasLoadError = true },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                )
+            }
         }
     }
 }
