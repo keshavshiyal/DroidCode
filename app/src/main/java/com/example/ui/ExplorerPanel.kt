@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,12 +38,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -59,11 +63,12 @@ fun ExplorerPanel(
     onOpenFile: (File) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
     val fs = remember { LocalFileSystem.getInstance() }
 
-    var currentProject by remember { mutableStateOf(workspaceMgr.currentProject) }
     var treeNodes by remember { mutableStateOf(workspaceMgr.workspaceFileTree) }
+    var expandedPaths by remember { mutableStateOf(setOf<String>()) }
 
     var selectedNode by remember { mutableStateOf<FileNode?>(null) }
     var showNewFileDialog by remember { mutableStateOf(false) }
@@ -73,6 +78,10 @@ fun ExplorerPanel(
 
     val refreshTree = {
         treeNodes = workspaceMgr.workspaceFileTree
+    }
+
+    LaunchedEffect(workspaceMgr.currentProject) {
+        refreshTree()
     }
 
     Column(
@@ -112,7 +121,13 @@ fun ExplorerPanel(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = { showNewFileDialog = true },
+                    onClick = {
+                        if (workspaceMgr.hasOpenWorkspace()) {
+                            showNewFileDialog = true
+                        } else {
+                            Toast.makeText(context, "Open a project first", Toast.LENGTH_SHORT).show()
+                        }
+                    },
                     modifier = Modifier
                         .size(32.dp)
                         .testTag("explorer_new_file_btn")
@@ -126,7 +141,13 @@ fun ExplorerPanel(
                 }
 
                 IconButton(
-                    onClick = { showNewFolderDialog = true },
+                    onClick = {
+                        if (workspaceMgr.hasOpenWorkspace()) {
+                            showNewFolderDialog = true
+                        } else {
+                            Toast.makeText(context, "Open a project first", Toast.LENGTH_SHORT).show()
+                        }
+                    },
                     modifier = Modifier
                         .size(32.dp)
                         .testTag("explorer_new_folder_btn")
@@ -247,14 +268,22 @@ fun ExplorerPanel(
                         node = node,
                         depth = 0,
                         selectedPath = selectedNode?.path,
+                        expandedPaths = expandedPaths,
+                        onFolderToggle = { folderNode ->
+                            expandedPaths = if (expandedPaths.contains(folderNode.path)) {
+                                expandedPaths - folderNode.path
+                            } else {
+                                expandedPaths + folderNode.path
+                            }
+                        },
                         onNodeClick = { clicked ->
                             selectedNode = clicked
                             if (clicked.isFolder) {
-                                clicked.isExpanded = !clicked.isExpanded
-                                if (clicked.isExpanded && clicked.children.isEmpty()) {
-                                    clicked.children = fs.listDirectoryRecursive(File(clicked.path))
+                                expandedPaths = if (expandedPaths.contains(clicked.path)) {
+                                    expandedPaths - clicked.path
+                                } else {
+                                    expandedPaths + clicked.path
                                 }
-                                refreshTree()
                             } else {
                                 onOpenFile(File(clicked.path))
                             }
@@ -277,15 +306,23 @@ fun ExplorerPanel(
 
         InputDialog(
             title = "New File in ${parentDir.name}",
-            label = "File Name",
+            label = "File Name (e.g. main.py)",
             onDismiss = { showNewFileDialog = false },
             onConfirm = { fileName: String ->
                 try {
                     val created = fs.createFile(parentDir, fileName)
                     showNewFileDialog = false
+                    expandedPaths = expandedPaths + parentDir.absolutePath
                     refreshTree()
+                    val newNode = FileNode.fromFile(created)
+                    if (newNode != null) {
+                        selectedNode = newNode
+                    }
                     onOpenFile(created)
-                } catch (e: Exception) {}
+                    Toast.makeText(context, "Created $fileName", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         )
     }
@@ -305,10 +342,18 @@ fun ExplorerPanel(
             onDismiss = { showNewFolderDialog = false },
             onConfirm = { folderName: String ->
                 try {
-                    fs.createDirectory(parentDir, folderName)
+                    val createdDir = fs.createDirectory(parentDir, folderName)
                     showNewFolderDialog = false
+                    expandedPaths = expandedPaths + parentDir.absolutePath + createdDir.absolutePath
                     refreshTree()
-                } catch (e: Exception) {}
+                    val newNode = FileNode.fromFile(createdDir)
+                    if (newNode != null) {
+                        selectedNode = newNode
+                    }
+                    Toast.makeText(context, "Created folder $folderName", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         )
     }
@@ -322,11 +367,14 @@ fun ExplorerPanel(
             onDismiss = { showRenameDialog = false },
             onConfirm = { newName ->
                 try {
-                    fs.renameFile(target, newName)
-                    selectedNode = null
+                    val renamed = fs.renameFile(target, newName)
                     showRenameDialog = false
                     refreshTree()
-                } catch (e: Exception) {}
+                    selectedNode = FileNode.fromFile(renamed)
+                    Toast.makeText(context, "Renamed to $newName", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         )
     }
@@ -341,11 +389,15 @@ fun ExplorerPanel(
                 Button(
                     onClick = {
                         try {
+                            val deletedName = selectedNode!!.name
                             fs.deleteFile(target)
                             selectedNode = null
                             showDeleteDialog = false
                             refreshTree()
-                        } catch (e: Exception) {}
+                            Toast.makeText(context, "Deleted $deletedName", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
                     }
                 ) { Text("Delete") }
             },
@@ -361,9 +413,12 @@ private fun FileTreeItem(
     node: FileNode,
     depth: Int,
     selectedPath: String?,
+    expandedPaths: Set<String>,
+    onFolderToggle: (FileNode) -> Unit,
     onNodeClick: (FileNode) -> Unit
 ) {
     val isSelected = selectedPath == node.path
+    val isExpanded = expandedPaths.contains(node.path)
     val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
 
     Column {
@@ -378,13 +433,15 @@ private fun FileTreeItem(
         ) {
             if (node.isFolder) {
                 Icon(
-                    imageVector = if (node.isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    imageVector = if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable { onFolderToggle(node) }
                 )
                 Icon(
-                    imageVector = if (node.isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
+                    imageVector = if (isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
@@ -413,12 +470,14 @@ private fun FileTreeItem(
             )
         }
 
-        if (node.isFolder && node.isExpanded) {
+        if (node.isFolder && isExpanded) {
             node.children.forEach { child ->
                 FileTreeItem(
                     node = child,
                     depth = depth + 1,
                     selectedPath = selectedPath,
+                    expandedPaths = expandedPaths,
+                    onFolderToggle = onFolderToggle,
                     onNodeClick = onNodeClick
                 )
             }
@@ -430,7 +489,10 @@ private fun FileTreeItem(
 private fun getFileIconColor(ext: String) = when (ext.lowercase()) {
     "kt", "kts" -> MaterialTheme.colorScheme.primary
     "java" -> MaterialTheme.colorScheme.secondary
-    "json", "xml" -> MaterialTheme.colorScheme.tertiary
+    "py" -> Color(0xFFFFC107) // Python Yellow
+    "js", "ts", "jsx", "tsx" -> Color(0xFF4CAF50) // Green
+    "html", "css" -> Color(0xFFE91E63) // Pink
+    "json", "xml", "toml", "yaml", "yml" -> MaterialTheme.colorScheme.tertiary
     "md", "txt" -> MaterialTheme.colorScheme.outline
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }

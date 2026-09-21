@@ -12,8 +12,8 @@ object SafUtils {
 
     /**
      * Resolves a SAF tree Uri (e.g. from OpenDocumentTree) to an absolute file path.
-     * Takes persistable permissions, checks primary storage & raw paths, and recursively
-     * imports SAF tree contents for virtual/external locations into local project storage.
+     * Takes persistable permissions and recursively imports all files and subdirectories
+     * into app workspace storage so that full read/write/create capabilities work natively.
      */
     fun resolvePathFromTreeUri(context: Context, uri: Uri): String? {
         try {
@@ -33,16 +33,27 @@ object SafUtils {
 
             val decodedDocId = if (docId != null) Uri.decode(docId) else ""
 
-            // 1. Direct raw storage path (e.g. raw:/storage/emulated/0/...)
-            if (decodedDocId.contains("raw:")) {
-                val rawPath = decodedDocId.substringAfter("raw:")
-                val rawFile = File(rawPath)
-                if (rawFile.exists()) {
-                    return rawFile.absolutePath
-                }
+            val documentTree = DocumentFile.fromTreeUri(context, uri)
+            val extractedName = when {
+                documentTree != null && !documentTree.name.isNullOrBlank() -> documentTree.name!!
+                decodedDocId.contains("primary:") -> decodedDocId.substringAfter("primary:").split("/").lastOrNull { it.isNotEmpty() } ?: "project"
+                decodedDocId.contains("/") -> decodedDocId.split("/").lastOrNull { it.isNotEmpty() } ?: "project"
+                else -> "project"
             }
 
-            // 2. Primary internal storage path (e.g. primary:Download/MyFolder)
+            val folderName = extractedName.replace("[^a-zA-Z0-9_.-]".toRegex(), "_")
+            val localProjectDir = File(context.filesDir, "saf_projects/$folderName")
+            if (localProjectDir.exists()) {
+                localProjectDir.deleteRecursively()
+            }
+            localProjectDir.mkdirs()
+
+            if (documentTree != null && documentTree.exists()) {
+                copyDocumentTreeRecursively(context, documentTree, localProjectDir)
+                return localProjectDir.absolutePath
+            }
+
+            // Fallback to direct path if DocumentFile wasn't resolvable
             if (decodedDocId.contains("primary:")) {
                 val relativePath = decodedDocId.substringAfter("primary:")
                 val externalStorage = Environment.getExternalStorageDirectory()
@@ -51,29 +62,6 @@ object SafUtils {
                     targetFile.mkdirs()
                 }
                 return targetFile.absolutePath
-            }
-
-            // 3. Absolute path in docId (e.g. /storage/emulated/0/...)
-            if (decodedDocId.startsWith("/storage/") || decodedDocId.startsWith("/sdcard/")) {
-                val directFile = File(decodedDocId)
-                if (directFile.exists()) {
-                    return directFile.absolutePath
-                }
-            }
-
-            // 4. Fallback for external SD cards or virtual providers:
-            // Recursively import the DocumentFile tree into local app workspace storage
-            val documentTree = DocumentFile.fromTreeUri(context, uri)
-            if (documentTree != null && documentTree.exists()) {
-                val folderName = documentTree.name ?: "saf_project"
-                val localProjectDir = File(context.filesDir, "saf_projects/$folderName")
-                if (localProjectDir.exists()) {
-                    localProjectDir.deleteRecursively()
-                }
-                localProjectDir.mkdirs()
-
-                copyDocumentTreeRecursively(context, documentTree, localProjectDir)
-                return localProjectDir.absolutePath
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -91,7 +79,7 @@ object SafUtils {
             if (file.isDirectory) {
                 val subDestDir = File(destDir, name)
                 copyDocumentTreeRecursively(context, file, subDestDir)
-            } else if (file.isFile) {
+            } else {
                 val targetFile = File(destDir, name)
                 try {
                     context.contentResolver.openInputStream(file.uri)?.use { input ->
