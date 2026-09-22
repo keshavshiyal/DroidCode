@@ -1,6 +1,6 @@
-package com.example
+package com.droidcode
 
-import com.example.ui.FileIconUtils
+import com.droidcode.ui.FileIconUtils
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

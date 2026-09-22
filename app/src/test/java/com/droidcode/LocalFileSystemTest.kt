@@ -1,6 +1,6 @@
-package com.example
+package com.droidcode
 
-import com.example.filesystem.LocalFileSystem
+import com.droidcode.filesystem.LocalFileSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull

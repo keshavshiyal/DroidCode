@@ -1,6 +1,6 @@
-package com.example
+package com.droidcode
 
-import com.example.editor.EditorManager
+import com.droidcode.editor.EditorManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull

@@ -1,8 +1,8 @@
-package com.example
+package com.droidcode
 
 import androidx.test.core.app.ApplicationProvider
-import com.example.project.Project
-import com.example.project.WorkspaceManager
+import com.droidcode.project.Project
+import com.droidcode.project.WorkspaceManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull

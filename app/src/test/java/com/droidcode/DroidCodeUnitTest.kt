@@ -1,12 +1,14 @@
-package com.example
+package com.droidcode
 
-import com.example.core.Command
-import com.example.core.CommandRegistry
-import com.example.core.EventBus
-import com.example.editor.EditorTab
-import com.example.editor.UndoManager
-import com.example.filesystem.LocalFileSystem
-import com.example.project.ProjectTemplate
+import com.droidcode.core.Command
+import com.droidcode.core.CommandRegistry
+import com.droidcode.core.EventBus
+import com.droidcode.editor.EditorTab
+import com.droidcode.editor.FileViewerType
+import com.droidcode.editor.UndoManager
+import com.droidcode.filesystem.LocalFileSystem
+import com.droidcode.project.ProjectTemplate
+import com.droidcode.settings.AppSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -145,46 +147,46 @@ class DroidCodeUnitTest {
 
     @Test
     fun testAppSettingsModel() {
-        val settings = com.example.settings.AppSettings(
-            com.example.settings.AppSettings.ThemeMode.DARK,
+        val settings = AppSettings(
+            AppSettings.ThemeMode.DARK,
             16,
             true,
             true,
-            com.example.settings.AppSettings.KeyBarDensity.NORMAL,
+            AppSettings.KeyBarDensity.NORMAL,
             true,
-            com.example.settings.AppSettings.EditorFontFamily.JETBRAINS_MONO
+            AppSettings.EditorFontFamily.JETBRAINS_MONO
         )
-        assertEquals(com.example.settings.AppSettings.ThemeMode.DARK, settings.themeMode)
+        assertEquals(AppSettings.ThemeMode.DARK, settings.themeMode)
         assertEquals(16, settings.fontSizeSp)
         assertTrue(settings.isWordWrap)
         assertTrue(settings.isQuickKeyBarEnabled)
-        assertEquals(com.example.settings.AppSettings.EditorFontFamily.JETBRAINS_MONO, settings.editorFontFamily)
+        assertEquals(AppSettings.EditorFontFamily.JETBRAINS_MONO, settings.editorFontFamily)
 
         settings.fontSizeSp = 18
         assertEquals(18, settings.fontSizeSp)
 
-        settings.editorFontFamily = com.example.settings.AppSettings.EditorFontFamily.FIRA_CODE
-        assertEquals(com.example.settings.AppSettings.EditorFontFamily.FIRA_CODE, settings.editorFontFamily)
+        settings.editorFontFamily = AppSettings.EditorFontFamily.FIRA_CODE
+        assertEquals(AppSettings.EditorFontFamily.FIRA_CODE, settings.editorFontFamily)
     }
 
     @Test
     fun testEditorFontFamilyEnumValues() {
-        val fonts = com.example.settings.AppSettings.EditorFontFamily.values()
-        assertTrue(fonts.any { it == com.example.settings.AppSettings.EditorFontFamily.JETBRAINS_MONO })
-        assertTrue(fonts.any { it == com.example.settings.AppSettings.EditorFontFamily.FIRA_CODE })
-        assertTrue(fonts.any { it == com.example.settings.AppSettings.EditorFontFamily.ROBOTO_MONO })
-        assertTrue(fonts.any { it == com.example.settings.AppSettings.EditorFontFamily.SOURCE_CODE_PRO })
+        val fonts = AppSettings.EditorFontFamily.values()
+        assertTrue(fonts.any { it == AppSettings.EditorFontFamily.JETBRAINS_MONO })
+        assertTrue(fonts.any { it == AppSettings.EditorFontFamily.FIRA_CODE })
+        assertTrue(fonts.any { it == AppSettings.EditorFontFamily.ROBOTO_MONO })
+        assertTrue(fonts.any { it == AppSettings.EditorFontFamily.SOURCE_CODE_PRO })
 
-        val jb = com.example.settings.AppSettings.EditorFontFamily.JETBRAINS_MONO
+        val jb = AppSettings.EditorFontFamily.JETBRAINS_MONO
         assertEquals("JetBrains Mono", jb.label)
         assertNotNull(jb.description)
     }
 
     @Test
     fun testKeyBarDensities() {
-        assertEquals(36, com.example.settings.AppSettings.KeyBarDensity.COMPACT.heightDp)
-        assertEquals(44, com.example.settings.AppSettings.KeyBarDensity.NORMAL.heightDp)
-        assertEquals(52, com.example.settings.AppSettings.KeyBarDensity.COMFORTABLE.heightDp)
+        assertEquals(36, AppSettings.KeyBarDensity.COMPACT.heightDp)
+        assertEquals(44, AppSettings.KeyBarDensity.NORMAL.heightDp)
+        assertEquals(52, AppSettings.KeyBarDensity.COMFORTABLE.heightDp)
     }
 
     @Test
@@ -199,7 +201,7 @@ class DroidCodeUnitTest {
     @Test
     fun testProjectFromDirectory() {
         val dir = tempFolder.newFolder("MyAwesomeProject")
-        val project = com.example.project.Project.fromDirectory(dir, "WEB")
+        val project = com.droidcode.project.Project.fromDirectory(dir, "WEB")
         assertNotNull(project)
         assertEquals("MyAwesomeProject", project.name)
         assertEquals(dir.absolutePath, project.path)
@@ -208,75 +210,75 @@ class DroidCodeUnitTest {
     @Test
     fun testFileIconClassificationCompleteness() {
         // Special files
-        assertEquals("DOCKER", com.example.ui.FileIconUtils.classifyFile("Dockerfile"))
-        assertEquals("DOCKER", com.example.ui.FileIconUtils.classifyFile("Dockerfile.dev"))
-        assertEquals("BUILD", com.example.ui.FileIconUtils.classifyFile("Makefile"))
-        assertEquals("MAVEN", com.example.ui.FileIconUtils.classifyFile("pom.xml"))
-        assertEquals("ENV", com.example.ui.FileIconUtils.classifyFile(".env"))
-        assertEquals("ENV", com.example.ui.FileIconUtils.classifyFile(".env.local"))
-        assertEquals("LICENSE", com.example.ui.FileIconUtils.classifyFile("LICENSE"))
-        assertEquals("LICENSE", com.example.ui.FileIconUtils.classifyFile("LICENSE.txt"))
-        assertEquals("CONFIG", com.example.ui.FileIconUtils.classifyFile(".editorconfig"))
-        assertEquals("README", com.example.ui.FileIconUtils.classifyFile("README.md"))
-        assertEquals("GIT", com.example.ui.FileIconUtils.classifyFile(".gitignore"))
+        assertEquals("DOCKER", com.droidcode.ui.FileIconUtils.classifyFile("Dockerfile"))
+        assertEquals("DOCKER", com.droidcode.ui.FileIconUtils.classifyFile("Dockerfile.dev"))
+        assertEquals("BUILD", com.droidcode.ui.FileIconUtils.classifyFile("Makefile"))
+        assertEquals("MAVEN", com.droidcode.ui.FileIconUtils.classifyFile("pom.xml"))
+        assertEquals("ENV", com.droidcode.ui.FileIconUtils.classifyFile(".env"))
+        assertEquals("ENV", com.droidcode.ui.FileIconUtils.classifyFile(".env.local"))
+        assertEquals("LICENSE", com.droidcode.ui.FileIconUtils.classifyFile("LICENSE"))
+        assertEquals("LICENSE", com.droidcode.ui.FileIconUtils.classifyFile("LICENSE.txt"))
+        assertEquals("CONFIG", com.droidcode.ui.FileIconUtils.classifyFile(".editorconfig"))
+        assertEquals("README", com.droidcode.ui.FileIconUtils.classifyFile("README.md"))
+        assertEquals("GIT", com.droidcode.ui.FileIconUtils.classifyFile(".gitignore"))
 
         // Stage 1 languages
-        assertEquals("HTML", com.example.ui.FileIconUtils.classifyFile("index.html"))
-        assertEquals("CSS", com.example.ui.FileIconUtils.classifyFile("styles.css"))
-        assertEquals("CSS", com.example.ui.FileIconUtils.classifyFile("theme.scss"))
-        assertEquals("CSS", com.example.ui.FileIconUtils.classifyFile("vars.sass"))
-        assertEquals("JAVASCRIPT", com.example.ui.FileIconUtils.classifyFile("bundle.js"))
-        assertEquals("TYPESCRIPT", com.example.ui.FileIconUtils.classifyFile("app.ts"))
-        assertEquals("TYPESCRIPT", com.example.ui.FileIconUtils.classifyFile("Component.tsx"))
-        assertEquals("JSON", com.example.ui.FileIconUtils.classifyFile("package.json"))
-        assertEquals("MARKDOWN", com.example.ui.FileIconUtils.classifyFile("NOTES.md"))
-        assertEquals("SQL", com.example.ui.FileIconUtils.classifyFile("schema.sql"))
-        assertEquals("SQL", com.example.ui.FileIconUtils.classifyFile("database.sqlite"))
+        assertEquals("HTML", com.droidcode.ui.FileIconUtils.classifyFile("index.html"))
+        assertEquals("CSS", com.droidcode.ui.FileIconUtils.classifyFile("styles.css"))
+        assertEquals("CSS", com.droidcode.ui.FileIconUtils.classifyFile("theme.scss"))
+        assertEquals("CSS", com.droidcode.ui.FileIconUtils.classifyFile("vars.sass"))
+        assertEquals("JAVASCRIPT", com.droidcode.ui.FileIconUtils.classifyFile("bundle.js"))
+        assertEquals("TYPESCRIPT", com.droidcode.ui.FileIconUtils.classifyFile("app.ts"))
+        assertEquals("TYPESCRIPT", com.droidcode.ui.FileIconUtils.classifyFile("Component.tsx"))
+        assertEquals("JSON", com.droidcode.ui.FileIconUtils.classifyFile("package.json"))
+        assertEquals("MARKDOWN", com.droidcode.ui.FileIconUtils.classifyFile("NOTES.md"))
+        assertEquals("SQL", com.droidcode.ui.FileIconUtils.classifyFile("schema.sql"))
+        assertEquals("SQL", com.droidcode.ui.FileIconUtils.classifyFile("database.sqlite"))
 
         // Programming languages
-        assertEquals("PYTHON", com.example.ui.FileIconUtils.classifyFile("script.py"))
-        assertEquals("JAVA", com.example.ui.FileIconUtils.classifyFile("Main.java"))
-        assertEquals("KOTLIN", com.example.ui.FileIconUtils.classifyFile("App.kt"))
-        assertEquals("KOTLIN", com.example.ui.FileIconUtils.classifyFile("build.gradle.kts"))
-        assertEquals("RUST", com.example.ui.FileIconUtils.classifyFile("main.rs"))
-        assertEquals("GO", com.example.ui.FileIconUtils.classifyFile("server.go"))
+        assertEquals("PYTHON", com.droidcode.ui.FileIconUtils.classifyFile("script.py"))
+        assertEquals("JAVA", com.droidcode.ui.FileIconUtils.classifyFile("Main.java"))
+        assertEquals("KOTLIN", com.droidcode.ui.FileIconUtils.classifyFile("App.kt"))
+        assertEquals("KOTLIN", com.droidcode.ui.FileIconUtils.classifyFile("build.gradle.kts"))
+        assertEquals("RUST", com.droidcode.ui.FileIconUtils.classifyFile("main.rs"))
+        assertEquals("GO", com.droidcode.ui.FileIconUtils.classifyFile("server.go"))
 
         // Config & Data
-        assertEquals("CONFIG", com.example.ui.FileIconUtils.classifyFile("settings.ini"))
-        assertEquals("TOML", com.example.ui.FileIconUtils.classifyFile("Cargo.toml"))
-        assertEquals("YAML", com.example.ui.FileIconUtils.classifyFile("ci.yml"))
-        assertEquals("DATA", com.example.ui.FileIconUtils.classifyFile("data.csv"))
-        assertEquals("GRADLE", com.example.ui.FileIconUtils.classifyFile("build.gradle"))
+        assertEquals("CONFIG", com.droidcode.ui.FileIconUtils.classifyFile("settings.ini"))
+        assertEquals("TOML", com.droidcode.ui.FileIconUtils.classifyFile("Cargo.toml"))
+        assertEquals("YAML", com.droidcode.ui.FileIconUtils.classifyFile("ci.yml"))
+        assertEquals("DATA", com.droidcode.ui.FileIconUtils.classifyFile("data.csv"))
+        assertEquals("GRADLE", com.droidcode.ui.FileIconUtils.classifyFile("build.gradle"))
 
         // Media formats
-        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("icon.png"))
-        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("photo.jpg"))
-        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("vector.svg"))
-        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("modern.avif"))
-        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("highres.heic"))
-        assertEquals("IMAGE", com.example.ui.FileIconUtils.classifyFile("photo.tiff"))
-        assertEquals("PDF", com.example.ui.FileIconUtils.classifyFile("manual.pdf"))
-        assertEquals("VIDEO", com.example.ui.FileIconUtils.classifyFile("demo.mp4"))
-        assertEquals("ARCHIVE", com.example.ui.FileIconUtils.classifyFile("backup.zip"))
-        assertEquals("SHELL", com.example.ui.FileIconUtils.classifyFile("deploy.sh"))
+        assertEquals("IMAGE", com.droidcode.ui.FileIconUtils.classifyFile("icon.png"))
+        assertEquals("IMAGE", com.droidcode.ui.FileIconUtils.classifyFile("photo.jpg"))
+        assertEquals("IMAGE", com.droidcode.ui.FileIconUtils.classifyFile("vector.svg"))
+        assertEquals("IMAGE", com.droidcode.ui.FileIconUtils.classifyFile("modern.avif"))
+        assertEquals("IMAGE", com.droidcode.ui.FileIconUtils.classifyFile("highres.heic"))
+        assertEquals("IMAGE", com.droidcode.ui.FileIconUtils.classifyFile("photo.tiff"))
+        assertEquals("PDF", com.droidcode.ui.FileIconUtils.classifyFile("manual.pdf"))
+        assertEquals("VIDEO", com.droidcode.ui.FileIconUtils.classifyFile("demo.mp4"))
+        assertEquals("ARCHIVE", com.droidcode.ui.FileIconUtils.classifyFile("backup.zip"))
+        assertEquals("SHELL", com.droidcode.ui.FileIconUtils.classifyFile("deploy.sh"))
     }
 
     @Test
     fun testEditorTabViewerTypeDetection() {
         val txtFile = tempFolder.newFile("sample.txt")
-        assertEquals(com.example.editor.FileViewerType.TEXT, com.example.editor.EditorTab.detectViewerType(txtFile))
+        assertEquals(FileViewerType.TEXT, EditorTab.detectViewerType(txtFile))
 
         val pngFile = tempFolder.newFile("logo.png")
-        assertEquals(com.example.editor.FileViewerType.IMAGE, com.example.editor.EditorTab.detectViewerType(pngFile))
+        assertEquals(FileViewerType.IMAGE, EditorTab.detectViewerType(pngFile))
 
         val avifFile = tempFolder.newFile("banner.avif")
-        assertEquals(com.example.editor.FileViewerType.IMAGE, com.example.editor.EditorTab.detectViewerType(avifFile))
+        assertEquals(FileViewerType.IMAGE, EditorTab.detectViewerType(avifFile))
 
         val mp4File = tempFolder.newFile("video.mp4")
-        assertEquals(com.example.editor.FileViewerType.VIDEO, com.example.editor.EditorTab.detectViewerType(mp4File))
+        assertEquals(FileViewerType.VIDEO, EditorTab.detectViewerType(mp4File))
 
         val pdfFile = tempFolder.newFile("document.pdf")
-        assertEquals(com.example.editor.FileViewerType.PDF, com.example.editor.EditorTab.detectViewerType(pdfFile))
+        assertEquals(FileViewerType.PDF, EditorTab.detectViewerType(pdfFile))
     }
 
     @Test
@@ -329,7 +331,7 @@ class DroidCodeUnitTest {
         val testFile = File(root, "test.kt")
         testFile.writeText("fun main() {}")
 
-        val editorMgr = com.example.editor.EditorManager.getInstance()
+        val editorMgr = com.droidcode.editor.EditorManager.getInstance()
         val tab = editorMgr.openFile(testFile)
         assertNotNull(tab)
         assertEquals("test.kt", tab.fileName)

@@ -1,9 +1,9 @@
-package com.example
+package com.droidcode
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.example.settings.AppSettings
-import com.example.settings.SettingsManager
+import com.droidcode.settings.AppSettings
+import com.droidcode.settings.SettingsManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
