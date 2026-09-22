@@ -2,7 +2,19 @@
 
 All notable changes to DroidCode will be documented in this file.
 
-## [0.1.0-alpha01] - 2026-09-21
+## [0.1.0-alpha01] - 2026-09-22
+
+### Phase 1.5.1 — Foundation Hardening & Architecture Cleanups
+- **Room Database Concurrency Hardening**:
+  - Removed `allowMainThreadQueries()` from `AppDatabase.java` to prevent disk I/O on Android UI threads.
+  - Converted Room DAOs (`WorkspaceDao`, `TabSessionDao`) to Kotlin with coroutine `suspend` methods and reactive `Flow` emissions.
+  - Migrated `WorkspaceManager` to Kotlin with asynchronous `withContext(Dispatchers.IO)` persistence routines and reactive workspace observation.
+- **Dependency Sprawl Elimination**:
+  - Cleaned up unused network and serialization libraries (`retrofit`, `okhttp`, `logging-interceptor`, `moshi-kotlin`, `converter-moshi`, `moshi-kotlin-codegen`) from `app/build.gradle.kts` and `gradle/libs.versions.toml`.
+- **Syntax Highlighter Consolidation**:
+  - Consolidated language keyword sets from `EditorView.kt` into `SyntaxHighlighter.java`.
+  - Removed orphaned interface `LanguageProvider.java`.
+  - Added unit test suite `SyntaxHighlighterTest.kt` covering keyword lookup across Kotlin, Java, JS/TS, Python, SQL, and HTML/XML.
 
 ### Phase 1.5 — Stabilization & Professionalization
 - **Workspace & State Persistence**:

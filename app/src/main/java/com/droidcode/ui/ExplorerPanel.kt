@@ -117,17 +117,18 @@ fun ExplorerPanel(
 
     val handlePaste: (FileNode?) -> Unit = { targetFolderNode ->
         val item = clipboardItem
-        if (item != null && workspaceMgr.hasOpenWorkspace()) {
+        val currentProj = workspaceMgr.currentProject
+        if (item != null && workspaceMgr.hasOpenWorkspace() && currentProj != null) {
             val targetDir = if (targetFolderNode != null && targetFolderNode.isFolder) {
                 File(targetFolderNode.path)
             } else if (targetFolderNode != null && !targetFolderNode.isFolder) {
-                File(targetFolderNode.path).parentFile ?: workspaceMgr.currentProject.directory
+                File(targetFolderNode.path).parentFile ?: currentProj.directory
             } else if (selectedNode != null && selectedNode!!.isFolder) {
                 File(selectedNode!!.path)
             } else if (selectedNode != null && !selectedNode!!.isFolder) {
-                File(selectedNode!!.path).parentFile ?: workspaceMgr.currentProject.directory
+                File(selectedNode!!.path).parentFile ?: currentProj.directory
             } else {
-                workspaceMgr.currentProject.directory
+                currentProj.directory
             }
 
             coroutineScope.launch {
@@ -196,7 +197,7 @@ fun ExplorerPanel(
                         modifier = Modifier.padding(top = 1.dp)
                     ) {
                         Text(
-                            text = workspaceMgr.currentProject.name,
+                            text = workspaceMgr.currentProject?.name ?: "",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -605,13 +606,14 @@ fun ExplorerPanel(
     }
 
     // Modal Action Dialogs
-    if (showNewFileDialog && workspaceMgr.hasOpenWorkspace()) {
+    val activeProjForDialog = workspaceMgr.currentProject
+    if (showNewFileDialog && workspaceMgr.hasOpenWorkspace() && activeProjForDialog != null) {
         val parentDir = if (selectedNode != null && selectedNode!!.isFolder) {
             File(selectedNode!!.path)
         } else if (selectedNode != null && !selectedNode!!.isFolder) {
-            File(selectedNode!!.path).parentFile ?: workspaceMgr.currentProject.directory
+            File(selectedNode!!.path).parentFile ?: activeProjForDialog.directory
         } else {
-            workspaceMgr.currentProject.directory
+            activeProjForDialog.directory
         }
 
         InputDialog(
@@ -637,13 +639,13 @@ fun ExplorerPanel(
         )
     }
 
-    if (showNewFolderDialog && workspaceMgr.hasOpenWorkspace()) {
+    if (showNewFolderDialog && workspaceMgr.hasOpenWorkspace() && activeProjForDialog != null) {
         val parentDir = if (selectedNode != null && selectedNode!!.isFolder) {
             File(selectedNode!!.path)
         } else if (selectedNode != null && !selectedNode!!.isFolder) {
-            File(selectedNode!!.path).parentFile ?: workspaceMgr.currentProject.directory
+            File(selectedNode!!.path).parentFile ?: activeProjForDialog.directory
         } else {
-            workspaceMgr.currentProject.directory
+            activeProjForDialog.directory
         }
 
         InputDialog(

@@ -22,7 +22,7 @@ public abstract class AppDatabase extends RoomDatabase {
                             context.getApplicationContext(),
                             AppDatabase.class,
                             "droidcode_db"
-                    ).allowMainThreadQueries().build();
+                    ).build();
                 }
             }
         }

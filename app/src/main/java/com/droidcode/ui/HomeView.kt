@@ -38,9 +38,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +59,7 @@ import com.droidcode.db.WorkspaceEntity
 import com.droidcode.filesystem.SafUtils
 import com.droidcode.project.ProjectTemplate
 import com.droidcode.project.WorkspaceManager
+import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
@@ -66,8 +69,10 @@ fun HomeView(
     onOpenGeneralMenu: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
-    var recentWorkspaces by remember { mutableStateOf(workspaceMgr.getRecentWorkspaces(context)) }
+    val recentWorkspaces by workspaceMgr.getRecentWorkspacesFlow(context)
+        .collectAsState(initial = emptyList())
 
     var showNewProjectDialog by remember { mutableStateOf(false) }
     var showOpenDirDialog by remember { mutableStateOf(false) }
@@ -217,8 +222,9 @@ fun HomeView(
                                     }
                                 },
                                 onRemove = {
-                                    workspaceMgr.removeWorkspace(context, workspace.path)
-                                    recentWorkspaces = workspaceMgr.getRecentWorkspaces(context)
+                                    coroutineScope.launch {
+                                        workspaceMgr.removeWorkspace(context, workspace.path)
+                                    }
                                 }
                             )
                         }

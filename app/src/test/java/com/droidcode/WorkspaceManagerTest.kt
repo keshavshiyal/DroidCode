@@ -3,6 +3,8 @@ package com.droidcode
 import androidx.test.core.app.ApplicationProvider
 import com.droidcode.project.Project
 import com.droidcode.project.WorkspaceManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -33,7 +35,7 @@ class WorkspaceManagerTest {
     }
 
     @Test
-    fun testOpenAndCloseWorkspace() {
+    fun testOpenAndCloseWorkspace() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val dir = tempFolder.newFolder("TestWorkspace")
 
@@ -55,7 +57,7 @@ class WorkspaceManagerTest {
     }
 
     @Test
-    fun testRecentWorkspacesPersistenceAndRemoval() {
+    fun testRecentWorkspacesPersistenceAndRemoval() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val dir1 = tempFolder.newFolder("Project1")
         val dir2 = tempFolder.newFolder("Project2")
@@ -74,8 +76,19 @@ class WorkspaceManagerTest {
         assertTrue(updatedRecents.any { it.path == dir2.absolutePath })
     }
 
+    @Test
+    fun testRecentWorkspacesFlowEmission() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val dir = tempFolder.newFolder("FlowWorkspace")
+
+        workspaceMgr.openWorkspace(context, dir, "KOTLIN")
+
+        val emission = workspaceMgr.getRecentWorkspacesFlow(context).first()
+        assertTrue(emission.any { it.path == dir.absolutePath })
+    }
+
     @Test(expected = IllegalArgumentException::class)
-    fun testOpenNonExistentDirectoryThrowsException() {
+    fun testOpenNonExistentDirectoryThrowsException() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val nonExistent = File(tempFolder.root, "non_existent_folder_xyz")
         workspaceMgr.openWorkspace(context, nonExistent, "GENERAL")

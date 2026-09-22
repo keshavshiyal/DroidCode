@@ -13,17 +13,17 @@ interface WorkspaceDao {
     fun getAllWorkspacesFlow(): Flow<List<WorkspaceEntity>>
 
     @Query("SELECT * FROM workspaces ORDER BY lastOpenedTimestamp DESC")
-    fun getAllWorkspacesSync(): List<WorkspaceEntity>
+    suspend fun getAllWorkspaces(): List<WorkspaceEntity>
 
     @Query("SELECT * FROM workspaces WHERE path = :path LIMIT 1")
-    fun getWorkspaceByPath(path: String): WorkspaceEntity?
+    suspend fun getWorkspaceByPath(path: String): WorkspaceEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insertWorkspace(workspace: WorkspaceEntity)
+    suspend fun insertWorkspace(workspace: WorkspaceEntity)
 
     @Query("DELETE FROM workspaces WHERE path = :path")
-    fun deleteWorkspaceByPath(path: String)
+    suspend fun deleteWorkspaceByPath(path: String)
 
     @Query("DELETE FROM workspaces")
-    fun clearAllWorkspaces()
+    suspend fun clearAllWorkspaces()
 }

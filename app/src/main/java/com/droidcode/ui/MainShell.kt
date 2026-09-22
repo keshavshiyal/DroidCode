@@ -338,7 +338,7 @@ fun MainShell() {
                                             .padding(horizontal = 8.dp, vertical = 2.dp)
                                     ) {
                                         Text(
-                                            text = workspaceMgr.currentProject.name,
+                                            text = workspaceMgr.currentProject?.name ?: "",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -444,9 +444,15 @@ fun MainShell() {
                         "HOME" -> {
                             HomeView(
                                 onOpenWorkspace = { path, type ->
-                                    workspaceMgr.openWorkspace(context, File(path), type)
-                                    isWorkspaceOpen = true
-                                    currentView = "IDE"
+                                    coroutineScope.launch {
+                                        try {
+                                            workspaceMgr.openWorkspace(context, File(path), type)
+                                            isWorkspaceOpen = true
+                                            currentView = "IDE"
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("MainShell", "Failed to open workspace", e)
+                                        }
+                                    }
                                 },
                                 onOpenSettings = { currentView = "SETTINGS" },
                                 onOpenGeneralMenu = { showProjectMenubar = true }

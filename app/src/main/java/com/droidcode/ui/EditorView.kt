@@ -113,6 +113,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.MoreVert
+import com.droidcode.language.SyntaxHighlighter
 import com.droidcode.project.WorkspaceManager
 
 @Composable
@@ -1535,14 +1536,7 @@ class CodeSyntaxVisualTransformation(
             val commentColor = if (isDarkTheme) Color(0xFF78909C) else Color(0xFF546E7A)
             val typeColor = if (isDarkTheme) Color(0xFF64B5F6) else Color(0xFF1565C0)
 
-            val keywords = when (languageId.lowercase()) {
-                "kotlin", "java" -> setOf("package", "import", "class", "interface", "fun", "val", "var", "public", "private", "protected", "return", "if", "else", "for", "while", "when", "try", "catch", "throw", "object", "sealed", "data", "override", "final", "static", "new", "null", "true", "false", "void")
-                "javascript", "typescript" -> setOf("import", "export", "from", "class", "function", "const", "let", "var", "return", "if", "else", "for", "while", "switch", "case", "async", "await", "try", "catch", "default", "null", "undefined", "true", "false")
-                "python" -> setOf("def", "class", "import", "from", "return", "if", "elif", "else", "for", "while", "try", "except", "with", "as", "pass", "None", "True", "False", "lambda", "yield")
-                "html", "xml" -> setOf("div", "span", "p", "a", "body", "head", "html", "script", "style", "link", "meta", "resources", "string", "layout", "manifest")
-                "sql" -> setOf("SELECT", "FROM", "WHERE", "INSERT", "INTO", "UPDATE", "DELETE", "JOIN", "LEFT", "RIGHT", "CREATE", "TABLE", "PRIMARY", "KEY", "ORDER", "BY", "GROUP", "LIMIT", "AND", "OR", "NOT")
-                else -> setOf("val", "var", "fun", "def", "class", "function", "return", "if", "else", "import", "public", "private")
-            }
+            val keywords = SyntaxHighlighter.getKeywordsForLanguage(languageId)
 
             val wordRegex = Regex("\\b[A-Za-z_][A-Za-z0-9_]*\\b")
             val stringRegex = Regex("\"[^\"]*\"|'[^']*'|`[^`]*`")
