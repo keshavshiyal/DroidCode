@@ -21,24 +21,36 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,11 +62,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.droidcode.core.Command
 import com.droidcode.core.CommandRegistry
 import com.droidcode.editor.EditorManager
+import com.droidcode.git.GitService
 import com.droidcode.project.WorkspaceManager
 import com.droidcode.settings.SettingsManager
 import com.droidcode.ui.theme.DroidCodeTheme
@@ -70,6 +84,7 @@ fun MainShell() {
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
     val editorMgr = remember { EditorManager.getInstance() }
     val commandRegistry = remember { CommandRegistry.getInstance() }
+    val gitService = remember { GitService.getInstance() }
 
     var isWorkspaceOpen by remember { mutableStateOf(workspaceMgr.hasOpenWorkspace()) }
     var currentView by remember { mutableStateOf(if (isWorkspaceOpen) "IDE" else "HOME") }
@@ -80,6 +95,16 @@ fun MainShell() {
     var showBottomPanel by remember { mutableStateOf(true) }
     var showCommandPalette by remember { mutableStateOf(false) }
     var showProjectMenubar by remember { mutableStateOf(false) }
+    var showWorkspaceDropdown by remember { mutableStateOf(false) }
+    var showTopOverflowMenu by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showShortcutsDialog by remember { mutableStateOf(false) }
+    var showRecentWorkspacesDialog by remember { mutableStateOf(false) }
+
+    val gitStatus = remember(workspaceMgr.currentProject, isWorkspaceOpen) {
+        gitService.inspectWorkspace(workspaceMgr.currentProject)
+    }
+    val recentWorkspaces by workspaceMgr.getRecentWorkspacesFlow(context).collectAsState(initial = emptyList())
 
     // Quick Key Bar sticky modifiers
     var ctrlActive by remember { mutableStateOf(false) }
@@ -309,12 +334,16 @@ fun MainShell() {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
-                                .border(1.dp, MaterialTheme.colorScheme.outline)
-                                .padding(horizontal = 8.dp),
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                                .padding(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Left Section: App Logo & Workspace Dropdown
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 Text(
                                     text = "<D/> DroidCode",
                                     fontSize = 15.sp,
@@ -325,110 +354,326 @@ fun MainShell() {
                                         .clickable {
                                             if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
                                         }
-                                        .padding(end = 12.dp)
+                                        .padding(end = 4.dp)
                                 )
 
                                 if (isWorkspaceOpen && workspaceMgr.currentProject != null) {
-                                    Box(
-                                        modifier = Modifier
-                                            .background(
-                                                MaterialTheme.colorScheme.surfaceVariant,
-                                                RoundedCornerShape(4.dp)
+                                    Box {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                            modifier = Modifier.clickable { showWorkspaceDropdown = true }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = workspaceMgr.currentProject?.name ?: "",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.ArrowDropDown,
+                                                    contentDescription = "Workspace options",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+
+                                        DropdownMenu(
+                                            expanded = showWorkspaceDropdown,
+                                            onDismissRequest = { showWorkspaceDropdown = false }
+                                        ) {
+                                            // Git Branch Info
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(
+                                                            text = if (gitStatus.isGitRepo) "Git Branch: ${gitStatus.currentBranch}" else "Git: Not a repository",
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = if (gitStatus.isGitRepo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                        Text(
+                                                            text = workspaceMgr.currentProject?.path ?: "",
+                                                            fontSize = 10.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Info,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showWorkspaceDropdown = false
+                                                    Toast.makeText(
+                                                        context,
+                                                        if (gitStatus.isGitRepo) "Branch: ${gitStatus.currentBranch}" else "Not a Git repository",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
                                             )
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = workspaceMgr.currentProject?.name ?: "",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
+
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                            // Switch Workspace
+                                            DropdownMenuItem(
+                                                text = { Text("Switch Workspace", fontSize = 13.sp) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.SwapHoriz,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showWorkspaceDropdown = false
+                                                    isWorkspaceOpen = false
+                                                    currentView = "HOME"
+                                                }
+                                            )
+
+                                            // Recent Workspaces
+                                            DropdownMenuItem(
+                                                text = { Text("Recent Workspaces", fontSize = 13.sp) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.History,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showWorkspaceDropdown = false
+                                                    showRecentWorkspacesDialog = true
+                                                }
+                                            )
+
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                            // Close Workspace
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = "Close Workspace",
+                                                        fontSize = 13.sp,
+                                                        color = MaterialTheme.colorScheme.error
+                                                    )
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Close,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showWorkspaceDropdown = false
+                                                    workspaceMgr.closeWorkspace()
+                                                    editorMgr.closeAllTabs()
+                                                    isWorkspaceOpen = false
+                                                    currentView = "HOME"
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
 
-                            Row {
+                            // Right Section: Primary High-Frequency Toggles & Three-Dot Overflow Menu
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Search & Commands toggle
                                 IconButton(
                                     onClick = { showCommandPalette = true },
                                     modifier = Modifier
-                                        .size(32.dp)
-                                        .testTag("top_bar_command_palette_btn")
+                                        .size(36.dp)
+                                        .testTag("top_bar_search_btn")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Search,
-                                        contentDescription = "Command Palette",
-                                        tint = MaterialTheme.colorScheme.onSurface
+                                        contentDescription = "Search & Commands",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
 
                                 if (isWorkspaceOpen) {
+                                    // Project Explorer toggle
                                     IconButton(
                                         onClick = {
                                             coroutineScope.launch {
                                                 if (drawerState.isClosed) drawerState.open() else drawerState.close()
                                             }
                                         },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .testTag("top_bar_explorer_btn")
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Folder,
                                             contentDescription = "Toggle Project Explorer",
-                                            tint = if (drawerState.isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            tint = if (drawerState.isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
 
+                                    // Terminal toggle
                                     IconButton(
                                         onClick = { showBottomPanel = !showBottomPanel },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .testTag("top_bar_terminal_btn")
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Terminal,
                                             contentDescription = "Toggle Terminal",
-                                            tint = if (showBottomPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            tint = if (showBottomPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
+                                }
 
+                                // 8dp horizontal breathing room between primary toggles and overflow menu
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Three-Dot Overflow Menu
+                                Box {
                                     IconButton(
-                                        onClick = {
-                                            workspaceMgr.closeWorkspace()
-                                            editorMgr.closeAllTabs()
-                                            isWorkspaceOpen = false
-                                            currentView = "HOME"
-                                        },
-                                        modifier = Modifier.size(32.dp)
+                                        onClick = { showTopOverflowMenu = true },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .testTag("top_bar_overflow_btn")
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Close Workspace",
-                                            tint = MaterialTheme.colorScheme.error
+                                            imageVector = Icons.Default.MoreVert,
+                                            contentDescription = "More Options",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                }
 
-                                IconButton(
-                                    onClick = { currentView = "SETTINGS" },
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .testTag("top_bar_settings_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Settings",
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
+                                    DropdownMenu(
+                                        expanded = showTopOverflowMenu,
+                                        onDismissRequest = { showTopOverflowMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Settings", fontSize = 13.sp) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Settings,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showTopOverflowMenu = false
+                                                currentView = "SETTINGS"
+                                            }
+                                        )
 
-                                IconButton(
-                                    onClick = { showProjectMenubar = true },
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .testTag("top_bar_menubar_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = "Project Commands Menu",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
+                                        DropdownMenuItem(
+                                            text = { Text("Command Palette", fontSize = 13.sp) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Search,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showTopOverflowMenu = false
+                                                showCommandPalette = true
+                                            }
+                                        )
+
+                                        DropdownMenuItem(
+                                            text = { Text("Project Menubar", fontSize = 13.sp) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Menu,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showTopOverflowMenu = false
+                                                showProjectMenubar = true
+                                            }
+                                        )
+
+                                        DropdownMenuItem(
+                                            text = { Text("Keyboard Shortcuts", fontSize = 13.sp) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Keyboard,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showTopOverflowMenu = false
+                                                showShortcutsDialog = true
+                                            }
+                                        )
+
+                                        DropdownMenuItem(
+                                            text = { Text("About DroidCode", fontSize = 13.sp) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Info,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showTopOverflowMenu = false
+                                                showAboutDialog = true
+                                            }
+                                        )
+
+                                        if (isWorkspaceOpen) {
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = "Close Workspace",
+                                                        fontSize = 13.sp,
+                                                        color = MaterialTheme.colorScheme.error
+                                                    )
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Close,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showTopOverflowMenu = false
+                                                    workspaceMgr.closeWorkspace()
+                                                    editorMgr.closeAllTabs()
+                                                    isWorkspaceOpen = false
+                                                    currentView = "HOME"
+                                                }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -540,6 +785,145 @@ fun MainShell() {
                             onDismiss = { showProjectMenubar = false },
                             onExecuteCommand = { cmd ->
                                 cmd.execute()
+                            }
+                        )
+                    }
+
+                    // About Dialog
+                    if (showAboutDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showAboutDialog = false },
+                            title = {
+                                Text(
+                                    text = "<D/> DroidCode",
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = "Version: 0.1.0-alpha01 (Milestone 1)",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Professional Android IDE shell optimized for mobile touch ergonomics and hardware keyboard workflows.",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showAboutDialog = false }) {
+                                    Text("OK")
+                                }
+                            }
+                        )
+                    }
+
+                    // Keyboard Shortcuts Dialog
+                    if (showShortcutsDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showShortcutsDialog = false },
+                            title = { Text("Keyboard Shortcuts") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf(
+                                        "Ctrl + S" to "Save active file",
+                                        "Ctrl + Shift + S" to "Save all files",
+                                        "Ctrl + P" to "Command Palette",
+                                        "Ctrl + B" to "Toggle Project Explorer",
+                                        "Ctrl + `" to "Toggle Terminal Panel",
+                                        "Ctrl + Z" to "Undo edit",
+                                        "Ctrl + Y" to "Redo edit"
+                                    ).forEach { (shortcut, description) ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = shortcut,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = description,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showShortcutsDialog = false }) {
+                                    Text("Close")
+                                }
+                            }
+                        )
+                    }
+
+                    // Recent Workspaces Dialog
+                    if (showRecentWorkspacesDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showRecentWorkspacesDialog = false },
+                            title = { Text("Recent Workspaces") },
+                            text = {
+                                if (recentWorkspaces.isEmpty()) {
+                                    Text(
+                                        text = "No recent workspaces found.",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        recentWorkspaces.take(5).forEach { entity ->
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        showRecentWorkspacesDialog = false
+                                                        coroutineScope.launch {
+                                                            try {
+                                                                workspaceMgr.openWorkspace(context, File(entity.path), entity.type)
+                                                                isWorkspaceOpen = true
+                                                                currentView = "IDE"
+                                                            } catch (e: Exception) {
+                                                                Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        }
+                                                    }
+                                            ) {
+                                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                                    Text(
+                                                        text = entity.name,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 13.sp
+                                                    )
+                                                    Text(
+                                                        text = entity.path,
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showRecentWorkspacesDialog = false }) {
+                                    Text("Cancel")
+                                }
                             }
                         )
                     }

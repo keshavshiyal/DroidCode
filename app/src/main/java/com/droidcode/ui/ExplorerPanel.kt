@@ -33,12 +33,14 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -72,6 +74,9 @@ import com.droidcode.filesystem.FileNode
 import com.droidcode.filesystem.LocalFileSystem
 import com.droidcode.project.WorkspaceManager
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,6 +93,7 @@ fun ExplorerPanel(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
     val fs = remember { LocalFileSystem.getInstance() }
     val coroutineScope = rememberCoroutineScope()
@@ -99,6 +105,8 @@ fun ExplorerPanel(
     var selectedNode by remember { mutableStateOf<FileNode?>(null) }
     var clipboardItem by remember { mutableStateOf<FileClipboardItem?>(null) }
 
+    var showToolbarOverflow by remember { mutableStateOf(false) }
+    var showPropertiesDialog by remember { mutableStateOf<FileNode?>(null) }
     var showNewFileDialog by remember { mutableStateOf(false) }
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -173,11 +181,11 @@ fun ExplorerPanel(
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline)
     ) {
-        // Explorer Header / Toolbar
+        // Explorer Header & Contextual Toolbar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .height(48.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -185,114 +193,100 @@ fun ExplorerPanel(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "PROJECT EXPLORER",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontFamily = FontFamily.Monospace
+                    text = "EXPLORER",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
                 )
                 if (workspaceMgr.hasOpenWorkspace()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 1.dp)
-                    ) {
-                        Text(
-                            text = workspaceMgr.currentProject?.name ?: "",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        // Close Project button directly beside root folder name
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                            modifier = Modifier.clickable {
-                                onCloseProject?.invoke() ?: run {
-                                    workspaceMgr.closeWorkspace()
-                                    refreshTree()
-                                }
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Close Project",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "Close",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = workspaceMgr.currentProject?.name ?: "",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = {
-                        if (workspaceMgr.hasOpenWorkspace()) {
-                            showNewFileDialog = true
-                        } else {
-                            Toast.makeText(context, "Open a project first", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .testTag("explorer_new_file_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.NoteAdd,
-                        contentDescription = "New File",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+            // Contextual Action Buttons
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                if (selectedNode == null) {
+                    // Default State: New File, New Folder, Refresh, Overflow
+                    IconButton(
+                        onClick = {
+                            if (workspaceMgr.hasOpenWorkspace()) {
+                                showNewFileDialog = true
+                            } else {
+                                Toast.makeText(context, "Open a project first", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_new_file_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.NoteAdd,
+                            contentDescription = "New File",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
-                IconButton(
-                    onClick = {
-                        if (workspaceMgr.hasOpenWorkspace()) {
-                            showNewFolderDialog = true
-                        } else {
-                            Toast.makeText(context, "Open a project first", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .testTag("explorer_new_folder_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CreateNewFolder,
-                        contentDescription = "New Folder",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    IconButton(
+                        onClick = {
+                            if (workspaceMgr.hasOpenWorkspace()) {
+                                showNewFolderDialog = true
+                            } else {
+                                Toast.makeText(context, "Open a project first", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_new_folder_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CreateNewFolder,
+                            contentDescription = "New Folder",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
-                if (selectedNode != null) {
+                    IconButton(
+                        onClick = { refreshTree() },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_refresh_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh File Tree",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    // Selected State: Cut, Copy, Rename, Delete, Overflow
                     IconButton(
                         onClick = {
                             clipboardItem = FileClipboardItem(selectedNode!!, isCut = true)
                             Toast.makeText(context, "Cut '${selectedNode!!.name}'", Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_cut_btn")
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCut,
                             contentDescription = "Cut",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -302,31 +296,37 @@ fun ExplorerPanel(
                             clipboardItem = FileClipboardItem(selectedNode!!, isCut = false)
                             Toast.makeText(context, "Copied '${selectedNode!!.name}'", Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_copy_btn")
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "Copy",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     }
 
                     IconButton(
                         onClick = { showRenameDialog = true },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_rename_btn")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Rename",
-                            tint = MaterialTheme.colorScheme.secondary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     }
 
                     IconButton(
                         onClick = { showDeleteDialog = true },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_delete_btn")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
@@ -337,32 +337,144 @@ fun ExplorerPanel(
                     }
                 }
 
-                if (clipboardItem != null) {
+                // Overflow Menu
+                Box {
                     IconButton(
-                        onClick = { handlePaste(selectedNode) },
-                        modifier = Modifier.size(32.dp)
+                        onClick = { showToolbarOverflow = true },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_overflow_btn")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ContentPaste,
-                            contentDescription = "Paste",
-                            tint = MaterialTheme.colorScheme.tertiary,
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Explorer Actions Menu",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     }
-                }
 
-                IconButton(
-                    onClick = { refreshTree() },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .testTag("explorer_refresh_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    DropdownMenu(
+                        expanded = showToolbarOverflow,
+                        onDismissRequest = { showToolbarOverflow = false }
+                    ) {
+                        // Paste
+                        DropdownMenuItem(
+                            text = { Text("Paste", fontSize = 13.sp) },
+                            enabled = clipboardItem != null,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ContentPaste,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                showToolbarOverflow = false
+                                handlePaste(selectedNode)
+                            }
+                        )
+
+                        // Duplicate
+                        if (selectedNode != null) {
+                            DropdownMenuItem(
+                                text = { Text("Duplicate", fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showToolbarOverflow = false
+                                    val node = selectedNode ?: return@DropdownMenuItem
+                                    coroutineScope.launch {
+                                        isLoadingTree = true
+                                        try {
+                                            val duplicated = withContext(Dispatchers.IO) {
+                                                fs.duplicateFile(File(node.path))
+                                            }
+                                            Toast.makeText(context, "Duplicated to '${duplicated.name}'", Toast.LENGTH_SHORT).show()
+                                            refreshTree()
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Duplicate failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        } finally {
+                                            isLoadingTree = false
+                                        }
+                                    }
+                                }
+                            )
+
+                            // Copy Path
+                            DropdownMenuItem(
+                                text = { Text("Copy Path", fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showToolbarOverflow = false
+                                    selectedNode?.let { node ->
+                                        clipboardManager.setText(AnnotatedString(node.path))
+                                        Toast.makeText(context, "Path copied to clipboard", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
+
+                            // Properties
+                            DropdownMenuItem(
+                                text = { Text("Properties", fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showToolbarOverflow = false
+                                    showPropertiesDialog = selectedNode
+                                }
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                            DropdownMenuItem(
+                                text = { Text("Clear Selection", fontSize = 13.sp) },
+                                onClick = {
+                                    showToolbarOverflow = false
+                                    selectedNode = null
+                                }
+                            )
+                        } else {
+                            // Default state extra options: Collapse All, Refresh
+                            DropdownMenuItem(
+                                text = { Text("Collapse All", fontSize = 13.sp) },
+                                onClick = {
+                                    showToolbarOverflow = false
+                                    expandedPaths = emptySet()
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text("Refresh", fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showToolbarOverflow = false
+                                    refreshTree()
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -598,6 +710,25 @@ fun ExplorerPanel(
                         onDeleteRequested = { targetNode ->
                             selectedNode = targetNode
                             showDeleteDialog = true
+                        },
+                        onDuplicateRequested = { targetNode ->
+                            coroutineScope.launch {
+                                isLoadingTree = true
+                                try {
+                                    val duplicated = withContext(Dispatchers.IO) {
+                                        fs.duplicateFile(File(targetNode.path))
+                                    }
+                                    Toast.makeText(context, "Duplicated to '${duplicated.name}'", Toast.LENGTH_SHORT).show()
+                                    refreshTree()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Duplicate failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    isLoadingTree = false
+                                }
+                            }
+                        },
+                        onPropertiesRequested = { targetNode ->
+                            showPropertiesDialog = targetNode
                         }
                     )
                 }
@@ -718,6 +849,67 @@ fun ExplorerPanel(
             }
         )
     }
+
+    if (showPropertiesDialog != null) {
+        val node = showPropertiesDialog!!
+        val file = File(node.path)
+        val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+        AlertDialog(
+            onDismissRequest = { showPropertiesDialog = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (node.isFolder) Icons.Default.Folder else Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Properties", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column {
+                        Text("Name", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(node.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Column {
+                        Text("Path", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(node.path, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Type", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(if (node.isFolder) "Directory" else "File (${node.extension.ifEmpty { "plain" }})", fontSize = 13.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Size", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val sizeStr = if (node.isFolder) "-" else when {
+                                file.length() < 1024 -> "${file.length()} B"
+                                file.length() < 1024 * 1024 -> String.format(Locale.US, "%.1f KB", file.length() / 1024.0)
+                                else -> String.format(Locale.US, "%.2f MB", file.length() / (1024.0 * 1024.0))
+                            }
+                            Text(sizeStr, fontSize = 13.sp)
+                        }
+                    }
+                    Column {
+                        Text("Last Modified", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(dateFormat.format(Date(file.lastModified())), fontSize = 12.sp)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("Readable: ${if (file.canRead()) "Yes" else "No"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Writable: ${if (file.canWrite()) "Yes" else "No"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPropertiesDialog = null }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -735,7 +927,9 @@ private fun FileTreeItem(
     onNewFileRequested: (FileNode) -> Unit,
     onNewFolderRequested: (FileNode) -> Unit,
     onRenameRequested: (FileNode) -> Unit,
-    onDeleteRequested: (FileNode) -> Unit
+    onDeleteRequested: (FileNode) -> Unit,
+    onDuplicateRequested: (FileNode) -> Unit = {},
+    onPropertiesRequested: (FileNode) -> Unit = {}
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -890,6 +1084,22 @@ private fun FileTreeItem(
                     }
                 )
                 DropdownMenuItem(
+                    text = { Text("Duplicate", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onDuplicateRequested(node)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Properties", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onPropertiesRequested(node)
+                    }
+                )
+                DropdownMenuItem(
                     text = { Text("Delete", fontSize = 13.sp, color = MaterialTheme.colorScheme.error) },
                     leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)) },
                     onClick = {
@@ -916,7 +1126,9 @@ private fun FileTreeItem(
                     onNewFileRequested = onNewFileRequested,
                     onNewFolderRequested = onNewFolderRequested,
                     onRenameRequested = onRenameRequested,
-                    onDeleteRequested = onDeleteRequested
+                    onDeleteRequested = onDeleteRequested,
+                    onDuplicateRequested = onDuplicateRequested,
+                    onPropertiesRequested = onPropertiesRequested
                 )
             }
         }

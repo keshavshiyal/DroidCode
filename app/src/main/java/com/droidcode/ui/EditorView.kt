@@ -190,15 +190,15 @@ fun EditorView(
                 tabs.forEachIndexed { index, tab ->
                     val isActive = index == editorMgr.activeTabIndex
                     val bg = if (isActive) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
-                    val border = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    val tabBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
 
                     Row(
                         modifier = Modifier
                             .fillMaxHeight()
                             .background(bg)
-                            .border(1.dp, border)
+                            .border(1.dp, tabBorderColor)
                             .clickable { editorMgr.activeTabIndex = index }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -214,8 +214,8 @@ fun EditorView(
                             text = tab.fileName + (if (tab.isModified) " *" else ""),
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace,
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         Spacer(modifier = Modifier.width(8.dp))
@@ -223,7 +223,7 @@ fun EditorView(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close tab",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (isActive) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier
                                 .size(14.dp)
                                 .clickable {
@@ -295,8 +295,8 @@ fun EditorView(
                     Text(
                         text = activeTab.languageId.uppercase(),
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier
                             .clickable { showChangeLanguageDialog = true }
@@ -333,30 +333,6 @@ fun EditorView(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = { editorMgr.undoActiveTab() },
-                        modifier = Modifier.size(26.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Undo,
-                            contentDescription = "Undo",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { editorMgr.redoActiveTab() },
-                        modifier = Modifier.size(26.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Redo,
-                            contentDescription = "Redo",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    IconButton(
                         onClick = {
                             try {
                                 editorMgr.saveActiveTab()
@@ -367,41 +343,43 @@ fun EditorView(
                             }
                         },
                         modifier = Modifier
-                            .size(26.dp)
+                            .size(32.dp)
                             .testTag("editor_save_btn")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Save,
                             contentDescription = "Save",
                             tint = if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    IconButton(
-                        onClick = { onOpenGeneralMenu?.invoke() ?: run { showContextMenu = true } },
-                        modifier = Modifier
-                            .size(26.dp)
-                            .testTag("editor_general_menu_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "General Menu",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    if (onOpenGeneralMenu != null) {
+                        IconButton(
+                            onClick = { onOpenGeneralMenu() },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("editor_general_menu_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "General Menu",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
 
                     IconButton(
                         onClick = { showContextMenu = true },
                         modifier = Modifier
-                            .size(26.dp)
+                            .size(32.dp)
                             .testTag("editor_context_menu_btn")
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "IDE Context Menu",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     }
