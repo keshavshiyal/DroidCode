@@ -94,7 +94,9 @@ fun ProjectMenubarDialog(
                 .padding(12.dp),
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
         ) {
             Column(
                 modifier = Modifier
@@ -209,8 +211,8 @@ fun ProjectMenubarDialog(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 380.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .heightIn(max = 400.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         commandsByCategory.forEach { (categoryName, commandList) ->
                             item {
@@ -220,7 +222,7 @@ fun ProjectMenubarDialog(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
                                     letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(top = 6.dp, bottom = 4.dp, start = 4.dp)
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp, start = 4.dp)
                                 )
                             }
 
@@ -282,10 +284,10 @@ private fun ProjectMenubarItem(
             .fillMaxWidth()
             .background(
                 if (isEnabled) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else Color.Transparent,
-                RoundedCornerShape(6.dp)
+                RoundedCornerShape(8.dp)
             )
             .clickable(enabled = isEnabled) { onClick() }
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -297,33 +299,17 @@ private fun ProjectMenubarItem(
                 imageVector = icon,
                 contentDescription = null,
                 tint = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.30f),
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(18.dp)
             )
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = command.title,
                 fontSize = 13.sp,
-                fontWeight = if (isEnabled) FontWeight.Medium else FontWeight.Normal,
+                fontWeight = FontWeight.Medium,
                 color = textColor,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+                overflow = TextOverflow.Ellipsis
             )
-            if (!isEnabled) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(3.dp)
-                ) {
-                    Text(
-                        text = "Disabled",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                    )
-                }
-            }
         }
 
         if (command.shortcut != null && command.shortcut.isNotEmpty()) {
@@ -336,16 +322,16 @@ private fun ProjectMenubarItem(
                     )
                     .border(
                         1.dp,
-                        if (isEnabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                        if (isEnabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
                         RoundedCornerShape(4.dp)
                     )
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = command.shortcut,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                    color = if (isEnabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                     maxLines = 1
                 )
             }

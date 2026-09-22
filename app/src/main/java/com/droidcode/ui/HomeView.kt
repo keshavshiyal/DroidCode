@@ -13,27 +13,37 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -371,16 +381,26 @@ private fun NewProjectModal(
     var projectName by remember { mutableStateOf("MyProject") }
     var selectedTemplate by remember { mutableStateOf(ProjectTemplate.Type.WEB) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val isProjectNameValid = projectName.trim().isNotEmpty()
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surface
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 580.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp)
+            ) {
                 Text(
                     text = "New Project",
                     fontSize = 18.sp,
@@ -392,10 +412,19 @@ private fun NewProjectModal(
 
                 OutlinedTextField(
                     value = projectName,
-                    onValueChange = { projectName = it },
+                    onValueChange = {
+                        projectName = it
+                        if (errorMessage != null) errorMessage = null
+                    },
                     label = { Text("Project Name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    isError = !isProjectNameValid,
+                    supportingText = if (!isProjectNameValid) {
+                        { Text("Project name cannot be blank", color = MaterialTheme.colorScheme.error) }
+                    } else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("new_project_name_input")
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -403,39 +432,67 @@ private fun NewProjectModal(
                 Text(
                     text = "Select Template:",
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                ProjectTemplate.Type.values().forEach { template ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .background(
-                                if (selectedTemplate == template)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                                RoundedCornerShape(4.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ProjectTemplate.Type.values().forEach { template ->
+                        val isSelected = selectedTemplate == template
+                        val icon = when (template) {
+                            ProjectTemplate.Type.WEB -> Icons.Default.Code
+                            ProjectTemplate.Type.PYTHON -> Icons.Default.Terminal
+                            ProjectTemplate.Type.SQL -> Icons.Default.Storage
+                            ProjectTemplate.Type.MARKDOWN -> Icons.Default.Description
+                            else -> Icons.Default.Folder
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (isSelected)
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .border(
+                                    if (isSelected) 2.dp else 1.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable { selectedTemplate = template }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selectedTemplate = template },
+                                colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                             )
-                            .clickable { selectedTemplate = template }
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = template.title,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
                             )
-                            Text(
-                                text = template.description,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = template.title,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = template.description,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -449,7 +506,7 @@ private fun NewProjectModal(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -460,6 +517,7 @@ private fun NewProjectModal(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
+                        enabled = isProjectNameValid,
                         onClick = {
                             try {
                                 val rootDir = context.filesDir
@@ -472,7 +530,8 @@ private fun NewProjectModal(
                             } catch (e: Exception) {
                                 errorMessage = e.message ?: "Failed to create project"
                             }
-                        }
+                        },
+                        modifier = Modifier.testTag("new_project_create_btn")
                     ) {
                         Text("Create")
                     }

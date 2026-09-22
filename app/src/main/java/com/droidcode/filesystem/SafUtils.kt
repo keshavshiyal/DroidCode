@@ -6,6 +6,8 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 object SafUtils {
@@ -283,6 +285,77 @@ object SafUtils {
             "xml" -> "text/xml"
             "md" -> "text/markdown"
             else -> "text/plain"
+        }
+    }
+
+    /**
+     * Recursively exports an internal project directory to an external SAF folder.
+     * Guaranteed to run on Dispatchers.IO without blocking the UI thread.
+     * Reports progress from 0.0f to 1.0f with current file name.
+     */
+    @JvmStatic
+    suspend fun exportProjectToSaf(
+        context: Context,
+        sourceDir: File,
+        destinationTreeUri: Uri,
+        onProgress: (Float, String) -> Unit = { _, _ -> }
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val rootDoc = DocumentFile.fromTreeUri(context, destinationTreeUri)
+                ?: throw IllegalArgumentException("Failed to access destination storage folder")
+            if (!rootDoc.canWrite()) {
+                throw IllegalStateException("Destination storage folder is not writable")
+            }
+
+            // Create target folder in external SAF directory named after the project
+            val targetDirDoc = rootDoc.findFile(sourceDir.name)
+                ?: rootDoc.createDirectory(sourceDir.name)
+                ?: throw IllegalStateException("Could not create target folder: ${sourceDir.name}")
+
+            val allFiles = mutableListOf<File>()
+            fun collectFiles(dir: File) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isDirectory) {
+                        collectFiles(file)
+                    } else {
+                        allFiles.add(file)
+                    }
+                }
+            }
+            collectFiles(sourceDir)
+
+            val totalFiles = allFiles.size
+            var copiedFiles = 0
+
+            fun copyRecursive(source: File, targetDoc: DocumentFile) {
+                val children = source.listFiles() ?: return
+                for (child in children) {
+                    if (child.isDirectory) {
+                        val subDoc = targetDoc.findFile(child.name)
+                            ?: targetDoc.createDirectory(child.name)
+                        if (subDoc != null) {
+                            copyRecursive(child, subDoc)
+                        }
+                    } else {
+                        val mime = getMimeType(child.name)
+                        val fileDoc = targetDoc.findFile(child.name)
+                            ?: targetDoc.createFile(mime, child.name)
+                        if (fileDoc != null) {
+                            context.contentResolver.openOutputStream(fileDoc.uri, "wt")?.use { out ->
+                                child.inputStream().use { input ->
+                                    input.copyTo(out)
+                                }
+                            }
+                        }
+                        copiedFiles++
+                        val progress = if (totalFiles > 0) copiedFiles.toFloat() / totalFiles else 1.0f
+                        onProgress(progress, child.name)
+                    }
+                }
+            }
+
+            copyRecursive(sourceDir, targetDirDoc)
+            copiedFiles
         }
     }
 }

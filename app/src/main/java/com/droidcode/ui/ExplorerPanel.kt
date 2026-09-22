@@ -1,6 +1,8 @@
 package com.droidcode.ui
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +10,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +39,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -72,6 +76,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.droidcode.filesystem.FileNode
 import com.droidcode.filesystem.LocalFileSystem
+import com.droidcode.filesystem.SafUtils
 import com.droidcode.project.WorkspaceManager
 import java.io.File
 import java.text.SimpleDateFormat
@@ -111,6 +116,54 @@ fun ExplorerPanel(
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    var isExporting by remember { mutableStateOf(false) }
+    var exportProgress by remember { mutableStateOf(0f) }
+    var exportStatusText by remember { mutableStateOf("") }
+    var exportTargetFolder by remember { mutableStateOf<File?>(null) }
+
+    val safExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { destinationUri ->
+        if (destinationUri != null) {
+            val sourceDir = exportTargetFolder ?: workspaceMgr.currentProject?.directory
+            if (sourceDir != null && sourceDir.exists()) {
+                isExporting = true
+                exportProgress = 0f
+                exportStatusText = "Preparing export..."
+                coroutineScope.launch {
+                    val result = SafUtils.exportProjectToSaf(
+                        context = context,
+                        sourceDir = sourceDir,
+                        destinationTreeUri = destinationUri,
+                        onProgress = { progress, fileName ->
+                            exportProgress = progress
+                            exportStatusText = "Exporting: $fileName"
+                        }
+                    )
+                    isExporting = false
+                    result.fold(
+                        onSuccess = { count ->
+                            Toast.makeText(
+                                context,
+                                "Exported ${sourceDir.name} ($count files) to device storage!",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        },
+                        onFailure = { error ->
+                            Toast.makeText(
+                                context,
+                                "Export failed: ${error.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    )
+                }
+            } else {
+                Toast.makeText(context, "No directory available to export", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     val refreshTree: () -> Unit = {
         coroutineScope.launch {
@@ -355,7 +408,10 @@ fun ExplorerPanel(
 
                     DropdownMenu(
                         expanded = showToolbarOverflow,
-                        onDismissRequest = { showToolbarOverflow = false }
+                        onDismissRequest = { showToolbarOverflow = false },
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                     ) {
                         // Paste
                         DropdownMenuItem(
@@ -368,6 +424,7 @@ fun ExplorerPanel(
                                     modifier = Modifier.size(18.dp)
                                 )
                             },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                             onClick = {
                                 showToolbarOverflow = false
                                 handlePaste(selectedNode)
@@ -385,6 +442,7 @@ fun ExplorerPanel(
                                         modifier = Modifier.size(18.dp)
                                     )
                                 },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 onClick = {
                                     showToolbarOverflow = false
                                     val node = selectedNode ?: return@DropdownMenuItem
@@ -415,6 +473,7 @@ fun ExplorerPanel(
                                         modifier = Modifier.size(18.dp)
                                     )
                                 },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 onClick = {
                                     showToolbarOverflow = false
                                     selectedNode?.let { node ->
@@ -434,16 +493,38 @@ fun ExplorerPanel(
                                         modifier = Modifier.size(18.dp)
                                     )
                                 },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 onClick = {
                                     showToolbarOverflow = false
                                     showPropertiesDialog = selectedNode
                                 }
                             )
 
+                            // Export selection if folder
+                            if (selectedNode!!.isFolder) {
+                                DropdownMenuItem(
+                                    text = { Text("Export Folder to Device...", fontSize = 13.sp) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.SdCard,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                    onClick = {
+                                        showToolbarOverflow = false
+                                        exportTargetFolder = File(selectedNode!!.path)
+                                        safExportLauncher.launch(null)
+                                    }
+                                )
+                            }
+
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                             DropdownMenuItem(
                                 text = { Text("Clear Selection", fontSize = 13.sp) },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 onClick = {
                                     showToolbarOverflow = false
                                     selectedNode = null
@@ -453,6 +534,7 @@ fun ExplorerPanel(
                             // Default state extra options: Collapse All, Refresh
                             DropdownMenuItem(
                                 text = { Text("Collapse All", fontSize = 13.sp) },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 onClick = {
                                     showToolbarOverflow = false
                                     expandedPaths = emptySet()
@@ -468,13 +550,102 @@ fun ExplorerPanel(
                                         modifier = Modifier.size(18.dp)
                                     )
                                 },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 onClick = {
                                     showToolbarOverflow = false
                                     refreshTree()
                                 }
                             )
                         }
+
+                        if (workspaceMgr.hasOpenWorkspace()) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            DropdownMenuItem(
+                                text = { Text("Export Project to Device...", fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.SdCard,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                onClick = {
+                                    showToolbarOverflow = false
+                                    exportTargetFolder = workspaceMgr.currentProject?.directory
+                                    safExportLauncher.launch(null)
+                                }
+                            )
+                        }
                     }
+                }
+            }
+        }
+
+        // Exporting to Device Progress Card
+        if (isExporting) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.SdCard,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Exporting to Device (SAF)...",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text(
+                            text = "${(exportProgress * 100).toInt()}%",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    LinearProgressIndicator(
+                        progress = { exportProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = exportStatusText,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -729,6 +900,10 @@ fun ExplorerPanel(
                         },
                         onPropertiesRequested = { targetNode ->
                             showPropertiesDialog = targetNode
+                        },
+                        onExportRequested = { targetNode ->
+                            exportTargetFolder = File(targetNode.path)
+                            safExportLauncher.launch(null)
                         }
                     )
                 }
@@ -929,7 +1104,8 @@ private fun FileTreeItem(
     onRenameRequested: (FileNode) -> Unit,
     onDeleteRequested: (FileNode) -> Unit,
     onDuplicateRequested: (FileNode) -> Unit = {},
-    onPropertiesRequested: (FileNode) -> Unit = {}
+    onPropertiesRequested: (FileNode) -> Unit = {},
+    onExportRequested: ((FileNode) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -1012,12 +1188,16 @@ private fun FileTreeItem(
 
             DropdownMenu(
                 expanded = showContextMenu,
-                onDismissRequest = { showContextMenu = false }
+                onDismissRequest = { showContextMenu = false },
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
             ) {
                 if (!node.isFolder) {
                     DropdownMenuItem(
                         text = { Text("Open File", fontSize = 13.sp) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(18.dp)) },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         onClick = {
                             showContextMenu = false
                             onNodeClick(node)
@@ -1027,6 +1207,7 @@ private fun FileTreeItem(
                 DropdownMenuItem(
                     text = { Text("Cut", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.Default.ContentCut, null, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         onCutRequested(node)
@@ -1035,6 +1216,7 @@ private fun FileTreeItem(
                 DropdownMenuItem(
                     text = { Text("Copy", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         onCopyRequested(node)
@@ -1044,6 +1226,7 @@ private fun FileTreeItem(
                     DropdownMenuItem(
                         text = { Text("Paste Here", fontSize = 13.sp) },
                         leadingIcon = { Icon(Icons.Default.ContentPaste, null, modifier = Modifier.size(18.dp)) },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         onClick = {
                             showContextMenu = false
                             onPasteRequested(node)
@@ -1053,6 +1236,7 @@ private fun FileTreeItem(
                 DropdownMenuItem(
                     text = { Text("New File Here", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.NoteAdd, null, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         onNewFileRequested(node)
@@ -1061,6 +1245,7 @@ private fun FileTreeItem(
                 DropdownMenuItem(
                     text = { Text("New Folder Here", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.Default.CreateNewFolder, null, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         onNewFolderRequested(node)
@@ -1069,6 +1254,7 @@ private fun FileTreeItem(
                 DropdownMenuItem(
                     text = { Text("Rename", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         onRenameRequested(node)
@@ -1077,6 +1263,7 @@ private fun FileTreeItem(
                 DropdownMenuItem(
                     text = { Text("Copy Path", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         clipboardManager.setText(AnnotatedString(node.path))
@@ -1086,6 +1273,7 @@ private fun FileTreeItem(
                 DropdownMenuItem(
                     text = { Text("Duplicate", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         onDuplicateRequested(node)
@@ -1094,14 +1282,27 @@ private fun FileTreeItem(
                 DropdownMenuItem(
                     text = { Text("Properties", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         onPropertiesRequested(node)
                     }
                 )
+                if (node.isFolder && onExportRequested != null) {
+                    DropdownMenuItem(
+                        text = { Text("Export to Device...", fontSize = 13.sp) },
+                        leadingIcon = { Icon(Icons.Default.SdCard, null, modifier = Modifier.size(18.dp)) },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        onClick = {
+                            showContextMenu = false
+                            onExportRequested(node)
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Delete", fontSize = 13.sp, color = MaterialTheme.colorScheme.error) },
                     leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     onClick = {
                         showContextMenu = false
                         onDeleteRequested(node)
@@ -1128,7 +1329,8 @@ private fun FileTreeItem(
                     onRenameRequested = onRenameRequested,
                     onDeleteRequested = onDeleteRequested,
                     onDuplicateRequested = onDuplicateRequested,
-                    onPropertiesRequested = onPropertiesRequested
+                    onPropertiesRequested = onPropertiesRequested,
+                    onExportRequested = onExportRequested
                 )
             }
         }

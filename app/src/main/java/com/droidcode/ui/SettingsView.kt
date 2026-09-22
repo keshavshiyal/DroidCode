@@ -138,21 +138,6 @@ fun SettingsView(
                     )
                 }
             }
-
-            if (onOpenGeneralMenu != null) {
-                IconButton(
-                    onClick = onOpenGeneralMenu,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .testTag("settings_general_menu_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Menu,
-                        contentDescription = "General Menu",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
         }
 
         // Top Category Scrollable Tabs
