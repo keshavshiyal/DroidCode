@@ -36,19 +36,20 @@ DroidCode is architected as a modular, production-ready, native Android IDE usin
 
 ## Modular Package Structure
 
-- `com.example.core`: Central domain models (`Command`, `Event`, `Result`, `Disposable`)
-- `com.example.project`: Workspace models (`Project`, `WorkspaceManager`, `ProjectTemplate`)
-- `com.example.filesystem`: Real file system layer (`FileNode`, `LocalFileSystem`, SAF handling)
-- `com.example.editor`: Text buffer management, editor tabs, cursor state, undo history
-- `com.example.settings`: App configuration manager (`AppSettings`, `ThemeMode`, `KeyBarDensity`)
-- `com.example.git`: Git status provider and repository abstraction
-- `com.example.terminal`: Terminal session manager and PTY runner abstraction
-- `com.example.database`: Generic database provider interface (`DatabaseProvider`, `QueryEngine`)
-- `com.example.language`: Language definitions, tokenizers, syntax highlighters
-- `com.example.ai`: Optional AI service provider interface
-- `com.example.extensions`: Modular plugin and extension lifecycle manager
-- `com.example.db`: Room database entities & DAOs for persisting workspaces and open tab sessions
-- `com.example.ui`: Jetpack Compose views, layouts, themes, and Developer Quick Key Bar
+- `com.droidcode.core`: Central domain models (`Command`, `Event`, `Result`, `Disposable`)
+- `com.droidcode.core.capability`: System capability registry, status descriptors, and verification catalog
+- `com.droidcode.project`: Workspace models (`Project`, `WorkspaceManager`, `ProjectTemplate`)
+- `com.droidcode.filesystem`: Real file system layer (`FileNode`, `LocalFileSystem`, SAF handling)
+- `com.droidcode.editor`: Text buffer management, editor tabs, cursor state, undo history
+- `com.droidcode.settings`: App configuration manager (`AppSettings`, `ThemeMode`, `KeyBarDensity`)
+- `com.droidcode.git`: Git status provider and repository abstraction
+- `com.droidcode.terminal`: Terminal session manager and PTY runner abstraction
+- `com.droidcode.database`: Generic database provider interface (`DatabaseProvider`, `QueryEngine`)
+- `com.droidcode.language`: Language definitions, tokenizers, syntax highlighters
+- `com.droidcode.ai`: Optional AI service provider interface
+- `com.droidcode.extensions`: Modular plugin and extension lifecycle manager
+- `com.droidcode.db`: Room database entities & DAOs for persisting workspaces and open tab sessions
+- `com.droidcode.ui`: Jetpack Compose views, layouts, themes, and Developer Quick Key Bar
 
 ## Core Architectural Principles
 

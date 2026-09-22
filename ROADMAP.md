@@ -7,7 +7,7 @@ DroidCode follows an incremental, architectural roadmap to build a native Androi
 ## Phase Progression
 
 ```
-[Phase 1: Architecture Foundation]  -->  [Phase 1.5: Stabilization & Quality] (CURRENT)  -->  [Phase 2 / M1: Shell Polish]  -->  [M2: Web IDE]
+[Phase 1: Architecture Foundation]  -->  [Phase 1.5: Stabilization]  -->  [Phase 1.5.1: Foundation Hardening] (CURRENT)  -->  [Phase 2 / M1: Shell Polish]  -->  [M2: Web IDE]
 ```
 
 ---
@@ -25,7 +25,7 @@ DroidCode follows an incremental, architectural roadmap to build a native Androi
 - Git status architectural detection (Honest "Not a Git repository" handling)
 - Terminal, Database, Extension, and AI service provider abstractions
 
-### Phase 1.5 — Stabilization & Professionalization (Complete - Current)
+### Phase 1.5 — Stabilization & Professionalization (Complete)
 - **Dependency & Build Cleanliness**: Completely decoupled from Firebase and Google Services plugins; self-contained offline build.
 - **Continuous Integration Pipeline**: Robust `.github/workflows/build.yml` with strict test execution before packaging.
 - **Workspace Reliability**: Non-destructive workspace handling; moved/inaccessible directories are preserved in a recoverable state with explicit UI indicators and removal controls.
@@ -34,6 +34,14 @@ DroidCode follows an incremental, architectural roadmap to build a native Androi
 - **Media Viewer Hardening**: Error states and graceful degradation for unsupported/corrupt image decoding.
 - **Test Suite Modernization**: Replaced sample template tests with real unit tests covering `WorkspaceManager`, `EditorManager`, `LocalFileSystem`, `FileIconUtils`, `SettingsManager`, and core command/event engines.
 - **Observability**: Replaced silent catch blocks with explicit Android logging and user toasts.
+
+### Phase 1.5.1 — Foundation Hardening & Capability Registry (Current)
+- **Package Identity Migration**: Clean repository-wide namespace migration to `com.droidcode` and application ID to `com.keshav.droidcode.app`.
+- **Capability Registry**: Lightweight descriptive subsystem (`com.droidcode.core.capability`) providing authoritative status (`AVAILABLE`, `PARTIAL`, `PLANNED`) tracking without simulating unavailable features.
+- **Room DAO Optimization**: Clean Kotlin DAO interfaces eliminating nullable collection compiler warnings.
+- **Compose Deprecation Cleanup**: Replaced deprecated `Divider` with `HorizontalDivider` and transitioned all action icons to `Icons.AutoMirrored`.
+- **Error Handling Audit**: Replaced silent catch blocks with proper logger messages and graceful fallbacks.
+- **Strict Accessibility**: Comprehensive semantics and minimum 48dp interactive touch target compliance.
 
 ### Phase 2 / Milestone 1 — Professional IDE Shell Polish (Next)
 - Split editor panes (horizontal and vertical multi-pane layouts)

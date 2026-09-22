@@ -47,25 +47,28 @@ DroidCode is architected as a native Android IDE designed for high reliability, 
 
 ## 3. Subsystem Breakdown
 
-### 3.1 Filesystem Subsystem (`com.example.filesystem`)
+### 3.1 Capability Subsystem (`com.droidcode.core.capability`)
+- **`CapabilityRegistry`**: Central descriptive registry declaring exact feature maturity (`PLANNED`, `PARTIAL`, `AVAILABLE`) to prevent simulated claims. See [Capability Registry](capability_registry.md).
+
+### 3.2 Filesystem Subsystem (`com.droidcode.filesystem`)
 - **`LocalFileSystem`**: Core singleton providing thread-safe operations on real files and directories (`createFile`, `createDirectory`, `readFileToString`, `writeStringToFile`, `copyFileOrDirectory`, `moveFileOrDirectory`, `renameFile`, `deleteFile`, `listDirectoryRecursive`).
 - **`SafUtils`**: Bridges modern Android Storage Access Framework (SAF) document URIs to standard local storage paths when user selects external storage trees.
 - **`FileNode`**: Tree node data structure representing hierarchical files and directories for `ExplorerPanel`.
 
-### 3.2 Editor Subsystem (`com.example.editor`)
+### 3.3 Editor Subsystem (`com.droidcode.editor`)
 - **`EditorManager`**: Central controller managing open tabs (`tabs`), active tab tracking (`activeTabIndex`), multi-file lifecycle, and undo/redo histories.
 - **`EditorTab`**: Encapsulates active file path, title, in-memory buffer, cursor position (line and column), dirty state (`isModified`), and viewer type (Text, Image, PDF, Video, Audio, Binary).
 - **`UndoManager`**: Bounded double-ended stack providing undo and redo capabilities for buffer edits.
 
-### 3.3 Workspace Subsystem (`com.example.project`)
+### 3.4 Workspace Subsystem (`com.droidcode.project`)
 - **`WorkspaceManager`**: Manages the current active project (`currentProject`), open/close lifecycle, and persists recent workspaces to Room SQLite database via `WorkspaceDao`.
 - **Non-Destructive Persistence**: Inaccessible directories are flagged rather than deleted, allowing users to reconnect moved folders or explicitly dismiss them.
 
-### 3.4 Command & Event Subsystem (`com.example.core`)
+### 3.5 Command & Event Subsystem (`com.droidcode.core`)
 - **`CommandRegistry`**: Central registry of all executable IDE actions with title, category, keyboard shortcut, and optional dynamic `enabledSupplier`.
 - **`EventBus`**: Lightweight publish/subscribe bus for decoupled inter-component events.
 
-### 3.5 Settings Subsystem (`com.example.settings`)
+### 3.6 Settings Subsystem (`com.droidcode.settings`)
 - **`SettingsManager`**: SharedPreferences-backed singleton managing `AppSettings`.
 - **`AppSettings`**: Configurable preferences including theme mode (Dark / Light / System), font size (sp), word wrap, Quick Key Bar visibility and density (Compact / Normal / Comfortable), line numbers, and font family (JetBrains Mono, Fira Code, Roboto Mono, Source Code Pro).
 

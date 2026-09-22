@@ -38,6 +38,14 @@ Status Legend:
 - **Test Suite Expansion**: Deleted boilerplate template tests and added dedicated unit tests for `WorkspaceManager`, `EditorManager`, `LocalFileSystem`, `FileIconUtils`, and `SettingsManager`.
 - **Error Handling & Observability**: Eliminated silent catch blocks; added structured Android logging and contextual user toasts.
 
+### Phase 1.5.1 — Foundation Hardening & Capability Registry (Complete)
+- **Package Identity Migration**: Complete migration from `com.example` to `com.droidcode` for namespace and `com.keshav.droidcode.app` for application ID across all Java/Kotlin source, tests, manifests, and documentation.
+- **Capability Registry**: Descriptive, lightweight architectural subsystem (`com.droidcode.core.capability`) providing an honest, testable record of actual feature availability (`AVAILABLE`, `PARTIAL`, `PLANNED`).
+- **Room DAO Optimization**: Converted DAOs to idiomatic Kotlin interfaces (`WorkspaceDao.kt`, `TabSessionDao.kt`) returning clean non-nullable collections.
+- **Compose API Hardening**: Upgraded deprecated `Divider` to `HorizontalDivider` and aligned directional/action icons with `Icons.AutoMirrored`.
+- **Silent Exception Cleanup**: Audited all `catch` blocks; added proper `Log.w`/`Log.e` diagnostics.
+- **Accessibility & Contrast Verification**: Verified all interactive elements comply with minimum 48dp touch targets and descriptive TalkBack semantics.
+
 ### Phase 2 / Milestone 1 — Professional IDE Shell Polish (Planned)
 - Split editor panes (horizontal and vertical layouts)
 - Workspace-wide recursive text search (grep across workspace)
