@@ -51,28 +51,40 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.droidcode.R
 import com.droidcode.core.Command
 import com.droidcode.core.CommandRegistry
 import com.droidcode.editor.EditorManager
 import com.droidcode.git.GitService
 import com.droidcode.project.WorkspaceManager
 import com.droidcode.settings.SettingsManager
+import com.droidcode.ui.theme.CornerLarge
+import com.droidcode.ui.theme.CornerMedium
+import com.droidcode.ui.theme.CornerSmall
 import com.droidcode.ui.theme.DroidCodeTheme
+import com.droidcode.ui.theme.SpacingL
+import com.droidcode.ui.theme.SpacingM
+import com.droidcode.ui.theme.SpacingS
+import com.droidcode.ui.theme.SpacingXL
+import com.droidcode.ui.theme.SpacingXS
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -87,8 +99,23 @@ fun MainShell() {
     val commandRegistry = remember { CommandRegistry.getInstance() }
     val gitService = remember { GitService.getInstance() }
 
-    var isWorkspaceOpen by remember { mutableStateOf(workspaceMgr.hasOpenWorkspace()) }
-    var currentView by remember { mutableStateOf(if (isWorkspaceOpen) "IDE" else "HOME") }
+    var isWorkspaceOpen by rememberSaveable { mutableStateOf(workspaceMgr.hasOpenWorkspace()) }
+    var currentView by rememberSaveable { mutableStateOf(if (isWorkspaceOpen) "IDE" else "HOME") }
+    var savedWorkspacePath by rememberSaveable { mutableStateOf(workspaceMgr.currentProject?.path ?: "") }
+
+    LaunchedEffect(savedWorkspacePath) {
+        if (savedWorkspacePath.isNotEmpty() && !workspaceMgr.hasOpenWorkspace()) {
+            val dir = File(savedWorkspacePath)
+            if (dir.exists() && dir.isDirectory) {
+                try {
+                    workspaceMgr.openWorkspace(context, dir, null)
+                    isWorkspaceOpen = true
+                } catch (e: Exception) {
+                    android.util.Log.e("MainShell", "Failed to restore workspace from saved path: $savedWorkspacePath", e)
+                }
+            }
+        }
+    }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
@@ -152,6 +179,7 @@ fun MainShell() {
             workspaceMgr.closeWorkspace()
             editorMgr.closeAllTabs()
             isWorkspaceOpen = false
+            savedWorkspacePath = ""
             currentView = "HOME"
         })
         commandRegistry.registerCommand(Command("settings.open", "Open Settings", "Preferences", "Ctrl+,") {
@@ -443,6 +471,7 @@ fun MainShell() {
                                                 onClick = {
                                                     showWorkspaceDropdown = false
                                                     isWorkspaceOpen = false
+                                                    savedWorkspacePath = ""
                                                     currentView = "HOME"
                                                 }
                                             )
@@ -487,6 +516,7 @@ fun MainShell() {
                                                     workspaceMgr.closeWorkspace()
                                                     editorMgr.closeAllTabs()
                                                     isWorkspaceOpen = false
+                                                    savedWorkspacePath = ""
                                                     currentView = "HOME"
                                                 }
                                             )
@@ -671,6 +701,7 @@ fun MainShell() {
                                                     workspaceMgr.closeWorkspace()
                                                     editorMgr.closeAllTabs()
                                                     isWorkspaceOpen = false
+                                                    savedWorkspacePath = ""
                                                     currentView = "HOME"
                                                 }
                                             )
@@ -695,6 +726,7 @@ fun MainShell() {
                                         coroutineScope.launch {
                                             try {
                                                 workspaceMgr.openWorkspace(context, File(path), type)
+                                                savedWorkspacePath = path
                                                 isWorkspaceOpen = true
                                                 currentView = "IDE"
                                             } catch (e: Exception) {
@@ -716,8 +748,7 @@ fun MainShell() {
                                     },
                                     onSettingsChanged = {
                                         settingsState = settingsMgr.getSettingsCopy()
-                                    },
-                                    onOpenGeneralMenu = { showProjectMenubar = true }
+                                    }
                                 )
                             }
                         }
@@ -899,6 +930,7 @@ fun MainShell() {
                                                         coroutineScope.launch {
                                                             try {
                                                                 workspaceMgr.openWorkspace(context, File(entity.path), entity.type)
+                                                                savedWorkspacePath = entity.path
                                                                 isWorkspaceOpen = true
                                                                 currentView = "IDE"
                                                             } catch (e: Exception) {

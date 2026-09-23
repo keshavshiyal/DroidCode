@@ -23,6 +23,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.res.stringResource
+import com.droidcode.R
+import com.droidcode.ui.theme.CornerMedium
+import com.droidcode.ui.theme.CornerSmall
+import com.droidcode.ui.theme.SpacingM
+import com.droidcode.ui.theme.SpacingS
+import com.droidcode.ui.theme.SpacingXS
 import com.droidcode.core.Command
 import com.droidcode.core.CommandRegistry
 
@@ -116,9 +123,9 @@ fun ProjectMenubarDialog(
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(SpacingS))
                         Text(
-                            text = "Project Menubar",
+                            text = stringResource(R.string.menubar_title),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -130,19 +137,19 @@ fun ProjectMenubarDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close Menu",
+                            contentDescription = stringResource(R.string.action_close),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(SpacingM))
 
                 // Search Filter Input
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search project commands...", fontSize = 13.sp) },
+                    placeholder = { Text(stringResource(R.string.search_commands_placeholder), fontSize = 13.sp) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -155,7 +162,7 @@ fun ProjectMenubarDialog(
                             IconButton(onClick = { searchQuery = "" }) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear",
+                                    contentDescription = stringResource(R.string.action_clear),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -167,14 +174,14 @@ fun ProjectMenubarDialog(
                         .testTag("project_menubar_search_input")
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(SpacingM))
 
                 // Category Quick Filter Chips with horizontal scrolling
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(bottom = 8.dp),
+                        .padding(bottom = SpacingS),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("ALL", "File", "Workspace", "View", "Build & Run", "Git VCS", "Preferences").forEach { filterLabel ->
@@ -191,7 +198,7 @@ fun ProjectMenubarDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(SpacingS))
 
                 // Action Items Grouped by Category
                 if (commandsByCategory.isEmpty()) {
@@ -202,7 +209,7 @@ fun ProjectMenubarDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No matching project commands found.",
+                            text = stringResource(R.string.no_commands_found),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp
                         )
@@ -212,18 +219,40 @@ fun ProjectMenubarDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 400.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(SpacingXS)
                     ) {
                         commandsByCategory.forEach { (categoryName, commandList) ->
                             item {
-                                Text(
-                                    text = categoryName.uppercase(),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp, start = 4.dp)
-                                )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                    shape = RoundedCornerShape(CornerSmall),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = SpacingS, bottom = SpacingXS)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = SpacingS, vertical = SpacingXS)
+                                    ) {
+                                        Text(
+                                            text = categoryName.uppercase(),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            letterSpacing = 1.sp,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "${commandList.size}",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                            modifier = Modifier
+                                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(CornerSmall))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
                             }
 
                             items(commandList) { command ->
@@ -241,7 +270,7 @@ fun ProjectMenubarDialog(
                             item {
                                 HorizontalDivider(
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                                    modifier = Modifier.padding(vertical = 4.dp)
+                                    modifier = Modifier.padding(vertical = SpacingXS)
                                 )
                             }
                         }

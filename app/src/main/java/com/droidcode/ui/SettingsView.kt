@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
@@ -57,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,14 +64,22 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.droidcode.BuildConfig
+import com.droidcode.R
 import com.droidcode.settings.AppSettings
 import com.droidcode.settings.SettingsManager
+import com.droidcode.ui.theme.CornerMedium
+import com.droidcode.ui.theme.CornerSmall
+import com.droidcode.ui.theme.SpacingL
+import com.droidcode.ui.theme.SpacingM
+import com.droidcode.ui.theme.SpacingS
+import com.droidcode.ui.theme.SpacingXS
 
 enum class SettingsCategory(val label: String, val icon: ImageVector) {
     APPEARANCE("Appearance", Icons.Default.Palette),
@@ -84,14 +92,13 @@ enum class SettingsCategory(val label: String, val icon: ImageVector) {
 @Composable
 fun SettingsView(
     onBack: () -> Unit,
-    onSettingsChanged: () -> Unit,
-    onOpenGeneralMenu: (() -> Unit)? = null
+    onSettingsChanged: () -> Unit
 ) {
     val context = LocalContext.current
     val settingsMgr = remember { SettingsManager.getInstance(context) }
     val settings = settingsMgr.settings
 
-    var selectedCategory by remember { mutableStateOf(SettingsCategory.APPEARANCE) }
+    var selectedCategory by rememberSaveable { mutableStateOf(SettingsCategory.APPEARANCE) }
 
     Column(
         modifier = Modifier
@@ -105,7 +112,7 @@ fun SettingsView(
                 .height(52.dp)
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = SpacingM),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -119,20 +126,20 @@ fun SettingsView(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = stringResource(R.string.action_back),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(SpacingS))
                 Column {
                     Text(
-                        text = "Preferences & Settings",
+                        text = stringResource(R.string.settings_title),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Configure workstation theme, editor, and developer shortcuts",
+                        text = stringResource(R.string.settings_subtitle),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -57,6 +57,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.foundation.ScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -68,11 +69,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
+import com.droidcode.R
+import com.droidcode.ui.theme.CornerLarge
+import com.droidcode.ui.theme.CornerMedium
+import com.droidcode.ui.theme.CornerSmall
+import com.droidcode.ui.theme.SpacingL
+import com.droidcode.ui.theme.SpacingM
+import com.droidcode.ui.theme.SpacingS
+import com.droidcode.ui.theme.SpacingXL
+import com.droidcode.ui.theme.SpacingXS
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -140,17 +153,47 @@ fun EditorView(
     val tabs = editorMgr.tabs
     val activeTab = editorMgr.activeTab
 
-    var tabToPromptCloseIndex by remember { mutableStateOf<Int?>(null) }
+    var savedOpenPaths by rememberSaveable {
+        mutableStateOf(ArrayList(editorMgr.tabs.map { it.filePath }))
+    }
+    var savedActiveTabIndex by rememberSaveable {
+        mutableStateOf(editorMgr.activeTabIndex)
+    }
 
-    var showContextMenu by remember { mutableStateOf(false) }
-    var showGoToLineDialog by remember { mutableStateOf(false) }
-    var showChangeLanguageDialog by remember { mutableStateOf(false) }
-    var showChangeEncodingDialog by remember { mutableStateOf(false) }
-    var showChangeLineEndingDialog by remember { mutableStateOf(false) }
-    var showSaveAsDialog by remember { mutableStateOf(false) }
-    var infoDialogTitle by remember { mutableStateOf<String?>(null) }
-    var infoDialogText by remember { mutableStateOf<String?>(null) }
-    var pendingActionType by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        if (editorMgr.tabs.isEmpty() && savedOpenPaths.isNotEmpty()) {
+            for (path in savedOpenPaths) {
+                val f = File(path)
+                if (f.exists() && f.isFile) {
+                    try {
+                        editorMgr.openFile(f)
+                    } catch (e: Exception) {
+                        android.util.Log.e("EditorView", "Failed to restore tab for $path", e)
+                    }
+                }
+            }
+            if (savedActiveTabIndex in 0 until editorMgr.tabs.size) {
+                editorMgr.activeTabIndex = savedActiveTabIndex
+            }
+        }
+    }
+
+    LaunchedEffect(tabs.size, editorMgr.activeTabIndex) {
+        savedOpenPaths = ArrayList(tabs.map { it.filePath })
+        savedActiveTabIndex = editorMgr.activeTabIndex
+    }
+
+    var tabToPromptCloseIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    var showContextMenu by rememberSaveable { mutableStateOf(false) }
+    var showGoToLineDialog by rememberSaveable { mutableStateOf(false) }
+    var showChangeLanguageDialog by rememberSaveable { mutableStateOf(false) }
+    var showChangeEncodingDialog by rememberSaveable { mutableStateOf(false) }
+    var showChangeLineEndingDialog by rememberSaveable { mutableStateOf(false) }
+    var showSaveAsDialog by rememberSaveable { mutableStateOf(false) }
+    var infoDialogTitle by rememberSaveable { mutableStateOf<String?>(null) }
+    var infoDialogText by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingActionType by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         EditorCommandRegistration.registerAllCommands(
@@ -224,11 +267,11 @@ fun EditorView(
                             color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(SpacingS))
 
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close tab",
+                            contentDescription = stringResource(R.string.action_close_tab),
                             tint = if (isActive) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier
                                 .size(14.dp)
@@ -251,8 +294,8 @@ fun EditorView(
             val tabToClose = tabs[tabToPromptCloseIndex!!]
             AlertDialog(
                 onDismissRequest = { tabToPromptCloseIndex = null },
-                title = { Text("Unsaved Changes") },
-                text = { Text("Do you want to save changes to '${tabToClose.fileName}' before closing?") },
+                title = { Text(stringResource(R.string.unsaved_changes_title)) },
+                text = { Text(stringResource(R.string.unsaved_changes_message, tabToClose.fileName)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -266,7 +309,7 @@ fun EditorView(
                             editorMgr.closeTab(tabToPromptCloseIndex!!)
                             tabToPromptCloseIndex = null
                         }
-                    ) { Text("Save") }
+                    ) { Text(stringResource(R.string.action_save)) }
                 },
                 dismissButton = {
                     Row {
@@ -275,11 +318,11 @@ fun EditorView(
                                 editorMgr.closeTab(tabToPromptCloseIndex!!)
                                 tabToPromptCloseIndex = null
                             }
-                        ) { Text("Don't Save") }
-                        Spacer(modifier = Modifier.width(4.dp))
+                        ) { Text(stringResource(R.string.action_dont_save)) }
+                        Spacer(modifier = Modifier.width(SpacingXS))
                         TextButton(
                             onClick = { tabToPromptCloseIndex = null }
-                        ) { Text("Cancel") }
+                        ) { Text(stringResource(R.string.action_cancel)) }
                     }
                 }
             )
@@ -328,9 +371,9 @@ fun EditorView(
                             .clickable { showChangeLineEndingDialog = true }
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(SpacingM))
                     Text(
-                        text = "Ln ${activeTab.line}, Col ${activeTab.column}",
+                        text = stringResource(R.string.status_line_col, activeTab.line, activeTab.column),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontFamily = FontFamily.Monospace
@@ -449,18 +492,18 @@ fun EditorView(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.size(48.dp)
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(SpacingM))
                     Text(
-                        text = "No file open",
+                        text = stringResource(R.string.no_open_files),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Open Project Explorer drawer to select a file",
+                        text = stringResource(R.string.no_open_files_subtitle),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(top = SpacingXS)
                     )
                 }
             }
@@ -565,7 +608,7 @@ private fun CodeCanvas(
         EditorFontHelper.getFontFamily(settings.editorFontFamily)
     }
 
-    var textFieldValue by remember(tab.id) {
+    var textFieldValue by rememberSaveable(tab.filePath, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(
             TextFieldValue(
                 text = tab.content,
@@ -676,8 +719,12 @@ private fun CodeCanvas(
         starts.toIntArray()
     }
     val lineCount = lineStarts.size
-    val verticalScroll = rememberScrollState()
-    val horizontalScroll = rememberScrollState()
+    val verticalScroll = rememberSaveable(tab.filePath, saver = ScrollState.Saver) {
+        ScrollState(initial = 0)
+    }
+    val horizontalScroll = rememberSaveable(tab.filePath, saver = ScrollState.Saver) {
+        ScrollState(initial = 0)
+    }
     val isDark = isSystemInDarkTheme()
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
@@ -700,14 +747,14 @@ private fun CodeCanvas(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerSmall))
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(CornerSmall))
+                                .padding(horizontal = SpacingM, vertical = SpacingS),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             if (tab.findQuery.isEmpty()) {
                                 Text(
-                                    text = "Find in code...",
+                                    text = stringResource(R.string.find_placeholder),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                 )
@@ -754,7 +801,7 @@ private fun CodeCanvas(
                             onClick = { tab.showFindBar = false },
                             modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), modifier = Modifier.size(16.dp))
                         }
                     }
 
@@ -766,14 +813,14 @@ private fun CodeCanvas(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
-                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerSmall))
+                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(CornerSmall))
+                                    .padding(horizontal = SpacingM, vertical = SpacingS),
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 if (tab.replaceQuery.isEmpty()) {
                                     Text(
-                                        text = "Replace with...",
+                                        text = stringResource(R.string.replace_placeholder),
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                     )
@@ -802,7 +849,7 @@ private fun CodeCanvas(
                                 },
                                 modifier = Modifier.height(36.dp)
                             ) {
-                                Text("Replace", fontSize = 11.sp)
+                                Text(stringResource(R.string.action_replace), fontSize = 11.sp)
                             }
 
                             Button(
@@ -815,7 +862,7 @@ private fun CodeCanvas(
                                 },
                                 modifier = Modifier.height(36.dp)
                             ) {
-                                Text("All", fontSize = 11.sp)
+                                Text(stringResource(R.string.action_replace_all), fontSize = 11.sp)
                             }
                         }
                     }

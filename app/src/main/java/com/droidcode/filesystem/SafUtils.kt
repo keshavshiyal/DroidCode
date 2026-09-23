@@ -288,10 +288,16 @@ object SafUtils {
         }
     }
 
+    data class ExportSummary(
+        val successCount: Int,
+        val failCount: Int
+    )
+
     /**
      * Recursively exports an internal project directory to an external SAF folder.
      * Guaranteed to run on Dispatchers.IO without blocking the UI thread.
      * Reports progress from 0.0f to 1.0f with current file name.
+     * Handles per-file errors: logs, continues, and returns summary (successCount, failCount).
      */
     @JvmStatic
     suspend fun exportProjectToSaf(
@@ -299,7 +305,7 @@ object SafUtils {
         sourceDir: File,
         destinationTreeUri: Uri,
         onProgress: (Float, String) -> Unit = { _, _ -> }
-    ): Result<Int> = withContext(Dispatchers.IO) {
+    ): Result<ExportSummary> = withContext(Dispatchers.IO) {
         runCatching {
             val rootDoc = DocumentFile.fromTreeUri(context, destinationTreeUri)
                 ?: throw IllegalArgumentException("Failed to access destination storage folder")
@@ -325,7 +331,9 @@ object SafUtils {
             collectFiles(sourceDir)
 
             val totalFiles = allFiles.size
-            var copiedFiles = 0
+            var processedFiles = 0
+            var successCount = 0
+            var failCount = 0
 
             fun copyRecursive(source: File, targetDoc: DocumentFile) {
                 val children = source.listFiles() ?: return
@@ -335,27 +343,37 @@ object SafUtils {
                             ?: targetDoc.createDirectory(child.name)
                         if (subDoc != null) {
                             copyRecursive(child, subDoc)
+                        } else {
+                            android.util.Log.e("SafUtils", "Failed to create directory in SAF: ${child.name}")
                         }
                     } else {
-                        val mime = getMimeType(child.name)
-                        val fileDoc = targetDoc.findFile(child.name)
-                            ?: targetDoc.createFile(mime, child.name)
-                        if (fileDoc != null) {
-                            context.contentResolver.openOutputStream(fileDoc.uri, "wt")?.use { out ->
-                                child.inputStream().use { input ->
-                                    input.copyTo(out)
-                                }
+                        try {
+                            val mime = getMimeType(child.name)
+                            val fileDoc = targetDoc.findFile(child.name)
+                                ?: targetDoc.createFile(mime, child.name)
+                            if (fileDoc != null) {
+                                context.contentResolver.openOutputStream(fileDoc.uri, "wt")?.use { out ->
+                                    child.inputStream().use { input ->
+                                        input.copyTo(out)
+                                    }
+                                } ?: throw IllegalStateException("Failed to open output stream")
+                                successCount++
+                            } else {
+                                throw IllegalStateException("Failed to create file document")
                             }
+                        } catch (e: Exception) {
+                            android.util.Log.e("SafUtils", "Failed to export file: ${child.name}", e)
+                            failCount++
                         }
-                        copiedFiles++
-                        val progress = if (totalFiles > 0) copiedFiles.toFloat() / totalFiles else 1.0f
+                        processedFiles++
+                        val progress = if (totalFiles > 0) processedFiles.toFloat() / totalFiles else 1.0f
                         onProgress(progress, child.name)
                     }
                 }
             }
 
             copyRecursive(sourceDir, targetDirDoc)
-            copiedFiles
+            ExportSummary(successCount = successCount, failCount = failCount)
         }
     }
 }

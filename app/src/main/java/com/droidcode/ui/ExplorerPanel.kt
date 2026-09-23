@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SdCard
@@ -50,15 +51,20 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +73,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -74,10 +81,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.droidcode.R
 import com.droidcode.filesystem.FileNode
 import com.droidcode.filesystem.LocalFileSystem
 import com.droidcode.filesystem.SafUtils
 import com.droidcode.project.WorkspaceManager
+import com.droidcode.ui.theme.CornerMedium
+import com.droidcode.ui.theme.CornerSmall
+import com.droidcode.ui.theme.SpacingXS
+import com.droidcode.ui.theme.SpacingS
+import com.droidcode.ui.theme.SpacingM
+import com.droidcode.ui.theme.SpacingL
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -102,15 +116,24 @@ fun ExplorerPanel(
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
     val fs = remember { LocalFileSystem.getInstance() }
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var treeNodes by remember { mutableStateOf(workspaceMgr.workspaceFileTree) }
-    var expandedPaths by remember { mutableStateOf(setOf<String>()) }
+    val expandedPathsSaver = listSaver<Set<String>, String>(
+        save = { it.toList() },
+        restore = { it.toSet() }
+    )
+    var expandedPaths by rememberSaveable(stateSaver = expandedPathsSaver) {
+        mutableStateOf(setOf<String>())
+    }
     var isLoadingTree by remember { mutableStateOf(false) }
 
     var selectedNode by remember { mutableStateOf<FileNode?>(null) }
     var clipboardItem by remember { mutableStateOf<FileClipboardItem?>(null) }
 
     var showToolbarOverflow by remember { mutableStateOf(false) }
+    var showRootContextMenu by remember { mutableStateOf(false) }
+    var showExportConfirmDialog by remember { mutableStateOf(false) }
     var showPropertiesDialog by remember { mutableStateOf<FileNode?>(null) }
     var showNewFileDialog by remember { mutableStateOf(false) }
     var showNewFolderDialog by remember { mutableStateOf(false) }
@@ -130,7 +153,7 @@ fun ExplorerPanel(
             if (sourceDir != null && sourceDir.exists()) {
                 isExporting = true
                 exportProgress = 0f
-                exportStatusText = "Preparing export..."
+                exportStatusText = context.getString(R.string.export_status_preparing)
                 coroutineScope.launch {
                     val result = SafUtils.exportProjectToSaf(
                         context = context,
@@ -143,19 +166,16 @@ fun ExplorerPanel(
                     )
                     isExporting = false
                     result.fold(
-                        onSuccess = { count ->
-                            Toast.makeText(
-                                context,
-                                "Exported ${sourceDir.name} ($count files) to device storage!",
-                                Toast.LENGTH_LONG
-                            ).show()
+                        onSuccess = { summary ->
+                            val msg = "Exported ${sourceDir.name}: ${summary.successCount} files copied" +
+                                    if (summary.failCount > 0) " (${summary.failCount} failed)" else " successfully"
+                            snackbarHostState.showSnackbar(msg)
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                         },
                         onFailure = { error ->
-                            Toast.makeText(
-                                context,
-                                "Export failed: ${error.message}",
-                                Toast.LENGTH_LONG
-                            ).show()
+                            val err = "Export failed: ${error.message}"
+                            snackbarHostState.showSnackbar(err)
+                            Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                         }
                     )
                 }
@@ -228,69 +248,124 @@ fun ExplorerPanel(
         refreshTree()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline)
-    ) {
-        // Explorer Header & Contextual Toolbar
-        Row(
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "EXPLORER",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
-                )
-                if (workspaceMgr.hasOpenWorkspace()) {
-                    Text(
-                        text = workspaceMgr.currentProject?.name ?: "",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Contextual Action Buttons
+            // Explorer Header & Contextual Toolbar
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .padding(horizontal = SpacingM),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (selectedNode == null) {
-                    // Default State: New File, New Folder, Refresh, Overflow
-                    IconButton(
-                        onClick = {
-                            if (workspaceMgr.hasOpenWorkspace()) {
-                                showNewFileDialog = true
-                            } else {
-                                Toast.makeText(context, "Open a project first", Toast.LENGTH_SHORT).show()
-                            }
-                        },
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
                         modifier = Modifier
-                            .size(36.dp)
-                            .testTag("explorer_new_file_btn")
+                            .fillMaxWidth()
+                            .pointerInput(workspaceMgr.currentProject) {
+                                detectTapGestures(
+                                    onLongPress = {
+                                        if (workspaceMgr.hasOpenWorkspace()) {
+                                            showRootContextMenu = true
+                                        }
+                                    }
+                                )
+                            }
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.NoteAdd,
-                            contentDescription = "New File",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
+                        Text(
+                            text = stringResource(R.string.explorer_title),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.sp
+                        )
+                        if (workspaceMgr.hasOpenWorkspace()) {
+                            Text(
+                                text = workspaceMgr.currentProject?.name ?: "",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = showRootContextMenu,
+                        onDismissRequest = { showRootContextMenu = false },
+                        tonalElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_export), fontSize = 13.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.SdCard,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            contentPadding = PaddingValues(horizontal = SpacingM, vertical = SpacingS),
+                            onClick = {
+                                showRootContextMenu = false
+                                exportTargetFolder = workspaceMgr.currentProject?.directory
+                                showExportConfirmDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_refresh), fontSize = 13.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            contentPadding = PaddingValues(horizontal = SpacingM, vertical = SpacingS),
+                            onClick = {
+                                showRootContextMenu = false
+                                refreshTree()
+                            }
                         )
                     }
+                }
+
+                // Contextual Action Buttons
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (selectedNode == null) {
+                        // Default State: New File, New Folder, Refresh, Overflow
+                        IconButton(
+                            onClick = {
+                                if (workspaceMgr.hasOpenWorkspace()) {
+                                    showNewFileDialog = true
+                                } else {
+                                    Toast.makeText(context, "Open a project first", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("explorer_new_file_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.NoteAdd,
+                                contentDescription = stringResource(R.string.explorer_new_file),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
 
                     IconButton(
                         onClick = {
@@ -409,9 +484,10 @@ fun ExplorerPanel(
                     DropdownMenu(
                         expanded = showToolbarOverflow,
                         onDismissRequest = { showToolbarOverflow = false },
+                        tonalElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
                     ) {
                         // Paste
                         DropdownMenuItem(
@@ -1080,9 +1156,40 @@ fun ExplorerPanel(
             },
             confirmButton = {
                 TextButton(onClick = { showPropertiesDialog = null }) {
-                    Text("Close")
+                    Text(stringResource(R.string.action_close))
                 }
             }
+        )
+    }
+
+    if (showExportConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showExportConfirmDialog = false },
+                title = { Text(stringResource(R.string.export_confirm_title)) },
+                text = { Text(stringResource(R.string.export_confirm_message)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showExportConfirmDialog = false
+                            safExportLauncher.launch(null)
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_export))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showExportConfirmDialog = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(SpacingM)
         )
     }
 }
@@ -1189,9 +1296,10 @@ private fun FileTreeItem(
             DropdownMenu(
                 expanded = showContextMenu,
                 onDismissRequest = { showContextMenu = false },
+                tonalElevation = 8.dp,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
             ) {
                 if (!node.isFolder) {
                     DropdownMenuItem(

@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,22 +55,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.droidcode.R
 import com.droidcode.db.WorkspaceEntity
 import com.droidcode.filesystem.SafUtils
 import com.droidcode.project.ProjectTemplate
 import com.droidcode.project.WorkspaceManager
+import com.droidcode.ui.theme.CornerMedium
+import com.droidcode.ui.theme.CornerSmall
+import com.droidcode.ui.theme.SpacingL
+import com.droidcode.ui.theme.SpacingM
+import com.droidcode.ui.theme.SpacingS
+import com.droidcode.ui.theme.SpacingXL
+import com.droidcode.ui.theme.SpacingXS
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -84,8 +96,8 @@ fun HomeView(
     val recentWorkspaces by workspaceMgr.getRecentWorkspacesFlow(context)
         .collectAsState(initial = emptyList())
 
-    var showNewProjectDialog by remember { mutableStateOf(false) }
-    var showOpenDirDialog by remember { mutableStateOf(false) }
+    var showNewProjectDialog by rememberSaveable { mutableStateOf(false) }
+    var showOpenDirDialog by rememberSaveable { mutableStateOf(false) }
 
     // SAF (Storage Access Framework) Folder Picker Launcher
     val safLauncher = rememberLauncherForActivityResult(
@@ -103,7 +115,7 @@ fun HomeView(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
+            .padding(SpacingXL),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -116,57 +128,57 @@ fun HomeView(
         )
 
         Text(
-            text = "Professional Native Android IDE Workstation",
+            text = stringResource(R.string.home_subtitle),
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 32.dp)
+            modifier = Modifier.padding(top = SpacingXS, bottom = SpacingXL)
         )
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 600.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(SpacingM)
         ) {
             // Quick Actions Column
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                    .padding(16.dp)
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(CornerMedium))
+                    .padding(SpacingM)
             ) {
                 Text(
                     text = "Start",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = SpacingS)
                 )
 
                 ActionTile(
-                    title = "New Project",
-                    subtitle = "Create workspace from template",
+                    title = stringResource(R.string.home_new_project),
+                    subtitle = stringResource(R.string.home_new_project_desc),
                     icon = Icons.Default.Add,
                     onClick = { showNewProjectDialog = true },
                     testTag = "home_new_project_btn"
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(SpacingS))
 
                 ActionTile(
-                    title = "Open Directory (SAF)",
-                    subtitle = "Select folder from device locations",
+                    title = stringResource(R.string.home_open_folder),
+                    subtitle = stringResource(R.string.home_open_folder_desc),
                     icon = Icons.Default.FolderOpen,
                     onClick = { showOpenDirDialog = true },
                     testTag = "home_open_directory_btn"
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(SpacingS))
 
                 ActionTile(
-                    title = "Settings",
-                    subtitle = "Theme, fonts & preferences",
+                    title = stringResource(R.string.menu_settings),
+                    subtitle = stringResource(R.string.cmd_settings_editor),
                     icon = Icons.Default.Settings,
                     onClick = onOpenSettings,
                     testTag = "home_settings_btn"
@@ -177,22 +189,22 @@ fun HomeView(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                    .padding(16.dp)
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(CornerMedium))
+                    .padding(SpacingM)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = SpacingS)
                 ) {
                     Icon(
                         imageVector = Icons.Default.History,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(SpacingS))
                     Text(
-                        text = "Recent Workspaces",
+                        text = stringResource(R.string.recent_workspaces_title),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -207,7 +219,7 @@ fun HomeView(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No recent projects",
+                            text = stringResource(R.string.home_no_recents),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp
                         )
@@ -378,17 +390,22 @@ private fun NewProjectModal(
     onCreate: (String, String) -> Unit
 ) {
     val context = LocalContext.current
-    var projectName by remember { mutableStateOf("MyProject") }
-    var selectedTemplate by remember { mutableStateOf(ProjectTemplate.Type.WEB) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var projectName by rememberSaveable { mutableStateOf("MyProject") }
+    var selectedTemplateName by rememberSaveable { mutableStateOf(ProjectTemplate.Type.WEB.name) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedTemplate = try {
+        ProjectTemplate.Type.valueOf(selectedTemplateName)
+    } catch (e: Exception) {
+        ProjectTemplate.Type.WEB
+    }
     val isProjectNameValid = projectName.trim().isNotEmpty()
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(12.dp),
+                .padding(SpacingM),
+            shape = RoundedCornerShape(CornerMedium),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp,
             shadowElevation = 8.dp,
@@ -399,16 +416,16 @@ private fun NewProjectModal(
                     .fillMaxWidth()
                     .heightIn(max = 580.dp)
                     .verticalScroll(rememberScrollState())
-                    .padding(20.dp)
+                    .padding(SpacingL)
             ) {
                 Text(
-                    text = "New Project",
+                    text = stringResource(R.string.new_project_dialog_title),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(SpacingM))
 
                 OutlinedTextField(
                     value = projectName,
@@ -416,29 +433,29 @@ private fun NewProjectModal(
                         projectName = it
                         if (errorMessage != null) errorMessage = null
                     },
-                    label = { Text("Project Name") },
+                    label = { Text(stringResource(R.string.project_name_label)) },
                     singleLine = true,
                     isError = !isProjectNameValid,
                     supportingText = if (!isProjectNameValid) {
-                        { Text("Project name cannot be blank", color = MaterialTheme.colorScheme.error) }
+                        { Text(stringResource(R.string.project_name_blank_error), color = MaterialTheme.colorScheme.error) }
                     } else null,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("new_project_name_input")
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(SpacingM))
 
                 Text(
-                    text = "Select Template:",
+                    text = stringResource(R.string.select_template_label),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(SpacingS))
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(SpacingS)) {
                     ProjectTemplate.Type.values().forEach { template ->
                         val isSelected = selectedTemplate == template
                         val icon = when (template) {
@@ -449,49 +466,62 @@ private fun NewProjectModal(
                             else -> Icons.Default.Folder
                         }
 
-                        Row(
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(
-                                    if (isSelected)
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                    RoundedCornerShape(8.dp)
-                                )
-                                .border(
-                                    if (isSelected) 2.dp else 1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                    RoundedCornerShape(8.dp)
-                                )
-                                .clickable { selectedTemplate = template }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .clickable { selectedTemplateName = template.name },
+                            shape = RoundedCornerShape(CornerMedium),
+                            border = androidx.compose.foundation.BorderStroke(
+                                if (isSelected) 2.dp else 1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            )
                         ) {
-                            RadioButton(
-                                selected = isSelected,
-                                onClick = { selectedTemplate = template },
-                                colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = template.title,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = SpacingM, vertical = SpacingS),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { selectedTemplateName = template.name },
+                                    colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                                 )
-                                Text(
-                                    text = template.description,
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Spacer(modifier = Modifier.width(SpacingS))
+                                Surface(
+                                    shape = RoundedCornerShape(CornerSmall),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(SpacingM))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = template.title,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = template.description,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -502,20 +532,20 @@ private fun NewProjectModal(
                         text = errorMessage!!,
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = SpacingS)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(SpacingL))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.action_cancel))
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(SpacingS))
                     Button(
                         enabled = isProjectNameValid,
                         onClick = {
@@ -533,7 +563,7 @@ private fun NewProjectModal(
                         },
                         modifier = Modifier.testTag("new_project_create_btn")
                     ) {
-                        Text("Create")
+                        Text(stringResource(R.string.action_create))
                     }
                 }
             }
