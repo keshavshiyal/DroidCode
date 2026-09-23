@@ -30,13 +30,19 @@ android {
       }
     }
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      val keystoreFile = file(keystorePath)
-      if (keystoreFile.exists()) {
+      val keystorePath = System.getenv("KEYSTORE_PATH")
+      val keystoreFile = when {
+        !keystorePath.isNullOrBlank() && file(keystorePath).exists() -> file(keystorePath)
+        !keystorePath.isNullOrBlank() && rootProject.file(keystorePath).exists() -> rootProject.file(keystorePath)
+        !keystorePath.isNullOrBlank() -> rootProject.file(keystorePath)
+        file("${rootDir}/my-upload-key.jks").exists() -> file("${rootDir}/my-upload-key.jks")
+        else -> null
+      }
+      if (keystoreFile != null) {
         storeFile = keystoreFile
         storePassword = System.getenv("STORE_PASSWORD")
-        keyAlias = "upload"
-        keyPassword = System.getenv("KEY_PASSWORD")
+        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+        keyPassword = System.getenv("KEY_PASSWORD") ?: System.getenv("STORE_PASSWORD")
       }
     }
   }

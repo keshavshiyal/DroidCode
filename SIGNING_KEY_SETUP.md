@@ -24,8 +24,8 @@ In `app/build.gradle.kts`, the project defines two signing configurations:
 2. **`release`**:
    - Location: Path set by `KEYSTORE_PATH` environment variable (defaults to `${rootDir}/my-upload-key.jks`).
    - Store Password: Set by `STORE_PASSWORD` environment variable.
-   - Key Alias: `upload`
-   - Key Password: Set by `KEY_PASSWORD` environment variable.
+   - Key Alias: Set by `KEY_ALIAS` environment variable (defaults to `upload`).
+   - Key Password: Set by `KEY_PASSWORD` environment variable (falls back to `STORE_PASSWORD`).
    - Purpose: Used for official release builds and Google Play / GitHub Releases.
 
 ---
