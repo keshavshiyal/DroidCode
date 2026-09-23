@@ -71,6 +71,7 @@ DroidCode maintains an extensive automated test suite with 100% pass rate:
 - [Phase 1 & 1.5 Feature Specification](docs/features/phase1.md)
 - [Testing Guide](docs/testing/testing_guide.md)
 - [Phase 1.5 Audit Report](docs/testing/phase1_5_audit.md)
+- [Signing Key Setup Guide](SIGNING_KEY_SETUP.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
 
