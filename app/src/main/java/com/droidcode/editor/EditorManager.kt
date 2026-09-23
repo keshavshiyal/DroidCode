@@ -6,8 +6,11 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 import com.droidcode.filesystem.LocalFileSystem
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class EditorManager private constructor() {
+@Singleton
+class EditorManager @Inject constructor() {
 
     val tabs = mutableStateListOf<EditorTab>()
     private val undoManagers = mutableMapOf<String, UndoManager>()

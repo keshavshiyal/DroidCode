@@ -87,10 +87,37 @@ import com.droidcode.ui.theme.SpacingXL
 import com.droidcode.ui.theme.SpacingXS
 import java.io.File
 import kotlinx.coroutines.launch
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.droidcode.navigation.DroidCodeNavGraph
+import com.droidcode.navigation.Screen
 
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
-fun MainShell() {
+fun MainShell(
+    windowSizeClass: WindowSizeClass? = null
+) {
     val context = LocalContext.current
+    val activity = context as? Activity
+    val sizeClass = windowSizeClass ?: activity?.let { calculateWindowSizeClass(it) }
+    val isExpanded = sizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
+
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
+
     val settingsMgr = remember { SettingsManager.getInstance(context) }
     var settingsState by remember { mutableStateOf(settingsMgr.settings) }
 
@@ -100,8 +127,15 @@ fun MainShell() {
     val gitService = remember { GitService.getInstance() }
 
     var isWorkspaceOpen by rememberSaveable { mutableStateOf(workspaceMgr.hasOpenWorkspace()) }
-    var currentView by rememberSaveable { mutableStateOf(if (isWorkspaceOpen) "IDE" else "HOME") }
     var savedWorkspacePath by rememberSaveable { mutableStateOf(workspaceMgr.currentProject?.path ?: "") }
+
+    fun navigateTo(route: String) {
+        if (currentRoute != route) {
+            navController.navigate(route) {
+                launchSingleTop = true
+            }
+        }
+    }
 
     LaunchedEffect(savedWorkspacePath) {
         if (savedWorkspacePath.isNotEmpty() && !workspaceMgr.hasOpenWorkspace()) {
@@ -110,6 +144,11 @@ fun MainShell() {
                 try {
                     workspaceMgr.openWorkspace(context, dir, null)
                     isWorkspaceOpen = true
+                    if (currentRoute == Screen.Home.route) {
+                        navController.navigate(Screen.Workspace.route) {
+                            popUpTo(Screen.Home.route)
+                        }
+                    }
                 } catch (e: Exception) {
                     android.util.Log.e("MainShell", "Failed to restore workspace from saved path: $savedWorkspacePath", e)
                 }
@@ -173,26 +212,26 @@ fun MainShell() {
             showBottomPanel = !showBottomPanel
         })
         commandRegistry.registerCommand(Command("workspace.open", "Open Workspace / Project", "Workspace", "Ctrl+O") {
-            currentView = "HOME"
+            navigateTo(Screen.Home.route)
         })
         commandRegistry.registerCommand(Command("workspace.close", "Close Workspace", "Workspace", null) {
             workspaceMgr.closeWorkspace()
             editorMgr.closeAllTabs()
             isWorkspaceOpen = false
             savedWorkspacePath = ""
-            currentView = "HOME"
+            navigateTo(Screen.Home.route)
         })
         commandRegistry.registerCommand(Command("settings.open", "Open Settings", "Preferences", "Ctrl+,") {
-            currentView = "SETTINGS"
+            navigateTo(Screen.Settings.route)
         })
         commandRegistry.registerCommand(Command("settings.editor", "Editor Fonts & Preferences", "Preferences", null) {
-            currentView = "SETTINGS"
+            navigateTo(Screen.Settings.route)
         })
         commandRegistry.registerCommand(Command("settings.keybar", "Quick Key Bar Settings", "Preferences", null) {
-            currentView = "SETTINGS"
+            navigateTo(Screen.Settings.route)
         })
         commandRegistry.registerCommand(Command("app.developer", "Developer Profile (Keshu Shiyal)", "Preferences", null) {
-            currentView = "SETTINGS"
+            navigateTo(Screen.Settings.route)
         })
         commandRegistry.registerCommand(Command("project.run", "Run Active Workspace", "Build & Run", "Ctrl+R") {
             val tab = editorMgr.activeTab
@@ -209,12 +248,13 @@ fun MainShell() {
         })
         commandRegistry.registerCommand(Command("git.status", "Check Git Status", "Git VCS", "Ctrl+G S") {
             showBottomPanel = true
+            navigateTo(Screen.Git.route)
         })
         commandRegistry.registerCommand(Command("git.pull", "Git Pull / Sync", "Git VCS", "Ctrl+G P") {
             Toast.makeText(context, "Workspace synchronized with git remote", Toast.LENGTH_SHORT).show()
         })
         commandRegistry.registerCommand(Command("app.about", "About DroidCode Workstation", "Preferences", null) {
-            currentView = "SETTINGS"
+            navigateTo(Screen.Settings.route)
         })
     }
 
@@ -322,9 +362,29 @@ fun MainShell() {
     }
 
     DroidCodeTheme(themeMode = settingsState.themeMode) {
+        BackHandler {
+            if (showCommandPalette) {
+                showCommandPalette = false
+            } else if (showProjectMenubar) {
+                showProjectMenubar = false
+            } else if (showRecentWorkspacesDialog) {
+                showRecentWorkspacesDialog = false
+            } else if (showAboutDialog) {
+                showAboutDialog = false
+            } else if (showShortcutsDialog) {
+                showShortcutsDialog = false
+            } else if (drawerState.isOpen) {
+                coroutineScope.launch { drawerState.close() }
+            } else if (navController.previousBackStackEntry != null) {
+                navController.popBackStack()
+            } else if (isWorkspaceOpen && currentRoute != Screen.Workspace.route) {
+                navigateTo(Screen.Workspace.route)
+            }
+        }
+
         ModalNavigationDrawer(
             drawerState = drawerState,
-            gesturesEnabled = currentView == "IDE" && isWorkspaceOpen,
+            gesturesEnabled = !isExpanded && currentRoute == Screen.Workspace.route && isWorkspaceOpen,
             drawerContent = {
                 if (isWorkspaceOpen) {
                     ModalDrawerSheet(
@@ -352,6 +412,29 @@ fun MainShell() {
         ) {
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Escape) {
+                            if (showCommandPalette) {
+                                showCommandPalette = false
+                                true
+                            } else if (showProjectMenubar) {
+                                showProjectMenubar = false
+                                true
+                            } else if (drawerState.isOpen) {
+                                coroutineScope.launch { drawerState.close() }
+                                true
+                            } else if (navController.previousBackStackEntry != null) {
+                                navController.popBackStack()
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    },
                 topBar = {
                     // Top App Bar Container with statusBarsPadding to keep title below Android notification bar
                     Box(
@@ -382,7 +465,7 @@ fun MainShell() {
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier
                                         .clickable {
-                                            if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
+                                            if (isWorkspaceOpen) navigateTo(Screen.Workspace.route) else navigateTo(Screen.Home.route)
                                         }
                                         .padding(end = 4.dp)
                                 )
@@ -472,7 +555,7 @@ fun MainShell() {
                                                     showWorkspaceDropdown = false
                                                     isWorkspaceOpen = false
                                                     savedWorkspacePath = ""
-                                                    currentView = "HOME"
+                                                    navigateTo(Screen.Home.route)
                                                 }
                                             )
 
@@ -517,7 +600,7 @@ fun MainShell() {
                                                     editorMgr.closeAllTabs()
                                                     isWorkspaceOpen = false
                                                     savedWorkspacePath = ""
-                                                    currentView = "HOME"
+                                                    navigateTo(Screen.Home.route)
                                                 }
                                             )
                                         }
@@ -614,7 +697,7 @@ fun MainShell() {
                                             },
                                             onClick = {
                                                 showTopOverflowMenu = false
-                                                currentView = "SETTINGS"
+                                                navigateTo(Screen.Settings.route)
                                             }
                                         )
 
@@ -702,7 +785,7 @@ fun MainShell() {
                                                     editorMgr.closeAllTabs()
                                                     isWorkspaceOpen = false
                                                     savedWorkspacePath = ""
-                                                    currentView = "HOME"
+                                                    navigateTo(Screen.Home.route)
                                                 }
                                             )
                                         }
@@ -718,8 +801,11 @@ fun MainShell() {
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    when (currentView) {
-                        "HOME" -> {
+                    DroidCodeNavGraph(
+                        navController = navController,
+                        startDestination = if (isWorkspaceOpen) Screen.Workspace.route else Screen.Home.route,
+                        modifier = Modifier.fillMaxSize(),
+                        homeContent = {
                             Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
                                 HomeView(
                                     onOpenWorkspace = { path, type ->
@@ -728,83 +814,164 @@ fun MainShell() {
                                                 workspaceMgr.openWorkspace(context, File(path), type)
                                                 savedWorkspacePath = path
                                                 isWorkspaceOpen = true
-                                                currentView = "IDE"
+                                                navigateTo(Screen.Workspace.route)
                                             } catch (e: Exception) {
                                                 android.util.Log.e("MainShell", "Failed to open workspace", e)
                                             }
                                         }
                                     },
-                                    onOpenSettings = { currentView = "SETTINGS" },
+                                    onOpenSettings = { navigateTo(Screen.Settings.route) },
                                     onOpenGeneralMenu = { showProjectMenubar = true }
                                 )
                             }
-                        }
-
-                        "SETTINGS" -> {
+                        },
+                        settingsContent = {
                             Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
                                 SettingsView(
                                     onBack = {
-                                        if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
+                                        if (navController.previousBackStackEntry != null) {
+                                            navController.popBackStack()
+                                        } else if (isWorkspaceOpen) {
+                                            navigateTo(Screen.Workspace.route)
+                                        } else {
+                                            navigateTo(Screen.Home.route)
+                                        }
                                     },
                                     onSettingsChanged = {
                                         settingsState = settingsMgr.getSettingsCopy()
                                     }
                                 )
                             }
-                        }
-
-                        "IDE" -> {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .imePadding()
-                                    .navigationBarsPadding()
-                            ) {
-                                // Main Editor Workstation Area
-                                Box(
+                        },
+                        workspaceContent = {
+                            if (isExpanded) {
+                                Row(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f)
+                                        .fillMaxSize()
+                                        .imePadding()
+                                        .navigationBarsPadding()
                                 ) {
-                                    EditorView(
-                                        settings = settingsState,
-                                        ctrlActive = ctrlActive,
-                                        shiftActive = shiftActive,
-                                        altActive = altActive,
-                                        onResetModifiers = {
-                                            ctrlActive = false
-                                            shiftActive = false
-                                            altActive = false
-                                        },
-                                        onOpenCommandPalette = { showCommandPalette = true },
-                                        onOpenGeneralMenu = { showProjectMenubar = true },
-                                        onSaveRequested = {},
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
+                                    // Multi-Pane Left Pane: Explorer Panel on Tablet / Expanded Screen
+                                    Box(
+                                        modifier = Modifier
+                                            .width(280.dp)
+                                            .fillMaxHeight()
+                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                    ) {
+                                        ExplorerPanel(
+                                            onOpenFile = { file ->
+                                                try {
+                                                    editorMgr.openFile(file)
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("MainShell", "Failed to open file: ${file.absolutePath}", e)
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
 
-                                // Developer Quick Key Bar
-                                if (settingsState.isQuickKeyBarEnabled) {
-                                    DeveloperQuickKeyBar(
-                                        density = settingsState.quickKeyBarDensity,
-                                        ctrlActive = ctrlActive,
-                                        shiftActive = shiftActive,
-                                        altActive = altActive,
-                                        onToggleCtrl = { ctrlActive = !ctrlActive },
-                                        onToggleShift = { shiftActive = !shiftActive },
-                                        onToggleAlt = { altActive = !altActive },
-                                        onInsertText = insertText,
-                                        onActionKey = triggerActionKey
-                                    )
-                                }
+                                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                                // Bottom Panel (Git / Terminal / Database / Problems)
-                                if (showBottomPanel) {
-                                    BottomPanel()
+                                    // Multi-Pane Right Pane: Editor Workstation Area
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .weight(1f)
+                                        ) {
+                                            EditorView(
+                                                settings = settingsState,
+                                                ctrlActive = ctrlActive,
+                                                shiftActive = shiftActive,
+                                                altActive = altActive,
+                                                onResetModifiers = {
+                                                    ctrlActive = false
+                                                    shiftActive = false
+                                                    altActive = false
+                                                },
+                                                onOpenCommandPalette = { showCommandPalette = true },
+                                                onOpenGeneralMenu = { showProjectMenubar = true },
+                                                onSaveRequested = {},
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+
+                                        if (settingsState.isQuickKeyBarEnabled) {
+                                            DeveloperQuickKeyBar(
+                                                density = settingsState.quickKeyBarDensity,
+                                                ctrlActive = ctrlActive,
+                                                shiftActive = shiftActive,
+                                                altActive = altActive,
+                                                onToggleCtrl = { ctrlActive = !ctrlActive },
+                                                onToggleShift = { shiftActive = !shiftActive },
+                                                onToggleAlt = { altActive = !altActive },
+                                                onInsertText = insertText,
+                                                onActionKey = triggerActionKey
+                                            )
+                                        }
+
+                                        if (showBottomPanel) {
+                                            BottomPanel()
+                                        }
+                                    }
+                                }
+                            } else {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .imePadding()
+                                        .navigationBarsPadding()
+                                ) {
+                                    // Main Editor Workstation Area
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f)
+                                    ) {
+                                        EditorView(
+                                            settings = settingsState,
+                                            ctrlActive = ctrlActive,
+                                            shiftActive = shiftActive,
+                                            altActive = altActive,
+                                            onResetModifiers = {
+                                                ctrlActive = false
+                                                shiftActive = false
+                                                altActive = false
+                                            },
+                                            onOpenCommandPalette = { showCommandPalette = true },
+                                            onOpenGeneralMenu = { showProjectMenubar = true },
+                                            onSaveRequested = {},
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+
+                                    // Developer Quick Key Bar
+                                    if (settingsState.isQuickKeyBarEnabled) {
+                                        DeveloperQuickKeyBar(
+                                            density = settingsState.quickKeyBarDensity,
+                                            ctrlActive = ctrlActive,
+                                            shiftActive = shiftActive,
+                                            altActive = altActive,
+                                            onToggleCtrl = { ctrlActive = !ctrlActive },
+                                            onToggleShift = { shiftActive = !shiftActive },
+                                            onToggleAlt = { altActive = !altActive },
+                                            onInsertText = insertText,
+                                            onActionKey = triggerActionKey
+                                        )
+                                    }
+
+                                    // Bottom Panel (Git / Terminal / Database / Problems)
+                                    if (showBottomPanel) {
+                                        BottomPanel()
+                                    }
                                 }
                             }
                         }
-                    }
+                    )
 
                     // Command Palette Modal Dialog
                     if (showCommandPalette) {
@@ -932,7 +1099,7 @@ fun MainShell() {
                                                                 workspaceMgr.openWorkspace(context, File(entity.path), entity.type)
                                                                 savedWorkspacePath = entity.path
                                                                 isWorkspaceOpen = true
-                                                                currentView = "IDE"
+                                                                navigateTo(Screen.Workspace.route)
                                                             } catch (e: Exception) {
                                                                 Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
                                                             }

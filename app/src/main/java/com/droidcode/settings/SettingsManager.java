@@ -2,7 +2,11 @@ package com.droidcode.settings;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import dagger.hilt.android.qualifiers.ApplicationContext;
 
+@Singleton
 public class SettingsManager {
 
     private static final String PREF_NAME = "droidcode_settings";
@@ -18,7 +22,8 @@ public class SettingsManager {
 
     private final AppSettings currentSettings;
 
-    private SettingsManager(Context context) {
+    @Inject
+    public SettingsManager(@ApplicationContext Context context) {
         SharedPreferences prefs = context.getApplicationContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
 
         String themeStr = prefs.getString(KEY_THEME, AppSettings.ThemeMode.DARK.name());

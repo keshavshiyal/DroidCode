@@ -9,8 +9,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class WorkspaceManager private constructor() {
+@Singleton
+class WorkspaceManager @Inject constructor() {
 
     @Volatile
     private var _currentProject: Project? = null

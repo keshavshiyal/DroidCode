@@ -6,21 +6,35 @@ Inspired by VS Code, IntelliJ IDEA, and Android Studio, DroidCode delivers a gen
 
 ---
 
-## Current Status: Phase 1.5 Foundation (v0.1.0-alpha01)
+## Current Status: Phase 1.5.1 Complete → Next: Milestone 1 (M1)
 
-DroidCode has achieved **Phase 1.5 (Stabilization & Professionalization)**. All core subsystems operate with real local persistence, truthful status reporting, zero mock data, and comprehensive test coverage.
+DroidCode has completed **Phase 1.5.1 (Foundation Hardening & Capability Registry)** and is advancing into **Milestone 1 (M1 — Professional IDE Shell)**. All core subsystems operate with real local persistence, truthful status reporting, zero mock data, modern dependency injection (Hilt), type-safe Navigation Compose, and adaptive multi-pane layouts.
 
-### Key Capabilities
+### Capability Registry & Feature Status
 
-- **Real Filesystem & Workspace Engine**: Create, open, edit, rename, duplicate, and delete real files and workspace directories locally or via Android Storage Access Framework (SAF). Inaccessible/moved directories are preserved in a recoverable state with explicit UI indicators.
-- **Multi-Tab Native Editor**: High-performance text buffer management with line numbers, cursor position tracking, modified indicators, undo/redo stacks, and multi-file tab switching.
-- **Developer Quick Key Bar**: Signature mobile editing bar with sticky modifier states (`Ctrl`, `Shift`, `Alt`), fast syntax symbols, and keyboard command shortcuts with configurable density.
-- **Unified Command Architecture & Command Palette**: Instant access (`Ctrl+Shift+P` / `Ctrl+P`) to all application actions, file searches, and editor commands.
-- **Truthful Context Actions**: Real buffer-to-disk Git Diff and honest runtime status banners (no simulated output or fake commit histories).
-- **Comprehensive File Icon System**: Over 40 file extensions mapped across web languages, systems languages, data configs, build files, and media assets.
-- **Media & Asset Viewing**: Native image viewer with error recovery for raster and modern formats, integrated PDF viewer, and external intent launching.
-- **Persisted Settings Subsystem**: Complete theme customization (Dark / Light / System), editor font scaling, word wrap toggles, line number controls, and key bar density controls.
-- **Architectural Abstractions**: Clean domain abstractions for Git, Terminal, Database engines, Language providers, Extensions, and AI services.
+| Feature ID | Subsystem | Capability | Status | Architecture Notes |
+| :--- | :--- | :--- | :---: | :--- |
+| **CORE-001** | Core | Dependency Injection | `AVAILABLE` | Hilt DI with `@Singleton` managers (`AppModule.kt`) |
+| **CORE-002** | Core | Command Architecture | `AVAILABLE` | Unified Command Registry & Event Bus |
+| **CORE-003** | Core | Capability Registry | `AVAILABLE` | Honest programmatic feature discovery (`CapabilityRegistry`) |
+| **NAV-001** | Navigation | Navigation Compose | `AVAILABLE` | Routes: `Home`, `Workspace`, `Settings`, `Git`, `Terminal` |
+| **UI-001** | Shell | Adaptive Multi-Pane | `AVAILABLE` | WindowSizeClass responsive split (`EXPANDED` tablet / `COMPACT` phone) |
+| **UI-002** | Shell | Theme System | `AVAILABLE` | Deep dark & soft light Material 3 theming |
+| **UI-003** | Shell | Developer Quick Key Bar | `AVAILABLE` | Sticky modifiers (`Ctrl`, `Shift`, `Alt`), fast syntax symbols |
+| **UI-004** | Shell | Command Palette | `AVAILABLE` | Fuzzy search & ranking dialog (`Ctrl+Shift+P`) |
+| **WORKSPACE-001** | Workspace | Workspace Management | `AVAILABLE` | Room DB persistence, SAF folder selection, non-destructive reconnect |
+| **FILES-001** | Filesystem | Local File System & SAF | `AVAILABLE` | Real CRUD operations, directory tree recursion, SAF document tree |
+| **FILES-002** | Filesystem | File Icon Classification | `AVAILABLE` | 40+ language, config, and media extensions mapped |
+| **EDITOR-001** | Editor | Multi-Tab Buffer Management | `AVAILABLE` | Tab lifecycle, undo/redo history, dirty indicators, cursor tracking |
+| **EDITOR-002** | Editor | Truthful Actions & Diff | `AVAILABLE` | Real disk-to-buffer Git diff, honest runtime reporting |
+| **MEDIA-001** | Media | Image & Document Viewer | `AVAILABLE` | Resilient raster/modern image decoding, PDF preview |
+| **SETTINGS-001** | Settings | Settings Subsystem | `AVAILABLE` | Preferences persistence for editor, typography, key bar |
+| **GIT-001** | VCS | Git Service Integration | `PARTIAL` | Workspace `.git` inspection, branch detection, buffer diff |
+| **TERMINAL-001** | Runtime | Terminal Subsystem | `PARTIAL` | Terminal panel shell with real execution diagnostics |
+| **DB-001** | Database | Database Explorer | `PLANNED` | Provider interfaces & connection manager |
+| **AI-001** | AI | AI Assistant Services | `PLANNED` | Provider abstraction for future localized & remote models |
+| **CI-001** | CI/CD | GitHub Actions Workflow | `AVAILABLE` | Android Lint, Detekt static analysis, unit test suite, APK assembly |
+| **TEST-001** | Quality | Automated Test Suite | `AVAILABLE` | Unit tests, Robolectric tests, Compose UI tests & benchmarks |
 
 ---
 

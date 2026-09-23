@@ -42,6 +42,22 @@ jobs:
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      - name: Run Android Lint (Static Analysis)
+        run: |
+          echo "Running Android Lint with warnings as errors..."
+          if [ -s ./gradlew ]; then
+            ./gradlew lintDebug -Dlint.htmlReport=true -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace
+          else
+            gradle lintDebug -Dlint.htmlReport=true -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace
+          fi
+
+      - name: Run Detekt Static Analysis
+        run: |
+          echo "Running Detekt static analysis..."
+          curl -sSLO https://github.com/detekt/detekt/releases/download/v1.23.6/detekt-cli-1.23.6.zip
+          unzip -q detekt-cli-1.23.6.zip
+          ./detekt-cli-1.23.6/bin/detekt-cli --config detekt.yml --input app/src/main/java --build-upon-default-config --fail-fast
+
       - name: Run Unit Tests
         run: |
           if [ -s ./gradlew ]; then

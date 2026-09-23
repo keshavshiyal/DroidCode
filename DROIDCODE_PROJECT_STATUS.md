@@ -57,29 +57,31 @@ Status Legend:
 
 ---
 
-## Feature Registry
+## Feature Registry (Aligned with Capability Registry)
 
 | Feature ID | Category | Feature Name | Description | Status | Notes |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **CORE-001** | Core | Modular Architecture | Clean separation of core, editor, workspace, filesystem, command, settings | 🟩 Complete | Hybrid Java core models + Kotlin/Compose UI |
-| **CORE-002** | Core | Event Bus & Command System | Centralized command registry & keyboard shortcuts | 🟩 Complete | Unified command execution model |
-| **UI-001** | UI | Professional Shell | Top Bar, Workspace tabs, Editor pane, Drawer/Panels, Status bar | 🟩 Complete | Responsive M3 IDE Shell |
-| **UI-002** | UI | Theme System | Deep neutral dark & intentional soft light themes | 🟩 Complete | Persisted theme engine |
-| **UI-003** | UI | Quick Key Bar | Mobile Developer Quick Key Bar with modifier key support & symbol picker | 🟩 Complete | Connected to command system |
-| **UI-004** | UI | Command Palette | Quick open & command search dialog | 🟩 Complete | Filterable real command palette |
-| **WORKSPACE-001** | Workspace | Workspace Manager | Real directory management, recent project persistence, non-destructive stale handling | 🟩 Complete | Room DB + Local storage |
-| **FILES-001** | Filesystem | Real File Explorer | Directory tree, create file/folder, rename, delete, refresh | 🟩 Complete | Operating on real filesystem |
-| **FILES-002** | Filesystem | File Icon Classification | 40+ language, config, and media extensions mapped | 🟩 Complete | Tested via FileIconUtilsTest |
-| **EDITOR-001** | Editor | Real Editor Foundation | Multi-tab editing, line numbers, cursor position, save, undo/redo | 🟩 Complete | Real file buffer reader/writer |
-| **EDITOR-002** | Editor | Context Actions & Diff | Truthful context actions, real buffer vs disk diff | 🟩 Complete | Zero mock output |
-| **MEDIA-001** | Media | Image & Document Viewer | Bitmap rendering with error recovery, PDF preview, external app intents | 🟩 Complete | Graceful decode handling |
-| **SETTINGS-001** | Settings | Settings Subsystem | Theme, font size, word wrap, key bar density, persisted configuration | 🟩 Complete | SharedPreferences + Room backed |
-| **GIT-001** | Git | Git Service Architecture | Real Git status detection (.git inspection, branch identification) | 🟩 Complete | Honest state ("Not a Git repository" / real branch) |
-| **TERMINAL-001** | Terminal | Terminal Architecture | Terminal subsystem foundation with real runtime status | 🟩 Complete | Honest state ("Terminal runtime not configured") |
-| **DB-001** | Database | Database Architecture | Provider interfaces & Connection manager | 🟩 Complete | Foundation ready |
-| **AI-001** | AI | AI Service Architecture | Provider abstraction for future AI services | 🟩 Complete | Isolated provider layer without external dependencies |
-| **CI-001** | CI/CD | GitHub Actions Workflow | Automated build, test, lint, artifact upload | 🟩 Complete | `.github/workflows/build.yml` |
-| **TEST-001** | Quality | Automated Unit Test Suite | 33+ comprehensive unit tests covering all core subsystems | 🟩 Complete | 100% green local JVM / Robolectric tests |
+| **CORE-001** | Core | Dependency Injection & Modular Architecture | Clean separation of core, editor, workspace, filesystem, command, settings | `AVAILABLE` | Hilt DI with `@Singleton` managers |
+| **CORE-002** | Core | Event Bus & Command System | Centralized command registry & keyboard shortcuts | `AVAILABLE` | Unified command execution model |
+| **CORE-003** | Core | Capability Registry | Descriptive subsystem documenting genuine platform support levels | `AVAILABLE` | `com.droidcode.core.capability` |
+| **NAV-001** | Navigation | Navigation Compose | Type-safe navigation across Home, Workspace, Settings, Git, and Terminal | `AVAILABLE` | BackHandler and Esc key navigation |
+| **UI-001** | UI | Professional Shell & Multi-Pane | Adaptive layout (multi-pane on tablet/expanded, single-pane on phone) | `AVAILABLE` | WindowSizeClass responsive layout |
+| **UI-002** | UI | Theme System | Deep neutral dark & intentional soft light themes | `AVAILABLE` | Persisted theme engine |
+| **UI-003** | UI | Quick Key Bar | Mobile Developer Quick Key Bar with modifier key support & symbol picker | `AVAILABLE` | Connected to command system |
+| **UI-004** | UI | Command Palette | Quick open & command search dialog with ranking | `AVAILABLE` | Filterable real command palette (`Ctrl+Shift+P`) |
+| **WORKSPACE-001** | Workspace | Workspace Manager | Real directory management, recent project persistence, non-destructive stale handling | `AVAILABLE` | Room DB + Local storage |
+| **FILES-001** | Filesystem | Real File Explorer | Directory tree, create file/folder, rename, delete, refresh | `AVAILABLE` | Operating on real filesystem |
+| **FILES-002** | Filesystem | File Icon Classification | 40+ language, config, and media extensions mapped | `AVAILABLE` | Tested via FileIconUtilsTest |
+| **EDITOR-001** | Editor | Real Editor Foundation | Multi-tab editing, line numbers, cursor position, save, undo/redo | `AVAILABLE` | Real file buffer reader/writer |
+| **EDITOR-002** | Editor | Context Actions & Diff | Truthful context actions, real buffer vs disk diff | `AVAILABLE` | Zero mock output |
+| **MEDIA-001** | Media | Image & Document Viewer | Bitmap rendering with error recovery, PDF preview, external app intents | `AVAILABLE` | Graceful decode handling |
+| **SETTINGS-001** | Settings | Settings Subsystem | Theme, font size, word wrap, key bar density, persisted configuration | `AVAILABLE` | SharedPreferences + Room backed |
+| **GIT-001** | Git | Git Service Architecture | Real Git status detection (.git inspection, branch identification) | `PARTIAL` | Honest state (.git inspection active, commits/push planned) |
+| **TERMINAL-001** | Terminal | Terminal Architecture | Terminal subsystem foundation with real runtime status | `PARTIAL` | Console panel active, real PTY planned |
+| **DB-001** | Database | Database Architecture | Provider interfaces & Connection manager | `PLANNED` | Provider contracts defined |
+| **AI-001** | AI | AI Service Architecture | Provider abstraction for future AI services | `PLANNED` | Isolated provider layer without external dependencies |
+| **CI-001** | CI/CD | GitHub Actions Workflow | Automated build, test, lint, artifact upload | `AVAILABLE` | `.github/workflows/build.yml` with Lint & Detekt |
+| **TEST-001** | Quality | Automated Test Suite | Unit tests, Robolectric tests, Compose UI tests, Macrobenchmarks | `AVAILABLE` | Android JUnit4 & Macrobenchmark rules |
 
 ---
 
