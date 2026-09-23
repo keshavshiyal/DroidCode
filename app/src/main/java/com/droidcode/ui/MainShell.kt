@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -322,6 +323,7 @@ fun MainShell() {
             }
         ) {
             Scaffold(
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
                     // Top App Bar Container with statusBarsPadding to keep title below Android notification bar
                     Box(
@@ -687,33 +689,37 @@ fun MainShell() {
                 ) {
                     when (currentView) {
                         "HOME" -> {
-                            HomeView(
-                                onOpenWorkspace = { path, type ->
-                                    coroutineScope.launch {
-                                        try {
-                                            workspaceMgr.openWorkspace(context, File(path), type)
-                                            isWorkspaceOpen = true
-                                            currentView = "IDE"
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("MainShell", "Failed to open workspace", e)
+                            Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+                                HomeView(
+                                    onOpenWorkspace = { path, type ->
+                                        coroutineScope.launch {
+                                            try {
+                                                workspaceMgr.openWorkspace(context, File(path), type)
+                                                isWorkspaceOpen = true
+                                                currentView = "IDE"
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("MainShell", "Failed to open workspace", e)
+                                            }
                                         }
-                                    }
-                                },
-                                onOpenSettings = { currentView = "SETTINGS" },
-                                onOpenGeneralMenu = { showProjectMenubar = true }
-                            )
+                                    },
+                                    onOpenSettings = { currentView = "SETTINGS" },
+                                    onOpenGeneralMenu = { showProjectMenubar = true }
+                                )
+                            }
                         }
 
                         "SETTINGS" -> {
-                            SettingsView(
-                                onBack = {
-                                    if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
-                                },
-                                onSettingsChanged = {
-                                    settingsState = settingsMgr.getSettingsCopy()
-                                },
-                                onOpenGeneralMenu = { showProjectMenubar = true }
-                            )
+                            Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+                                SettingsView(
+                                    onBack = {
+                                        if (isWorkspaceOpen) currentView = "IDE" else currentView = "HOME"
+                                    },
+                                    onSettingsChanged = {
+                                        settingsState = settingsMgr.getSettingsCopy()
+                                    },
+                                    onOpenGeneralMenu = { showProjectMenubar = true }
+                                )
+                            }
                         }
 
                         "IDE" -> {

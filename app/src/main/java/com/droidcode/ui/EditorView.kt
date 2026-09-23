@@ -11,6 +11,7 @@ import android.webkit.MimeTypeMap
 import android.widget.MediaController
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -72,7 +73,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -658,8 +664,18 @@ private fun CodeCanvas(
         }
     }
 
-    val lines = textFieldValue.text.split("\n")
-    val lineCount = lines.size
+    val lineStarts = remember(textFieldValue.text) {
+        val starts = ArrayList<Int>()
+        starts.add(0)
+        val text = textFieldValue.text
+        for (i in 0 until text.length) {
+            if (text[i] == '\n') {
+                starts.add(i + 1)
+            }
+        }
+        starts.toIntArray()
+    }
+    val lineCount = lineStarts.size
     val verticalScroll = rememberScrollState()
     val horizontalScroll = rememberScrollState()
     val isDark = isSystemInDarkTheme()
@@ -816,78 +832,105 @@ private fun CodeCanvas(
             if (settings.isLineNumbersEnabled) {
                 val density = LocalDensity.current
                 val layout = textLayoutResult
+                val primaryColor = MaterialTheme.colorScheme.primary
+                val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+                val primaryContainerColor = MaterialTheme.colorScheme.primaryContainer
 
-                Column(
+                val textPaint = remember(activeFontFamily, settings.fontSizeSp, density) {
+                    android.graphics.Paint().apply {
+                        isAntiAlias = true
+                        textSize = with(density) { settings.fontSizeSp.sp.toPx() }
+                        textAlign = android.graphics.Paint.Align.RIGHT
+                    }
+                }
+
+                Canvas(
                     modifier = Modifier
                         .fillMaxHeight()
                         .width(46.dp)
                         .background(MaterialTheme.colorScheme.surface)
-                        .verticalScroll(verticalScroll)
-                        .padding(vertical = 8.dp, horizontal = 2.dp),
-                    horizontalAlignment = Alignment.End
+                        .padding(horizontal = 4.dp)
                 ) {
+                    val canvasWidth = size.width
+                    val canvasHeight = size.height
+                    val scrollY = verticalScroll.value.toFloat()
+                    val topPaddingPx = with(density) { 8.dp.toPx() }
+
                     if (layout != null && layout.lineCount > 0) {
+                        val visualLineCount = layout.lineCount
+                        val firstVisual = layout.getLineForVerticalPosition(scrollY).coerceIn(0, visualLineCount - 1)
+                        val lastVisual = layout.getLineForVerticalPosition(scrollY + canvasHeight).coerceIn(firstVisual, visualLineCount - 1)
+
                         val fullText = textFieldValue.text
-                        var charOffset = 0
-                        for (i in 0 until lines.size) {
-                            val lineStr = lines[i]
-                            val startOffset = charOffset.coerceAtMost(fullText.length)
-                            val endOffset = (charOffset + lineStr.length).coerceAtMost(fullText.length)
+                        for (vLine in firstVisual..lastVisual) {
+                            val startOffset = layout.getLineStart(vLine)
+                            val isLogicalLineStart = (vLine == 0 || (startOffset > 0 && startOffset <= fullText.length && fullText[startOffset - 1] == '\n'))
 
-                            val startVisualLine = layout.getLineForOffset(startOffset)
-                            val endVisualLine = layout.getLineForOffset(endOffset)
+                            if (isLogicalLineStart) {
+                                val lineIndex = lineStarts.binarySearch(startOffset).let { if (it < 0) -it - 2 else it }.coerceAtLeast(0)
+                                val lineNumber = lineIndex + 1
+                                val isActiveLine = (lineNumber == tab.line)
 
-                            val topPx = layout.getLineTop(startVisualLine)
-                            val bottomPx = layout.getLineBottom(endVisualLine)
-                            val lineDp = with(density) { (bottomPx - topPx).toDp() }
+                                val lineTop = layout.getLineTop(vLine) - scrollY + topPaddingPx
+                                val lineBottom = layout.getLineBottom(vLine) - scrollY + topPaddingPx
+                                val lineHeight = (lineBottom - lineTop).coerceAtLeast(1f)
 
-                            val lineNumber = i + 1
-                            val isActiveLine = (lineNumber == tab.line)
-                            val bgColor = if (isActiveLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent
-                            val textColor = if (isActiveLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                if (isActiveLine) {
+                                    drawRoundRect(
+                                        color = primaryContainerColor.copy(alpha = 0.6f),
+                                        topLeft = Offset(0f, lineTop),
+                                        size = Size(canvasWidth, lineHeight),
+                                        cornerRadius = CornerRadius(6f, 6f)
+                                    )
+                                    textPaint.color = primaryColor.toArgb()
+                                    textPaint.isFakeBoldText = true
+                                } else {
+                                    textPaint.color = onSurfaceVariantColor.copy(alpha = 0.5f).toArgb()
+                                    textPaint.isFakeBoldText = false
+                                }
 
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(if (lineDp > 0.dp) lineDp else (settings.fontSizeSp * 1.4).dp)
-                                    .background(bgColor, RoundedCornerShape(3.dp))
-                                    .padding(horizontal = 4.dp),
-                                contentAlignment = Alignment.TopEnd
-                            ) {
-                                Text(
-                                    text = lineNumber.toString(),
-                                    fontSize = settings.fontSizeSp.sp,
-                                    fontFamily = activeFontFamily,
-                                    fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
-                                    color = textColor,
-                                    lineHeight = (settings.fontSizeSp * 1.4).sp
+                                val fontMetrics = textPaint.fontMetrics
+                                val baseline = lineTop + (lineHeight - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    lineNumber.toString(),
+                                    canvasWidth - 4f,
+                                    baseline,
+                                    textPaint
                                 )
                             }
-
-                            charOffset += lineStr.length + 1
                         }
                     } else {
-                        for (i in 1..lineCount) {
-                            val isActiveLine = (i == tab.line)
-                            val bgColor = if (isActiveLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent
-                            val textColor = if (isActiveLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        val lineHeightPx = with(density) { (settings.fontSizeSp * 1.4).sp.toPx() }
+                        val firstLine = ((scrollY - topPaddingPx) / lineHeightPx).toInt().coerceAtLeast(0)
+                        val lastLine = (((scrollY + canvasHeight) - topPaddingPx) / lineHeightPx).toInt().coerceAtMost(lineCount - 1)
 
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(bgColor, RoundedCornerShape(3.dp))
-                                    .padding(horizontal = 4.dp),
-                                contentAlignment = Alignment.CenterEnd
-                            ) {
-                                Text(
-                                    text = i.toString(),
-                                    fontSize = settings.fontSizeSp.sp,
-                                    fontFamily = activeFontFamily,
-                                    fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
-                                    color = textColor,
-                                    lineHeight = (settings.fontSizeSp * 1.4).sp
+                        for (i in firstLine..lastLine) {
+                            val lineNumber = i + 1
+                            val isActiveLine = (lineNumber == tab.line)
+                            val lineTop = i * lineHeightPx - scrollY + topPaddingPx
+
+                            if (isActiveLine) {
+                                drawRoundRect(
+                                    color = primaryContainerColor.copy(alpha = 0.6f),
+                                    topLeft = Offset(0f, lineTop),
+                                    size = Size(canvasWidth, lineHeightPx),
+                                    cornerRadius = CornerRadius(6f, 6f)
                                 )
+                                textPaint.color = primaryColor.toArgb()
+                                textPaint.isFakeBoldText = true
+                            } else {
+                                textPaint.color = onSurfaceVariantColor.copy(alpha = 0.5f).toArgb()
+                                textPaint.isFakeBoldText = false
                             }
+
+                            val fontMetrics = textPaint.fontMetrics
+                            val baseline = lineTop + (lineHeightPx - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent
+                            drawContext.canvas.nativeCanvas.drawText(
+                                lineNumber.toString(),
+                                canvasWidth - 4f,
+                                baseline,
+                                textPaint
+                            )
                         }
                     }
                 }
@@ -1502,11 +1545,35 @@ class CodeSyntaxVisualTransformation(
     private val isDarkTheme: Boolean
 ) : VisualTransformation {
 
+    companion object {
+        private val wordRegex = Regex("\\b[A-Za-z_][A-Za-z0-9_]*\\b")
+        private val stringRegex = Regex("\"[^\"]*\"|'[^']*'|`[^`]*`")
+        private val numberRegex = Regex("\\b\\d+(\\.\\d+)?\\b")
+        private val commentRegex = Regex("//.*|/\\*[\\s\\S]*?\\*/|#.*")
+    }
+
+    private var cachedInputText: String? = null
+    private var cachedTransformedText: TransformedText? = null
+
     override fun filter(text: AnnotatedString): TransformedText {
+        if (text.text == cachedInputText && cachedTransformedText != null) {
+            return cachedTransformedText!!
+        }
+
+        val code = text.text
+        if (code.isEmpty()) {
+            val empty = TransformedText(text, OffsetMapping.Identity)
+            cachedInputText = code
+            cachedTransformedText = empty
+            return empty
+        }
+
+        // Limit highlighting for large codebases to avoid locking frame budget
+        val shouldHighlight = code.length <= 40000
+
         val highlighted = buildAnnotatedString {
-            append(text.text)
-            val code = text.text
-            if (code.isEmpty()) return@buildAnnotatedString
+            append(code)
+            if (!shouldHighlight) return@buildAnnotatedString
 
             val keywordColor = if (isDarkTheme) Color(0xFFCF92D7) else Color(0xFF8E24AA)
             val stringColor = if (isDarkTheme) Color(0xFF81C784) else Color(0xFF2E7D32)
@@ -1515,11 +1582,6 @@ class CodeSyntaxVisualTransformation(
             val typeColor = if (isDarkTheme) Color(0xFF64B5F6) else Color(0xFF1565C0)
 
             val keywords = SyntaxHighlighter.getKeywordsForLanguage(languageId)
-
-            val wordRegex = Regex("\\b[A-Za-z_][A-Za-z0-9_]*\\b")
-            val stringRegex = Regex("\"[^\"]*\"|'[^']*'|`[^`]*`")
-            val numberRegex = Regex("\\b\\d+(\\.\\d+)?\\b")
-            val commentRegex = Regex("//.*|/\\*[\\s\\S]*?\\*/|#.*")
 
             for (match in commentRegex.findAll(code)) {
                 addStyle(SpanStyle(color = commentColor, fontWeight = FontWeight.Normal), match.range.first, match.range.last + 1)
@@ -1542,6 +1604,9 @@ class CodeSyntaxVisualTransformation(
                 }
             }
         }
-        return TransformedText(highlighted, OffsetMapping.Identity)
+        val result = TransformedText(highlighted, OffsetMapping.Identity)
+        cachedInputText = code
+        cachedTransformedText = result
+        return result
     }
 }
