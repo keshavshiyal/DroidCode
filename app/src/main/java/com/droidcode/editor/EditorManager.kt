@@ -88,6 +88,10 @@ class EditorManager @Inject constructor() {
         }
     }
 
+    fun hasUnsavedChanges(): Boolean = tabs.any { it.isModified }
+
+    fun getUnsavedTabs(): List<EditorTab> = tabs.filter { it.isModified }
+
     fun canUndoActiveTab(): Boolean {
         val tab = activeTab ?: return false
         val undoMgr = undoManagers[tab.filePath] ?: return false

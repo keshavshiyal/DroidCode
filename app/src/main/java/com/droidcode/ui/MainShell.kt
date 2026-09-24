@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -54,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -69,6 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.droidcode.R
 import com.droidcode.core.Command
 import com.droidcode.core.CommandRegistry
@@ -117,6 +121,9 @@ fun MainShell(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
+    val isHomeScreen = currentRoute == Screen.Home.route
+
+    val focusManager = LocalFocusManager.current
 
     val settingsMgr = remember { SettingsManager.getInstance(context) }
     var settingsState by remember { mutableStateOf(settingsMgr.settings) }
@@ -129,11 +136,35 @@ fun MainShell(
     var isWorkspaceOpen by rememberSaveable { mutableStateOf(workspaceMgr.hasOpenWorkspace()) }
     var savedWorkspacePath by rememberSaveable { mutableStateOf(workspaceMgr.currentProject?.path ?: "") }
 
+    var showUnsavedCloseDialog by remember { mutableStateOf(false) }
+    var pendingCloseAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showSameWorkspaceDialog by remember { mutableStateOf(false) }
+    var sameWorkspaceName by remember { mutableStateOf("") }
+
     fun navigateTo(route: String) {
         if (currentRoute != route) {
             navController.navigate(route) {
                 launchSingleTop = true
             }
+        }
+    }
+
+    fun requestCloseOrSwitchWorkspace(onConfirmed: () -> Unit) {
+        if (editorMgr.hasUnsavedChanges()) {
+            pendingCloseAction = onConfirmed
+            showUnsavedCloseDialog = true
+        } else {
+            onConfirmed()
+        }
+    }
+
+    fun closeCurrentWorkspace() {
+        requestCloseOrSwitchWorkspace {
+            workspaceMgr.closeWorkspace()
+            editorMgr.closeAllTabs()
+            isWorkspaceOpen = false
+            savedWorkspacePath = ""
+            navigateTo(Screen.Home.route)
         }
     }
 
@@ -158,6 +189,12 @@ fun MainShell(
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(drawerState.isOpen, drawerState.isAnimationRunning, drawerState.targetValue, drawerState.currentValue) {
+        if (drawerState.isOpen || drawerState.isAnimationRunning || drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open) {
+            focusManager.clearFocus(force = true)
+        }
+    }
 
     var showBottomPanel by remember { mutableStateOf(true) }
     var showCommandPalette by remember { mutableStateOf(false) }
@@ -215,11 +252,10 @@ fun MainShell(
             navigateTo(Screen.Home.route)
         })
         commandRegistry.registerCommand(Command("workspace.close", "Close Workspace", "Workspace", null) {
-            workspaceMgr.closeWorkspace()
-            editorMgr.closeAllTabs()
-            isWorkspaceOpen = false
-            savedWorkspacePath = ""
-            navigateTo(Screen.Home.route)
+            closeCurrentWorkspace()
+        })
+        commandRegistry.registerCommand(Command("workspace.recent", "Recent Workspaces", "Workspace", null) {
+            showRecentWorkspacesDialog = true
         })
         commandRegistry.registerCommand(Command("settings.open", "Open Settings", "Preferences", "Ctrl+,") {
             navigateTo(Screen.Settings.route)
@@ -367,6 +403,11 @@ fun MainShell(
                 showCommandPalette = false
             } else if (showProjectMenubar) {
                 showProjectMenubar = false
+            } else if (showUnsavedCloseDialog) {
+                showUnsavedCloseDialog = false
+                pendingCloseAction = null
+            } else if (showSameWorkspaceDialog) {
+                showSameWorkspaceDialog = false
             } else if (showRecentWorkspacesDialog) {
                 showRecentWorkspacesDialog = false
             } else if (showAboutDialog) {
@@ -387,25 +428,33 @@ fun MainShell(
             gesturesEnabled = !isExpanded && currentRoute == Screen.Workspace.route && isWorkspaceOpen,
             drawerContent = {
                 if (isWorkspaceOpen) {
-                    ModalDrawerSheet(
-                        drawerContainerColor = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier
-                            .width(300.dp)
-                            .fillMaxHeight()
-                            .statusBarsPadding()
-                            .navigationBarsPadding()
-                    ) {
-                        ExplorerPanel(
-                            onOpenFile = { file: File ->
-                                try {
-                                    editorMgr.openFile(file)
-                                } catch (e: Exception) {
-                                    android.util.Log.e("MainShell", "Failed to open file: ${file.absolutePath}", e)
-                                }
-                                coroutineScope.launch { drawerState.close() }
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                    val activePath = workspaceMgr.currentProject?.path ?: savedWorkspacePath
+                    key(activePath) {
+                        ModalDrawerSheet(
+                            drawerContainerColor = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .zIndex(100f)
+                                .width(300.dp)
+                                .fillMaxHeight()
+                                .statusBarsPadding()
+                                .navigationBarsPadding()
+                        ) {
+                            ExplorerPanel(
+                                onOpenFile = { file: File ->
+                                    try {
+                                        editorMgr.openFile(file)
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("MainShell", "Failed to open file: ${file.absolutePath}", e)
+                                    }
+                                    coroutineScope.launch { drawerState.close() }
+                                },
+                                onCloseProject = {
+                                    coroutineScope.launch { drawerState.close() }
+                                    closeCurrentWorkspace()
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
             }
@@ -421,6 +470,13 @@ fun MainShell(
                                 true
                             } else if (showProjectMenubar) {
                                 showProjectMenubar = false
+                                true
+                            } else if (showUnsavedCloseDialog) {
+                                showUnsavedCloseDialog = false
+                                pendingCloseAction = null
+                                true
+                            } else if (showSameWorkspaceDialog) {
+                                showSameWorkspaceDialog = false
                                 true
                             } else if (drawerState.isOpen) {
                                 coroutineScope.launch { drawerState.close() }
@@ -541,24 +597,6 @@ fun MainShell(
 
                                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                                            // Switch Workspace
-                                            DropdownMenuItem(
-                                                text = { Text("Switch Workspace", fontSize = 13.sp) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.SwapHoriz,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showWorkspaceDropdown = false
-                                                    isWorkspaceOpen = false
-                                                    savedWorkspacePath = ""
-                                                    navigateTo(Screen.Home.route)
-                                                }
-                                            )
-
                                             // Recent Workspaces
                                             DropdownMenuItem(
                                                 text = { Text("Recent Workspaces", fontSize = 13.sp) },
@@ -596,11 +634,7 @@ fun MainShell(
                                                 },
                                                 onClick = {
                                                     showWorkspaceDropdown = false
-                                                    workspaceMgr.closeWorkspace()
-                                                    editorMgr.closeAllTabs()
-                                                    isWorkspaceOpen = false
-                                                    savedWorkspacePath = ""
-                                                    navigateTo(Screen.Home.route)
+                                                    closeCurrentWorkspace()
                                                 }
                                             )
                                         }
@@ -612,25 +646,31 @@ fun MainShell(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Search & Commands toggle
-                                IconButton(
-                                    onClick = { showCommandPalette = true },
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .testTag("top_bar_search_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = "Search & Commands",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                if (!isHomeScreen) {
+                                    // Search & Commands toggle
+                                    IconButton(
+                                        onClick = {
+                                            focusManager.clearFocus(force = true)
+                                            showCommandPalette = true
+                                        },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .testTag("top_bar_search_btn")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = "Search & Commands",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
 
-                                if (isWorkspaceOpen) {
+                                if (isWorkspaceOpen && !isHomeScreen) {
                                     // Project Explorer toggle
                                     IconButton(
                                         onClick = {
+                                            focusManager.clearFocus(force = true)
                                             coroutineScope.launch {
                                                 if (drawerState.isClosed) drawerState.open() else drawerState.close()
                                             }
@@ -663,131 +703,132 @@ fun MainShell(
                                     }
                                 }
 
-                                // 8dp horizontal breathing room between primary toggles and overflow menu
-                                Spacer(modifier = Modifier.width(8.dp))
+                                if (!isHomeScreen) {
+                                    // 8dp horizontal breathing room between primary toggles and overflow menu
+                                    Spacer(modifier = Modifier.width(8.dp))
 
-                                // Three-Dot Overflow Menu
-                                Box {
-                                    IconButton(
-                                        onClick = { showTopOverflowMenu = true },
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .testTag("top_bar_overflow_btn")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.MoreVert,
-                                            contentDescription = "More Options",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = showTopOverflowMenu,
-                                        onDismissRequest = { showTopOverflowMenu = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Settings", fontSize = 13.sp) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Default.Settings,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            },
+                                    // Three-Dot Overflow Menu
+                                    Box {
+                                        IconButton(
                                             onClick = {
-                                                showTopOverflowMenu = false
-                                                navigateTo(Screen.Settings.route)
-                                            }
-                                        )
-
-                                        DropdownMenuItem(
-                                            text = { Text("Command Palette", fontSize = 13.sp) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Default.Search,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
+                                                focusManager.clearFocus(force = true)
+                                                showTopOverflowMenu = true
                                             },
-                                            onClick = {
-                                                showTopOverflowMenu = false
-                                                showCommandPalette = true
-                                            }
-                                        )
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .testTag("top_bar_overflow_btn")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MoreVert,
+                                                contentDescription = "More Options",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
 
-                                        DropdownMenuItem(
-                                            text = { Text("Project Menubar", fontSize = 13.sp) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Default.Menu,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            },
-                                            onClick = {
-                                                showTopOverflowMenu = false
-                                                showProjectMenubar = true
-                                            }
-                                        )
-
-                                        DropdownMenuItem(
-                                            text = { Text("Keyboard Shortcuts", fontSize = 13.sp) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Default.Keyboard,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            },
-                                            onClick = {
-                                                showTopOverflowMenu = false
-                                                showShortcutsDialog = true
-                                            }
-                                        )
-
-                                        DropdownMenuItem(
-                                            text = { Text("About DroidCode", fontSize = 13.sp) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Default.Info,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            },
-                                            onClick = {
-                                                showTopOverflowMenu = false
-                                                showAboutDialog = true
-                                            }
-                                        )
-
-                                        if (isWorkspaceOpen) {
-                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                        DropdownMenu(
+                                            expanded = showTopOverflowMenu,
+                                            onDismissRequest = { showTopOverflowMenu = false }
+                                        ) {
                                             DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        text = "Close Workspace",
-                                                        fontSize = 13.sp,
-                                                        color = MaterialTheme.colorScheme.error
-                                                    )
-                                                },
+                                                text = { Text("Settings", fontSize = 13.sp) },
                                                 leadingIcon = {
                                                     Icon(
-                                                        imageVector = Icons.Default.Close,
+                                                        imageVector = Icons.Default.Settings,
                                                         contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.error,
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                 },
                                                 onClick = {
                                                     showTopOverflowMenu = false
-                                                    workspaceMgr.closeWorkspace()
-                                                    editorMgr.closeAllTabs()
-                                                    isWorkspaceOpen = false
-                                                    savedWorkspacePath = ""
-                                                    navigateTo(Screen.Home.route)
+                                                    navigateTo(Screen.Settings.route)
                                                 }
                                             )
+
+                                            DropdownMenuItem(
+                                                text = { Text("Command Palette", fontSize = 13.sp) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Search,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showTopOverflowMenu = false
+                                                    showCommandPalette = true
+                                                }
+                                            )
+
+                                            DropdownMenuItem(
+                                                text = { Text("Project Menubar", fontSize = 13.sp) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Menu,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showTopOverflowMenu = false
+                                                    showProjectMenubar = true
+                                                }
+                                            )
+
+                                            DropdownMenuItem(
+                                                text = { Text("Keyboard Shortcuts", fontSize = 13.sp) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Keyboard,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showTopOverflowMenu = false
+                                                    showShortcutsDialog = true
+                                                }
+                                            )
+
+                                            DropdownMenuItem(
+                                                text = { Text("About DroidCode", fontSize = 13.sp) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Info,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showTopOverflowMenu = false
+                                                    showAboutDialog = true
+                                                }
+                                            )
+
+                                            if (isWorkspaceOpen) {
+                                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Text(
+                                                            text = "Close Workspace",
+                                                            fontSize = 13.sp,
+                                                            color = MaterialTheme.colorScheme.error
+                                                        )
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Close,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.error,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showTopOverflowMenu = false
+                                                        closeCurrentWorkspace()
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -809,14 +850,23 @@ fun MainShell(
                             Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
                                 HomeView(
                                     onOpenWorkspace = { path, type ->
-                                        coroutineScope.launch {
-                                            try {
-                                                workspaceMgr.openWorkspace(context, File(path), type)
-                                                savedWorkspacePath = path
-                                                isWorkspaceOpen = true
-                                                navigateTo(Screen.Workspace.route)
-                                            } catch (e: Exception) {
-                                                android.util.Log.e("MainShell", "Failed to open workspace", e)
+                                        if (workspaceMgr.hasOpenWorkspace() && workspaceMgr.currentProject?.path == path) {
+                                            sameWorkspaceName = workspaceMgr.currentProject?.name ?: "Current Workspace"
+                                            showSameWorkspaceDialog = true
+                                        } else {
+                                            requestCloseOrSwitchWorkspace {
+                                                coroutineScope.launch {
+                                                    try {
+                                                        workspaceMgr.closeWorkspace()
+                                                        editorMgr.closeAllTabs()
+                                                        workspaceMgr.openWorkspace(context, File(path), type)
+                                                        savedWorkspacePath = path
+                                                        isWorkspaceOpen = true
+                                                        navigateTo(Screen.Workspace.route)
+                                                    } catch (e: Exception) {
+                                                        android.util.Log.e("MainShell", "Failed to open workspace", e)
+                                                    }
+                                                }
                                             }
                                         }
                                     },
@@ -852,22 +902,29 @@ fun MainShell(
                                         .navigationBarsPadding()
                                 ) {
                                     // Multi-Pane Left Pane: Explorer Panel on Tablet / Expanded Screen
-                                    Box(
-                                        modifier = Modifier
-                                            .width(280.dp)
-                                            .fillMaxHeight()
-                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                    ) {
-                                        ExplorerPanel(
-                                            onOpenFile = { file ->
-                                                try {
-                                                    editorMgr.openFile(file)
-                                                } catch (e: Exception) {
-                                                    android.util.Log.e("MainShell", "Failed to open file: ${file.absolutePath}", e)
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxSize()
-                                        )
+                                    val activePath = workspaceMgr.currentProject?.path ?: savedWorkspacePath
+                                    key(activePath) {
+                                        Box(
+                                            modifier = Modifier
+                                                .zIndex(10f)
+                                                .width(280.dp)
+                                                .fillMaxHeight()
+                                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                        ) {
+                                            ExplorerPanel(
+                                                onOpenFile = { file ->
+                                                    try {
+                                                        editorMgr.openFile(file)
+                                                    } catch (e: Exception) {
+                                                        android.util.Log.e("MainShell", "Failed to open file: ${file.absolutePath}", e)
+                                                    }
+                                                },
+                                                onCloseProject = {
+                                                    closeCurrentWorkspace()
+                                                },
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
                                     }
 
                                     VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1093,15 +1150,25 @@ fun MainShell(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable {
-                                                        showRecentWorkspacesDialog = false
-                                                        coroutineScope.launch {
-                                                            try {
-                                                                workspaceMgr.openWorkspace(context, File(entity.path), entity.type)
-                                                                savedWorkspacePath = entity.path
-                                                                isWorkspaceOpen = true
-                                                                navigateTo(Screen.Workspace.route)
-                                                            } catch (e: Exception) {
-                                                                Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                        if (workspaceMgr.hasOpenWorkspace() && workspaceMgr.currentProject?.path == entity.path) {
+                                                            showRecentWorkspacesDialog = false
+                                                            sameWorkspaceName = entity.name
+                                                            showSameWorkspaceDialog = true
+                                                        } else {
+                                                            showRecentWorkspacesDialog = false
+                                                            requestCloseOrSwitchWorkspace {
+                                                                coroutineScope.launch {
+                                                                    try {
+                                                                        workspaceMgr.closeWorkspace()
+                                                                        editorMgr.closeAllTabs()
+                                                                        workspaceMgr.openWorkspace(context, File(entity.path), entity.type)
+                                                                        savedWorkspacePath = entity.path
+                                                                        isWorkspaceOpen = true
+                                                                        navigateTo(Screen.Workspace.route)
+                                                                    } catch (e: Exception) {
+                                                                        Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1128,6 +1195,76 @@ fun MainShell(
                             confirmButton = {
                                 TextButton(onClick = { showRecentWorkspacesDialog = false }) {
                                     Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+
+                    // Same Workspace Dialog
+                    if (showSameWorkspaceDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showSameWorkspaceDialog = false },
+                            title = { Text("Workspace Already Open") },
+                            text = {
+                                Text("'$sameWorkspaceName' is already open in the current screen.")
+                            },
+                            confirmButton = {
+                                Button(onClick = { showSameWorkspaceDialog = false }) {
+                                    Text("OK")
+                                }
+                            }
+                        )
+                    }
+
+                    // Unsaved Changes Confirmation Dialog
+                    if (showUnsavedCloseDialog) {
+                        AlertDialog(
+                            onDismissRequest = {
+                                showUnsavedCloseDialog = false
+                                pendingCloseAction = null
+                            },
+                            title = { Text("Unsaved Changes") },
+                            text = {
+                                val unsavedTabs = editorMgr.getUnsavedTabs()
+                                val fileNames = unsavedTabs.take(3).joinToString(", ") { it.fileName }
+                                val suffix = if (unsavedTabs.size > 3) " and ${unsavedTabs.size - 3} more" else ""
+                                Text("There are unsaved changes in: $fileNames$suffix.\n\nDo you want to save before closing the current workspace?")
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        try {
+                                            editorMgr.saveAllTabs()
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("MainShell", "Failed to save files before closing", e)
+                                        }
+                                        showUnsavedCloseDialog = false
+                                        pendingCloseAction?.invoke()
+                                        pendingCloseAction = null
+                                    }
+                                ) {
+                                    Text("Save & Close")
+                                }
+                            },
+                            dismissButton = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(
+                                        onClick = {
+                                            showUnsavedCloseDialog = false
+                                            pendingCloseAction = null
+                                        }
+                                    ) {
+                                        Text("Cancel")
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            showUnsavedCloseDialog = false
+                                            pendingCloseAction?.invoke()
+                                            pendingCloseAction = null
+                                        }
+                                    ) {
+                                        Text("Don't Save", color = MaterialTheme.colorScheme.error)
+                                    }
                                 }
                             }
                         )

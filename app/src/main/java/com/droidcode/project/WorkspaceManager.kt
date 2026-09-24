@@ -7,6 +7,9 @@ import com.droidcode.filesystem.FileNode
 import com.droidcode.filesystem.LocalFileSystem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -20,6 +23,16 @@ class WorkspaceManager @Inject constructor() {
 
     val currentProject: Project?
         get() = _currentProject
+
+    private val _currentProjectFlow = MutableStateFlow<Project?>(null)
+    val currentProjectFlow: StateFlow<Project?> = _currentProjectFlow.asStateFlow()
+
+    private val _treeVersion = MutableStateFlow(0)
+    val treeVersion: StateFlow<Int> = _treeVersion.asStateFlow()
+
+    fun notifyTreeChanged() {
+        _treeVersion.value += 1
+    }
 
     private val fileSystem: LocalFileSystem = LocalFileSystem.getInstance()
 
@@ -39,6 +52,8 @@ class WorkspaceManager @Inject constructor() {
         val project = Project.fromDirectory(directory, projectType)
         if (project != null) {
             _currentProject = project
+            _currentProjectFlow.value = project
+            _treeVersion.value += 1
 
             val db = AppDatabase.getInstance(context)
             db.workspaceDao().insertWorkspace(
@@ -55,6 +70,8 @@ class WorkspaceManager @Inject constructor() {
 
     fun closeWorkspace() {
         _currentProject = null
+        _currentProjectFlow.value = null
+        _treeVersion.value += 1
     }
 
     val workspaceFileTree: List<FileNode>

@@ -59,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +73,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -113,10 +115,18 @@ fun ExplorerPanel(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val focusManager = LocalFocusManager.current
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
     val fs = remember { LocalFileSystem.getInstance() }
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        focusManager.clearFocus(force = true)
+    }
+
+    val currentProject by workspaceMgr.currentProjectFlow.collectAsState()
+    val treeVersion by workspaceMgr.treeVersion.collectAsState()
 
     var treeNodes by remember { mutableStateOf(workspaceMgr.workspaceFileTree) }
     val expandedPathsSaver = listSaver<Set<String>, String>(
@@ -130,6 +140,42 @@ fun ExplorerPanel(
 
     var selectedNode by remember { mutableStateOf<FileNode?>(null) }
     var clipboardItem by remember { mutableStateOf<FileClipboardItem?>(null) }
+
+    // Auto-refresh file navigation tree whenever workspace changes or treeVersion updates
+    LaunchedEffect(currentProject?.path, treeVersion) {
+        isLoadingTree = true
+        val nodes = withContext(Dispatchers.IO) {
+            workspaceMgr.workspaceFileTree
+        }
+        treeNodes = nodes
+        isLoadingTree = false
+    }
+
+    // Auto-clear selection and expanded paths whenever switching between workspaces
+    var lastObservedProjectPath by remember { mutableStateOf(currentProject?.path) }
+    LaunchedEffect(currentProject?.path) {
+        val currentPath = currentProject?.path
+        if (currentPath != lastObservedProjectPath) {
+            lastObservedProjectPath = currentPath
+            selectedNode = null
+            clipboardItem = null
+            expandedPaths = emptySet()
+        }
+    }
+
+    // Guard: clear selectedNode if it points to a file outside the active workspace or no longer exists
+    LaunchedEffect(selectedNode, currentProject?.path) {
+        val activeProj = currentProject
+        val targetNode = selectedNode
+        if (targetNode != null) {
+            val isValid = activeProj != null &&
+                    targetNode.path.startsWith(activeProj.path) &&
+                    File(targetNode.path).exists()
+            if (!isValid) {
+                selectedNode = null
+            }
+        }
+    }
 
     var showToolbarOverflow by remember { mutableStateOf(false) }
     var showRootContextMenu by remember { mutableStateOf(false) }
@@ -337,6 +383,31 @@ fun ExplorerPanel(
                                 refreshTree()
                             }
                         )
+                        if (onCloseProject != null) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(R.string.cmd_workspace_close),
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                contentPadding = PaddingValues(horizontal = SpacingM, vertical = SpacingS),
+                                onClick = {
+                                    showRootContextMenu = false
+                                    onCloseProject()
+                                }
+                            )
+                        }
                     }
                 }
 

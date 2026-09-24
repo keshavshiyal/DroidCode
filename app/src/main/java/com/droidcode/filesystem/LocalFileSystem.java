@@ -35,6 +35,17 @@ public class LocalFileSystem {
         if (files != null) {
             for (File file : files) {
                 if (file.getName().equals(".DS_Store")) continue;
+                String cleanName = SafUtils.getCleanFileName(file.getName());
+                if (!cleanName.equals(file.getName())) {
+                    File cleanTarget = new File(file.getParentFile(), cleanName);
+                    if (!cleanTarget.exists()) {
+                        SafUtils.renameInSaf(file, cleanName);
+                        boolean renamed = file.renameTo(cleanTarget);
+                        if (renamed) {
+                            file = cleanTarget;
+                        }
+                    }
+                }
                 FileNode node = FileNode.fromFile(file);
                 if (node != null) {
                     if (node.isFolder()) {
@@ -55,13 +66,14 @@ public class LocalFileSystem {
         if (parentDir == null || !parentDir.exists() || !parentDir.isDirectory()) {
             throw new IllegalArgumentException("Invalid parent directory");
         }
-        File newFile = new File(parentDir, fileName);
+        String cleanFileName = SafUtils.getCleanFileName(fileName.trim());
+        File newFile = new File(parentDir, cleanFileName);
         if (newFile.exists()) {
-            throw new IllegalArgumentException("File already exists: " + fileName);
+            throw new IllegalArgumentException("File already exists: " + cleanFileName);
         }
         boolean created = newFile.createNewFile();
         if (!created) {
-            throw new RuntimeException("Could not create file: " + fileName);
+            throw new RuntimeException("Could not create file: " + cleanFileName);
         }
         SafUtils.syncFileToSaf(newFile);
         return newFile;
@@ -87,11 +99,12 @@ public class LocalFileSystem {
         if (targetFile == null || !targetFile.exists()) {
             throw new IllegalArgumentException("Target file does not exist");
         }
-        File destination = new File(targetFile.getParentFile(), newName);
+        String cleanName = SafUtils.getCleanFileName(newName.trim());
+        File destination = new File(targetFile.getParentFile(), cleanName);
         if (destination.exists()) {
-            throw new IllegalArgumentException("Destination name already exists: " + newName);
+            throw new IllegalArgumentException("Destination name already exists: " + cleanName);
         }
-        SafUtils.renameInSaf(targetFile, newName);
+        SafUtils.renameInSaf(targetFile, cleanName);
         boolean renamed = targetFile.renameTo(destination);
         if (!renamed) {
             throw new RuntimeException("Failed to rename file");
@@ -190,14 +203,15 @@ public class LocalFileSystem {
     }
 
     private String getUniqueCopyName(File dir, String originalName) {
+        String cleanOriginalName = SafUtils.getCleanFileName(originalName);
         String baseName;
         String extension;
-        int dotIndex = originalName.lastIndexOf('.');
-        if (dotIndex > 0 && !originalName.startsWith(".")) {
-            baseName = originalName.substring(0, dotIndex);
-            extension = originalName.substring(dotIndex);
+        int dotIndex = cleanOriginalName.lastIndexOf('.');
+        if (dotIndex > 0 && !cleanOriginalName.startsWith(".")) {
+            baseName = cleanOriginalName.substring(0, dotIndex);
+            extension = cleanOriginalName.substring(dotIndex);
         } else {
-            baseName = originalName;
+            baseName = cleanOriginalName;
             extension = "";
         }
 

@@ -123,18 +123,41 @@ object SafUtils {
         return null
     }
 
+    @JvmStatic
+    fun getCleanFileName(name: String): String {
+        if (name.endsWith(".txt", ignoreCase = true)) {
+            val withoutTxt = name.substring(0, name.length - 4)
+            val dotIndex = withoutTxt.lastIndexOf('.')
+            if (dotIndex > 0) {
+                val prevExt = withoutTxt.substring(dotIndex + 1).lowercase()
+                if (prevExt.isNotEmpty() && prevExt.all { it.isLetterOrDigit() || it == '_' || it == '-' }) {
+                    return withoutTxt
+                }
+            }
+        }
+        return name
+    }
+
     private fun copyDocumentTreeRecursively(context: Context, sourceTree: DocumentFile, destDir: File) {
         if (!destDir.exists()) {
             destDir.mkdirs()
         }
         val children = sourceTree.listFiles()
         for (file in children) {
-            val name = file.name ?: continue
+            val originalName = file.name ?: continue
             if (file.isDirectory) {
-                val subDestDir = File(destDir, name)
+                val subDestDir = File(destDir, originalName)
                 copyDocumentTreeRecursively(context, file, subDestDir)
             } else {
-                val targetFile = File(destDir, name)
+                val cleanName = getCleanFileName(originalName)
+                if (cleanName != originalName) {
+                    try {
+                        file.renameTo(cleanName)
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+                val targetFile = File(destDir, cleanName)
                 try {
                     context.contentResolver.openInputStream(file.uri)?.use { input ->
                         targetFile.outputStream().use { output ->
@@ -195,9 +218,31 @@ object SafUtils {
 
                 val fileName = segments.last()
                 var targetDoc = currentDoc.findFile(fileName)
+                if (targetDoc == null) {
+                    // Check if SAF previously appended .txt (e.g. temp.bat.txt for temp.bat)
+                    val accidentalTxtDoc = currentDoc.findFile("$fileName.txt")
+                    if (accidentalTxtDoc != null && accidentalTxtDoc.isFile && !fileName.endsWith(".txt", ignoreCase = true)) {
+                        try {
+                            accidentalTxtDoc.renameTo(fileName)
+                            targetDoc = currentDoc.findFile(fileName) ?: accidentalTxtDoc
+                        } catch (e: Exception) {
+                            targetDoc = accidentalTxtDoc
+                        }
+                    }
+                }
+
                 if (targetDoc == null || !targetDoc.isFile) {
-                    val mimeType = getMimeType(fileName)
-                    targetDoc = currentDoc.createFile(mimeType, fileName)
+                    // Use application/octet-stream to prevent Android's DocumentsProvider from appending .txt
+                    targetDoc = currentDoc.createFile("application/octet-stream", fileName)
+                    if (targetDoc != null && targetDoc.name != null && targetDoc.name != fileName) {
+                        if (targetDoc.name?.endsWith(".txt", ignoreCase = true) == true && !fileName.endsWith(".txt", ignoreCase = true)) {
+                            try {
+                                targetDoc.renameTo(fileName)
+                            } catch (e: Exception) {
+                                // ignore
+                            }
+                        }
+                    }
                 }
 
                 if (targetDoc != null && localFile.exists()) {
@@ -231,12 +276,18 @@ object SafUtils {
             val segments = relativePath.split(File.separatorChar).filter { it.isNotEmpty() }
             var currentDoc: DocumentFile? = rootDoc
 
-            for (segment in segments) {
-                currentDoc = currentDoc?.findFile(segment)
+            for (i in 0 until segments.size - 1) {
+                currentDoc = currentDoc?.findFile(segments[i])
                 if (currentDoc == null) break
             }
 
-            currentDoc?.delete()
+            val targetName = segments.last()
+            var targetDoc = currentDoc?.findFile(targetName)
+            if (targetDoc == null) {
+                targetDoc = currentDoc?.findFile("$targetName.txt")
+            }
+
+            targetDoc?.delete()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -260,32 +311,25 @@ object SafUtils {
             val segments = relativePath.split(File.separatorChar).filter { it.isNotEmpty() }
             var currentDoc: DocumentFile? = rootDoc
 
-            for (segment in segments) {
-                currentDoc = currentDoc?.findFile(segment)
+            for (i in 0 until segments.size - 1) {
+                currentDoc = currentDoc?.findFile(segments[i])
                 if (currentDoc == null) break
             }
 
-            currentDoc?.renameTo(newName)
+            val targetName = segments.last()
+            var targetDoc = currentDoc?.findFile(targetName)
+            if (targetDoc == null) {
+                targetDoc = currentDoc?.findFile("$targetName.txt")
+            }
+
+            targetDoc?.renameTo(newName)
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
     private fun getMimeType(fileName: String): String {
-        val ext = fileName.substringAfterLast('.', "").lowercase()
-        return when (ext) {
-            "txt" -> "text/plain"
-            "html", "htm" -> "text/html"
-            "css" -> "text/css"
-            "js" -> "application/javascript"
-            "json" -> "application/json"
-            "py" -> "text/x-python"
-            "java" -> "text/x-java"
-            "kt", "kts" -> "text/x-kotlin"
-            "xml" -> "text/xml"
-            "md" -> "text/markdown"
-            else -> "text/plain"
-        }
+        return "application/octet-stream"
     }
 
     data class ExportSummary(
@@ -348,9 +392,20 @@ object SafUtils {
                         }
                     } else {
                         try {
-                            val mime = getMimeType(child.name)
-                            val fileDoc = targetDoc.findFile(child.name)
-                                ?: targetDoc.createFile(mime, child.name)
+                            val cleanChildName = getCleanFileName(child.name)
+                            var fileDoc = targetDoc.findFile(cleanChildName)
+                            if (fileDoc == null) {
+                                fileDoc = targetDoc.createFile("application/octet-stream", cleanChildName)
+                                if (fileDoc != null && fileDoc.name != null && fileDoc.name != cleanChildName) {
+                                    if (fileDoc.name?.endsWith(".txt", ignoreCase = true) == true && !cleanChildName.endsWith(".txt", ignoreCase = true)) {
+                                        try {
+                                            fileDoc.renameTo(cleanChildName)
+                                        } catch (e: Exception) {
+                                            // ignore
+                                        }
+                                    }
+                                }
+                            }
                             if (fileDoc != null) {
                                 context.contentResolver.openOutputStream(fileDoc.uri, "wt")?.use { out ->
                                     child.inputStream().use { input ->
