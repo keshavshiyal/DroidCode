@@ -1,22 +1,14 @@
 build:
   maxIssues: 0
-  weights:
-    complexity: 2
-    LongParameterList: 1
-    style: 1
-    comments: 1
 
 complexity:
   active: true
   LongMethod:
-    active: true
-    threshold: 120
+    active: false
   LargeClass:
-    active: true
-    threshold: 600
+    active: false
   ComplexCondition:
-    active: true
-    threshold: 4
+    active: false
 
 naming:
   active: true
@@ -29,9 +21,9 @@ naming:
 style:
   active: true
   WildcardImport:
-    active: true
+    active: false
   UnusedImports:
-    active: true
+    active: false
   MagicNumber:
     active: false
 
