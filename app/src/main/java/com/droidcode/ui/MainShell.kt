@@ -425,7 +425,7 @@ fun MainShell(
 
         ModalNavigationDrawer(
             drawerState = drawerState,
-            gesturesEnabled = !isExpanded && currentRoute == Screen.Workspace.route && isWorkspaceOpen,
+            gesturesEnabled = !isExpanded && currentRoute == Screen.Workspace.route && isWorkspaceOpen && drawerState.isOpen,
             drawerContent = {
                 if (isWorkspaceOpen) {
                     val activePath = workspaceMgr.currentProject?.path ?: savedWorkspacePath

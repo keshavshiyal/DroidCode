@@ -104,6 +104,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FindReplace
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Splitscreen
@@ -111,7 +112,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import com.droidcode.editor.LineDiffCalculator
 import com.droidcode.editor.LineDiffStatus
 import com.droidcode.project.WorkspaceManager
@@ -137,6 +141,7 @@ fun EditorView(
     val context = LocalContext.current
     val editorMgr = remember { EditorManager.getInstance() }
     val workspaceMgr = remember { WorkspaceManager.getInstance() }
+    val currentProject by workspaceMgr.currentProjectFlow.collectAsState()
     val tabs = editorMgr.tabs
     val activeTab = editorMgr.activeTab
 
@@ -330,7 +335,19 @@ fun EditorView(
         if (activeTab != null) {
             BreadcrumbsBar(
                 tab = activeTab,
-                workspaceDir = workspaceMgr.currentProject?.directory
+                workspaceDir = currentProject?.directory,
+                onOpenFile = { file ->
+                    try {
+                        editorMgr.openFile(file)
+                    } catch (e: Exception) {
+                        android.util.Log.e("EditorView", "Failed to open file: ${file.name}", e)
+                    }
+                },
+                onShowGoToLine = { showGoToLineDialog = true },
+                onShowFind = {
+                    activeTab.showFindBar = true
+                    activeTab.showReplaceBar = false
+                }
             )
         }
 
@@ -546,6 +563,7 @@ fun EditorView(
                             tab = secondTab,
                             allTabs = tabs,
                             settings = settings,
+                            workspaceDir = currentProject?.directory,
                             onSelectTab = { selectedTab ->
                                 secondaryTabIndex = tabs.indexOf(selectedTab)
                             },
@@ -594,6 +612,7 @@ fun EditorView(
                             tab = secondTab,
                             allTabs = tabs,
                             settings = settings,
+                            workspaceDir = currentProject?.directory,
                             onSelectTab = { selectedTab ->
                                 secondaryTabIndex = tabs.indexOf(selectedTab)
                             },
@@ -726,70 +745,240 @@ fun EditorView(
     }
 }
 
+private data class BreadcrumbNode(
+    val name: String,
+    val file: File?,
+    val isDirectory: Boolean
+)
+
 @Composable
 private fun BreadcrumbsBar(
     tab: EditorTab,
-    workspaceDir: File?
+    workspaceDir: File?,
+    onOpenFile: (File) -> Unit,
+    onShowGoToLine: (() -> Unit)? = null,
+    onShowFind: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
-    val relPath = remember(tab.filePath, workspaceDir?.path) {
-        if (workspaceDir != null && tab.file.startsWith(workspaceDir)) {
-            tab.file.relativeToOrNull(workspaceDir)?.path
-        } else {
-            tab.fileName
-        }
-    }
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    var activeDropdownIndex by remember { mutableStateOf<Int?>(null) }
 
-    val segments = remember(relPath) {
-        relPath?.split(File.separatorChar, '/')?.filter { it.isNotEmpty() } ?: listOf(tab.fileName)
+    val nodes = remember(tab.filePath, workspaceDir?.absolutePath) {
+        val tabFile = tab.file
+        val rootDir = workspaceDir?.canonicalFile ?: workspaceDir
+        val fileCanonical = try { tabFile.canonicalFile } catch (_: Exception) { tabFile.absoluteFile }
+
+        val result = mutableListOf<BreadcrumbNode>()
+        if (rootDir != null && (fileCanonical.startsWith(rootDir) || tabFile.startsWith(rootDir))) {
+            result.add(BreadcrumbNode(rootDir.name.ifEmpty { "Project" }, rootDir, true))
+            val rel = try {
+                fileCanonical.relativeTo(rootDir).path
+            } catch (_: Exception) {
+                tabFile.name
+            }
+            val parts = rel.split(File.separatorChar, '/').filter { it.isNotEmpty() }
+            var currentDir = rootDir
+            for (i in 0 until parts.size - 1) {
+                val seg = parts[i]
+                currentDir = File(currentDir, seg)
+                result.add(BreadcrumbNode(seg, currentDir, true))
+            }
+            result.add(BreadcrumbNode(parts.lastOrNull() ?: tab.fileName, tabFile, false))
+        } else {
+            val parents = mutableListOf<File>()
+            var p = tabFile.parentFile
+            while (p != null && parents.size < 3) {
+                parents.add(0, p)
+                p = p.parentFile
+            }
+            for (dir in parents) {
+                result.add(BreadcrumbNode(dir.name.ifEmpty { "Files" }, dir, true))
+            }
+            if (result.isEmpty()) {
+                result.add(BreadcrumbNode("Files", tabFile.parentFile, true))
+            }
+            result.add(BreadcrumbNode(tab.fileName, tabFile, false))
+        }
+        result
     }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .height(26.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .height(30.dp)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(width = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.Default.FolderOpen,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-            modifier = Modifier.size(14.dp)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = workspaceDir?.name ?: "Workspace",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontFamily = FontFamily.Monospace
-        )
-
-        segments.forEachIndexed { index, seg ->
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(12.dp)
-            )
-            val isLast = (index == segments.size - 1)
-            if (isLast) {
+        nodes.forEachIndexed { index, node ->
+            if (index > 0) {
                 Icon(
-                    imageVector = Icons.Default.Description,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(12.dp)
                 )
                 Spacer(modifier = Modifier.width(2.dp))
             }
-            Text(
-                text = seg,
-                fontSize = 11.sp,
-                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
-                color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = FontFamily.Monospace
-            )
+
+            val isLast = index == nodes.size - 1
+            val isExpanded = activeDropdownIndex == index
+
+            Box {
+                Row(
+                    modifier = Modifier
+                        .clickable { activeDropdownIndex = if (isExpanded) null else index }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (node.isDirectory) {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = getEditorFileIcon(node.name),
+                            contentDescription = null,
+                            tint = getEditorFileIconColor(node.name),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = node.name,
+                        fontSize = 11.sp,
+                        fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    if (node.isDirectory) {
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = "▾",
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                if (isExpanded) {
+                    DropdownMenu(
+                        expanded = true,
+                        onDismissRequest = { activeDropdownIndex = null }
+                    ) {
+                        if (node.isDirectory && node.file != null && node.file.isDirectory) {
+                            val children = remember(node.file.path) {
+                                try {
+                                    node.file.listFiles()
+                                        ?.filter { !it.name.startsWith(".") }
+                                        ?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+                                        ?.take(40) ?: emptyList()
+                                } catch (_: Exception) {
+                                    emptyList()
+                                }
+                            }
+                            if (children.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("(Empty folder)", fontSize = 12.sp) },
+                                    onClick = { activeDropdownIndex = null }
+                                )
+                            } else {
+                                children.forEach { child ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (child.isDirectory) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Folder,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        imageVector = getEditorFileIcon(child.name),
+                                                        contentDescription = null,
+                                                        tint = getEditorFileIconColor(child.name),
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = child.name,
+                                                    fontSize = 12.sp,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    color = if (child.absolutePath == tab.filePath) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            activeDropdownIndex = null
+                                            if (child.isFile) {
+                                                onOpenFile(child)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        } else {
+                            // File Actions Dropdown
+                            DropdownMenuItem(
+                                text = { Text("Copy Full Path", fontSize = 12.sp) },
+                                onClick = {
+                                    activeDropdownIndex = null
+                                    clipboardManager.setText(AnnotatedString(tab.filePath))
+                                    Toast.makeText(context, "Full path copied", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                            val rel = workspaceDir?.let { tab.file.relativeToOrNull(it)?.path }
+                            if (rel != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Copy Relative Path", fontSize = 12.sp) },
+                                    onClick = {
+                                        activeDropdownIndex = null
+                                        clipboardManager.setText(AnnotatedString(rel))
+                                        Toast.makeText(context, "Relative path copied", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                            if (onShowGoToLine != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Go to Line...", fontSize = 12.sp) },
+                                    onClick = {
+                                        activeDropdownIndex = null
+                                        onShowGoToLine()
+                                    }
+                                )
+                            }
+                            if (onShowFind != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Find in File", fontSize = 12.sp) },
+                                    onClick = {
+                                        activeDropdownIndex = null
+                                        onShowFind()
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "${tab.fileName} (${tab.lineStartOffsets.size.coerceAtLeast(1)} lines)",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                onClick = { activeDropdownIndex = null }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -855,6 +1044,7 @@ private fun SecondaryEditorPane(
     tab: EditorTab,
     allTabs: List<EditorTab>,
     settings: AppSettings,
+    workspaceDir: File? = null,
     onSelectTab: (EditorTab) -> Unit,
     onCloseSplit: () -> Unit,
     onSaveRequested: () -> Unit,
@@ -945,6 +1135,24 @@ private fun SecondaryEditorPane(
                 }
             }
         }
+
+        BreadcrumbsBar(
+            tab = tab,
+            workspaceDir = workspaceDir,
+            onOpenFile = { file ->
+                val existing = allTabs.firstOrNull { it.filePath == file.absolutePath }
+                if (existing != null) {
+                    onSelectTab(existing)
+                } else {
+                    try {
+                        val opened = EditorManager.getInstance().openFile(file)
+                        onSelectTab(opened)
+                    } catch (e: Exception) {
+                        android.util.Log.e("SecondaryEditorPane", "Failed to open file: ${file.name}", e)
+                    }
+                }
+            }
+        )
 
         Box(modifier = Modifier.fillMaxSize()) {
             EditorTabContent(

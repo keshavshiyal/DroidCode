@@ -16,6 +16,7 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import android.view.HapticFeedbackConstants
 import android.widget.OverScroller
 import com.droidcode.editor.LineDiffStatus
 import kotlin.math.max
@@ -180,7 +181,14 @@ class CodeEditorView @JvmOverloads constructor(
             return true
         }
 
+        override fun onLongPress(e: MotionEvent) {
+            val pos = screenToCursor(e.x, e.y)
+            selectWordAt(pos)
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        }
+
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+            parent?.requestDisallowInterceptTouchEvent(true)
             scrollBy(distanceX.toInt(), distanceY.toInt())
             clampScroll()
             invalidate()
@@ -236,7 +244,13 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     private fun getMaxScrollY(): Int {
-        return max(0, (buffer.lineCount * lineHeight + height * 0.4f).toInt())
+        val contentHeight = (buffer.lineCount * lineHeight).toInt()
+        val visibleHeight = height
+        return if (contentHeight <= visibleHeight) {
+            0
+        } else {
+            max(0, contentHeight - (visibleHeight * 0.3f).toInt())
+        }
     }
 
     private fun clampScroll() {
@@ -256,12 +270,23 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
+            }
+        }
+
         if (gestureDetector.onTouchEvent(event)) {
             return true
         }
 
-        if (event.action == MotionEvent.ACTION_MOVE && event.historySize > 0) {
-            // Drag-to-select
+        // Support mouse or stylus drag-to-select (not finger scrolling)
+        val isMouseOrStylus = event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE ||
+                event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS
+        if (isMouseOrStylus && event.action == MotionEvent.ACTION_MOVE && event.historySize > 0) {
             val pos = screenToCursor(event.x, event.y)
             selection = SelectionRange(selection.start, pos)
             cursorPosition = pos
@@ -304,6 +329,8 @@ class CodeEditorView @JvmOverloads constructor(
 
         selection = SelectionRange(CursorPos(pos.line, start), CursorPos(pos.line, end))
         cursorPosition = CursorPos(pos.line, end)
+        onCursorChanged?.invoke(cursorPosition.line + 1, cursorPosition.col + 1)
+        resetCursorBlink()
         invalidate()
     }
 
@@ -346,6 +373,8 @@ class CodeEditorView @JvmOverloads constructor(
         } else if (cursorY > scrollY + height - lineHeight - padding) {
             targetScrollY = (cursorY - height + lineHeight + padding).toInt()
         }
+
+        targetScrollY = targetScrollY.coerceIn(0, getMaxScrollY())
 
         if (targetScrollX != scrollX || targetScrollY != scrollY) {
             scrollTo(targetScrollX, targetScrollY)
