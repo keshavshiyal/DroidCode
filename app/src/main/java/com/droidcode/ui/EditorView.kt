@@ -501,7 +501,6 @@ fun EditorView(
                     }
                 }
             }
-        }
 
         // Unsaved Changes Confirmation Dialog
         if (tabToPromptCloseIndex != null && tabToPromptCloseIndex!! in tabs.indices) {
