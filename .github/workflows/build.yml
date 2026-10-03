@@ -49,32 +49,26 @@ jobs:
         run: |
           echo "Running Android Lint with warnings as errors..."
           if [ -s ./gradlew ]; then
-            ./gradlew lintDebug -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace || {
+            ./gradlew lintDebug -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace 2>&1 | tee gradle_output.txt || {
               echo "=== LINT FAILURE REPORT ==="
-              cat app/build/reports/lint-results-debug.txt 2>/dev/null || cat app/build/reports/lint-results-debug.xml 2>/dev/null || true
-              curl -s --data-binary @app/build/reports/lint-results-debug.txt https://paste.rs > paste_url.txt || true
-              echo "Paste URL: $(cat paste_url.txt 2>/dev/null)"
               git config user.name "github-actions[bot]"
               git config user.email "github-actions[bot]@users.noreply.github.com"
               git checkout -B ci-lint-report
-              git add -f app/build/reports 2>/dev/null || true
-              git add -f paste_url.txt 2>/dev/null || true
-              git commit -m "ci: lint failure reports [skip ci]" || true
+              git add -f gradle_output.txt 2>/dev/null || true
+              find app/build/reports -type f -exec git add -f {} + 2>/dev/null || true
+              git commit -m "ci: lint failure log [skip ci]" || true
               git push origin ci-lint-report --force || true
               exit 1
             }
           else
-            gradle lintDebug -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace || {
+            gradle lintDebug -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace 2>&1 | tee gradle_output.txt || {
               echo "=== LINT FAILURE REPORT ==="
-              cat app/build/reports/lint-results-debug.txt 2>/dev/null || cat app/build/reports/lint-results-debug.xml 2>/dev/null || true
-              curl -s --data-binary @app/build/reports/lint-results-debug.txt https://paste.rs > paste_url.txt || true
-              echo "Paste URL: $(cat paste_url.txt 2>/dev/null)"
               git config user.name "github-actions[bot]"
               git config user.email "github-actions[bot]@users.noreply.github.com"
               git checkout -B ci-lint-report
-              git add -f app/build/reports 2>/dev/null || true
-              git add -f paste_url.txt 2>/dev/null || true
-              git commit -m "ci: lint failure reports [skip ci]" || true
+              git add -f gradle_output.txt 2>/dev/null || true
+              find app/build/reports -type f -exec git add -f {} + 2>/dev/null || true
+              git commit -m "ci: lint failure log [skip ci]" || true
               git push origin ci-lint-report --force || true
               exit 1
             }
