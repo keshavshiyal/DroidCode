@@ -2,7 +2,6 @@ package com.droidcode.editor.engine
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -46,6 +45,7 @@ fun DroidCodeEditor(
             CodeEditorView(ctx).apply {
                 this.theme = theme
                 this.languageId = tab.languageId
+                this.fontOption = settings.editorFontFamily
                 this.fontSizeSp = settings.fontSizeSp.toFloat()
                 this.isLineNumbersEnabled = settings.isLineNumbersEnabled
                 this.lineDiffMap = lineDiffMap
@@ -56,6 +56,9 @@ fun DroidCodeEditor(
 
                 this.onContentChanged = onContentChange
                 this.onCursorChanged = onCursorChange
+                this.onSelectionChanged = { start, end ->
+                    tab.updateSelection(start, end)
+                }
                 this.onSaveShortcut = onSaveRequested
                 this.onUndoShortcut = onUndoRequested
                 this.onRedoShortcut = onRedoRequested
@@ -67,11 +70,15 @@ fun DroidCodeEditor(
                 if (tab.line > 0 && tab.column > 0) {
                     this.setCursorPosition(CursorPos(tab.line - 1, tab.column - 1))
                 }
+                if (tab.selectionStart != tab.selectionEnd) {
+                    this.setSelectionOffsets(tab.selectionStart, tab.selectionEnd)
+                }
             }
         },
         update = { view ->
             view.theme = theme
             view.languageId = tab.languageId
+            view.fontOption = settings.editorFontFamily
             view.fontSizeSp = settings.fontSizeSp.toFloat()
             view.isLineNumbersEnabled = settings.isLineNumbersEnabled
             view.lineDiffMap = lineDiffMap
@@ -80,6 +87,9 @@ fun DroidCodeEditor(
             view.altActive = altActive
             view.onContentChanged = onContentChange
             view.onCursorChanged = onCursorChange
+            view.onSelectionChanged = { start, end ->
+                tab.updateSelection(start, end)
+            }
             view.onSaveShortcut = onSaveRequested
             view.onUndoShortcut = onUndoRequested
             view.onRedoShortcut = onRedoRequested
@@ -93,7 +103,12 @@ fun DroidCodeEditor(
                 view.setBufferText(tab.content)
             }
 
-            if (tab.line > 0 && tab.column > 0) {
+            if (tab.selectionStart != tab.selectionEnd) {
+                val (viewStart, viewEnd) = view.getSelectionOffsets()
+                if (tab.selectionStart != viewStart || tab.selectionEnd != viewEnd) {
+                    view.setSelectionOffsets(tab.selectionStart, tab.selectionEnd)
+                }
+            } else if (tab.line > 0 && tab.column > 0) {
                 val targetPos = CursorPos(tab.line - 1, tab.column - 1)
                 if (view.cursorPosition != targetPos) {
                     view.setCursorPosition(targetPos)

@@ -229,8 +229,14 @@ fun EditorView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        // Tab Bar
-        if (tabs.isNotEmpty()) {
+        // Top Navigation Header Bars (Tab Bar, Breadcrumbs, Editor Toolbar)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .zIndex(5f)
+        ) {
+            // Tab Bar
+            if (tabs.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -491,17 +497,23 @@ fun EditorView(
                     }
                 }
             }
+        }
 
-            // Split-Pane or Single Editor Container
-            val secondTab = if (splitMode != EditorSplitMode.NONE && tabs.isNotEmpty()) {
-                if (secondaryTabIndex in tabs.indices && tabs[secondaryTabIndex] != activeTab) {
-                    tabs[secondaryTabIndex]
-                } else {
-                    tabs.firstOrNull { it != activeTab } ?: activeTab
-                }
-            } else null
+        // Split-Pane or Single Editor Container
+        val secondTab = if (splitMode != EditorSplitMode.NONE && tabs.isNotEmpty()) {
+            if (secondaryTabIndex in tabs.indices && tabs[secondaryTabIndex] != activeTab) {
+                tabs[secondaryTabIndex]
+            } else {
+                tabs.firstOrNull { it != activeTab } ?: activeTab
+            }
+        } else null
 
-            if (splitMode == EditorSplitMode.NONE || secondTab == null) {
+        if (splitMode == EditorSplitMode.NONE || secondTab == null) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
                 EditorTabContent(
                     tab = activeTab,
                     settings = settings,
@@ -526,105 +538,106 @@ fun EditorView(
                         activeTab.updateCursor(pos)
                     }
                 )
-            } else if (splitMode == EditorSplitMode.HORIZONTAL) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        EditorTabContent(
-                            tab = activeTab,
-                            settings = settings,
-                            ctrlActive = ctrlActive,
-                            shiftActive = shiftActive,
-                            altActive = altActive,
-                            pendingActionType = pendingActionType,
-                            onClearPendingAction = { pendingActionType = null },
-                            onResetModifiers = onResetModifiers,
-                            onOpenCommandPalette = onOpenCommandPalette,
-                            onOpenContextMenu = { showContextMenu = true },
-                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
-                            onShowInfoDialog = { title, text ->
-                                infoDialogTitle = title
-                                infoDialogText = text
-                            },
-                            onSaveRequested = onSaveRequested,
-                            onContentChange = { newText: String ->
-                                editorMgr.updateActiveTabContent(newText)
-                            },
-                            onCursorChange = { pos: Int ->
-                                activeTab.updateCursor(pos)
-                            }
-                        )
-                    }
-                    VerticalDivider(
-                        modifier = Modifier.width(1.dp).fillMaxHeight(),
-                        color = MaterialTheme.colorScheme.outlineVariant
+            }
+        } else if (splitMode == EditorSplitMode.HORIZONTAL) {
+            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    EditorTabContent(
+                        tab = activeTab,
+                        settings = settings,
+                        ctrlActive = ctrlActive,
+                        shiftActive = shiftActive,
+                        altActive = altActive,
+                        pendingActionType = pendingActionType,
+                        onClearPendingAction = { pendingActionType = null },
+                        onResetModifiers = onResetModifiers,
+                        onOpenCommandPalette = onOpenCommandPalette,
+                        onOpenContextMenu = { showContextMenu = true },
+                        onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
+                        onShowInfoDialog = { title, text ->
+                            infoDialogTitle = title
+                            infoDialogText = text
+                        },
+                        onSaveRequested = onSaveRequested,
+                        onContentChange = { newText: String ->
+                            editorMgr.updateActiveTabContent(newText)
+                        },
+                        onCursorChange = { pos: Int ->
+                            activeTab.updateCursor(pos)
+                        }
                     )
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        SecondaryEditorPane(
-                            tab = secondTab,
-                            allTabs = tabs,
-                            settings = settings,
-                            workspaceDir = currentProject?.directory,
-                            onSelectTab = { selectedTab ->
-                                secondaryTabIndex = tabs.indexOf(selectedTab)
-                            },
-                            onCloseSplit = {
-                                splitMode = EditorSplitMode.NONE
-                            },
-                            onSaveRequested = onSaveRequested,
-                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
-                        )
-                    }
                 }
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        EditorTabContent(
-                            tab = activeTab,
-                            settings = settings,
-                            ctrlActive = ctrlActive,
-                            shiftActive = shiftActive,
-                            altActive = altActive,
-                            pendingActionType = pendingActionType,
-                            onClearPendingAction = { pendingActionType = null },
-                            onResetModifiers = onResetModifiers,
-                            onOpenCommandPalette = onOpenCommandPalette,
-                            onOpenContextMenu = { showContextMenu = true },
-                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
-                            onShowInfoDialog = { title, text ->
-                                infoDialogTitle = title
-                                infoDialogText = text
-                            },
-                            onSaveRequested = onSaveRequested,
-                            onContentChange = { newText: String ->
-                                editorMgr.updateActiveTabContent(newText)
-                            },
-                            onCursorChange = { pos: Int ->
-                                activeTab.updateCursor(pos)
-                            }
-                        )
-                    }
-                    HorizontalDivider(
-                        modifier = Modifier.height(1.dp).fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.outlineVariant
+                VerticalDivider(
+                    modifier = Modifier.width(1.dp).fillMaxHeight(),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    SecondaryEditorPane(
+                        tab = secondTab,
+                        allTabs = tabs,
+                        settings = settings,
+                        workspaceDir = currentProject?.directory,
+                        onSelectTab = { selectedTab ->
+                            secondaryTabIndex = tabs.indexOf(selectedTab)
+                        },
+                        onCloseSplit = {
+                            splitMode = EditorSplitMode.NONE
+                        },
+                        onSaveRequested = onSaveRequested,
+                        onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
                     )
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        SecondaryEditorPane(
-                            tab = secondTab,
-                            allTabs = tabs,
-                            settings = settings,
-                            workspaceDir = currentProject?.directory,
-                            onSelectTab = { selectedTab ->
-                                secondaryTabIndex = tabs.indexOf(selectedTab)
-                            },
-                            onCloseSplit = {
-                                splitMode = EditorSplitMode.NONE
-                            },
-                            onSaveRequested = onSaveRequested,
-                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
-                        )
-                    }
                 }
             }
+        } else {
+            Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    EditorTabContent(
+                        tab = activeTab,
+                        settings = settings,
+                        ctrlActive = ctrlActive,
+                        shiftActive = shiftActive,
+                        altActive = altActive,
+                        pendingActionType = pendingActionType,
+                        onClearPendingAction = { pendingActionType = null },
+                        onResetModifiers = onResetModifiers,
+                        onOpenCommandPalette = onOpenCommandPalette,
+                        onOpenContextMenu = { showContextMenu = true },
+                        onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
+                        onShowInfoDialog = { title, text ->
+                            infoDialogTitle = title
+                            infoDialogText = text
+                        },
+                        onSaveRequested = onSaveRequested,
+                        onContentChange = { newText: String ->
+                            editorMgr.updateActiveTabContent(newText)
+                        },
+                        onCursorChange = { pos: Int ->
+                            activeTab.updateCursor(pos)
+                        }
+                    )
+                }
+                HorizontalDivider(
+                    modifier = Modifier.height(1.dp).fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    SecondaryEditorPane(
+                        tab = secondTab,
+                        allTabs = tabs,
+                        settings = settings,
+                        workspaceDir = currentProject?.directory,
+                        onSelectTab = { selectedTab ->
+                            secondaryTabIndex = tabs.indexOf(selectedTab)
+                        },
+                        onCloseSplit = {
+                            splitMode = EditorSplitMode.NONE
+                        },
+                        onSaveRequested = onSaveRequested,
+                        onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
+                    )
+                }
+            }
+        }
         } else {
             // Empty State
             Box(
@@ -1487,7 +1500,8 @@ private fun CodeCanvas(
             },
             onResetModifiers = onResetModifiers,
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .testTag("code_editor_text_input")
         )
     }

@@ -45,6 +45,27 @@ class EditorInputConnection(
                     return true
                 }
                 when (event.keyCode) {
+                    KeyEvent.KEYCODE_A -> {
+                        editor.selectAll()
+                        editor.onResetModifiers?.invoke()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_C -> {
+                        editor.copySelectedText()
+                        editor.onResetModifiers?.invoke()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_X -> {
+                        editor.copySelectedText()
+                        editor.deleteSelectedText()
+                        editor.onResetModifiers?.invoke()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_V -> {
+                        editor.pasteFromClipboard()
+                        editor.onResetModifiers?.invoke()
+                        return true
+                    }
                     KeyEvent.KEYCODE_S -> {
                         editor.save()
                         editor.onResetModifiers?.invoke()
