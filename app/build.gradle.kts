@@ -78,7 +78,9 @@ android {
   }
   lint {
     textReport = true
-    textOutput = file("stdout")
+    textOutput = file("build/reports/lint-results-debug.txt")
+    htmlReport = true
+    xmlReport = true
     abortOnError = true
     warningsAsErrors = true
   }
