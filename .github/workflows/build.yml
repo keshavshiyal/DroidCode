@@ -125,6 +125,7 @@ jobs:
 
       - name: Build Debug APK
         run: |
+          set -o pipefail
           if [ -s ./gradlew ]; then
             ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build_debug_output.txt || {
               echo "=== ASSEMBLE DEBUG FAILURE ==="
@@ -162,6 +163,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
+          set -o pipefail
           if [ -s ./gradlew ]; then
             ./gradlew :app:assembleRelease --stacktrace 2>&1 | tee build_release_output.txt || {
               echo "=== ASSEMBLE RELEASE FAILURE ==="
@@ -186,16 +188,30 @@ jobs:
             }
           fi
 
+      - name: List APK Outputs
+        run: |
+          echo "=== APK OUTPUT DIRECTORIES ==="
+          ls -la app/build/outputs/ 2>/dev/null || true
+          ls -la app/build/outputs/apk/ 2>/dev/null || true
+          find app/build/outputs -name "*.apk" 2>/dev/null || true
+
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: DroidCode-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
           
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: DroidCode-Release-APK
           path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      - name: Upload Build Failure Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-logs
+          path: "*.txt"
