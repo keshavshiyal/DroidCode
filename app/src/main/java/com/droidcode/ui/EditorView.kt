@@ -78,23 +78,10 @@ import com.droidcode.ui.theme.CornerSmall
 import com.droidcode.ui.theme.SpacingM
 import com.droidcode.ui.theme.SpacingS
 import com.droidcode.ui.theme.SpacingXS
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -107,6 +94,7 @@ import androidx.core.content.FileProvider
 import com.droidcode.editor.EditorManager
 import com.droidcode.editor.EditorTab
 import com.droidcode.editor.FileViewerType
+import com.droidcode.editor.engine.DroidCodeEditor
 import com.droidcode.settings.AppSettings
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -124,10 +112,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.input.key.isShiftPressed
 import com.droidcode.editor.LineDiffCalculator
 import com.droidcode.editor.LineDiffStatus
-import com.droidcode.language.IncrementalSyntaxHighlighter
 import com.droidcode.project.WorkspaceManager
 
 enum class EditorSplitMode {
@@ -1010,77 +996,85 @@ private fun CodeCanvas(
         EditorFontHelper.getFontFamily(settings.editorFontFamily)
     }
 
-    var textFieldValue by rememberSaveable(tab.filePath, stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(
-            TextFieldValue(
-                text = tab.content,
-                selection = TextRange(tab.cursorPosition.coerceIn(0, tab.content.length))
-            )
-        )
-    }
-
-    LaunchedEffect(tab.content) {
-        if (tab.content != textFieldValue.text) {
-            textFieldValue = TextFieldValue(
-                text = tab.content,
-                selection = TextRange(tab.cursorPosition.coerceIn(0, tab.content.length))
-            )
-        }
-    }
-
     LaunchedEffect(pendingActionType) {
         if (pendingActionType != null) {
             val act = pendingActionType
             onClearPendingAction()
+            val textValue = TextFieldValue(
+                text = tab.content,
+                selection = TextRange(tab.cursorPosition.coerceIn(0, tab.content.length))
+            )
 
             when {
-                act == "CUT" -> EditorActionsHandler.cut(context, tab, textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "CUT" -> EditorActionsHandler.cut(context, tab, textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
-                act == "COPY" -> EditorActionsHandler.copy(context, tab, textFieldValue)
-                act == "PASTE" -> EditorActionsHandler.paste(context, textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "COPY" -> EditorActionsHandler.copy(context, tab, textValue)
+                act == "PASTE" -> EditorActionsHandler.paste(context, textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
-                act == "PASTE_PLAIN" -> EditorActionsHandler.pastePlain(context, textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "PASTE_PLAIN" -> EditorActionsHandler.pastePlain(context, textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
-                act == "SELECT_ALL" -> EditorActionsHandler.selectAll(textFieldValue) {
-                    textFieldValue = it
+                act == "SELECT_ALL" -> EditorActionsHandler.selectAll(textValue) {
+                    tab.updateSelection(it.selection.start, it.selection.end)
                 }
-                act == "SELECT_LINE" -> EditorActionsHandler.selectLine(textFieldValue) {
-                    textFieldValue = it
+                act == "SELECT_LINE" -> EditorActionsHandler.selectLine(textValue) {
+                    tab.updateSelection(it.selection.start, it.selection.end)
                 }
-                act == "DUPLICATE_LINE" -> EditorActionsHandler.duplicateLineOrSelection(textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "DUPLICATE_LINE" -> EditorActionsHandler.duplicateLineOrSelection(textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
-                act == "DELETE_LINE" -> EditorActionsHandler.deleteLine(textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "DELETE_LINE" -> EditorActionsHandler.deleteLine(textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
-                act == "JOIN_LINES" -> EditorActionsHandler.joinLines(textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "JOIN_LINES" -> EditorActionsHandler.joinLines(textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
                 act.startsWith("GO_TO_LINE:") -> {
                     val lineNum = act.removePrefix("GO_TO_LINE:").toIntOrNull() ?: 1
                     EditorActionsHandler.goToLine(tab, lineNum) {
-                        textFieldValue = it; onCursorChange(it.selection.start)
+                        tab.updateCursor(it.selection.start)
+                        onCursorChange(it.selection.start)
                     }
                 }
                 act == "GO_DEFINITION" || act == "GO_DECLARATION" -> {
-                    EditorActionsHandler.goToDefinition(context, tab, textFieldValue) {
-                        textFieldValue = it; onCursorChange(it.selection.start)
+                    EditorActionsHandler.goToDefinition(context, tab, textValue) {
+                        tab.updateCursor(it.selection.start)
+                        onCursorChange(it.selection.start)
                     }
                 }
                 act == "FORMAT_DOC" -> EditorActionsHandler.formatDocument(tab) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
-                act == "TOGGLE_COMMENT" -> EditorActionsHandler.toggleCommentLine(tab, textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "TOGGLE_COMMENT" -> EditorActionsHandler.toggleCommentLine(tab, textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
-                act == "INDENT" -> EditorActionsHandler.indent(textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "INDENT" -> EditorActionsHandler.indent(textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
-                act == "OUTDENT" -> EditorActionsHandler.outdent(textFieldValue) {
-                    textFieldValue = it; onContentChange(it.text); onCursorChange(it.selection.start)
+                act == "OUTDENT" -> EditorActionsHandler.outdent(textValue) {
+                    onContentChange(it.text)
+                    tab.updateCursor(it.selection.start)
+                    onCursorChange(it.selection.start)
                 }
                 act == "SHOW_FIND" -> {
                     tab.showFindBar = true
@@ -1109,29 +1103,16 @@ private fun CodeCanvas(
         }
     }
 
-    val lineStarts = remember(textFieldValue.text) {
-        val starts = ArrayList<Int>()
-        starts.add(0)
-        val text = textFieldValue.text
-        for (i in 0 until text.length) {
-            if (text[i] == '\n') {
-                starts.add(i + 1)
+    var lineDiffMap by remember(tab.filePath) { mutableStateOf<Map<Int, LineDiffStatus>>(emptyMap()) }
+    LaunchedEffect(tab.content, tab.originalContent) {
+        kotlinx.coroutines.delay(350L)
+        withContext(Dispatchers.Default) {
+            val diff = LineDiffCalculator.computeDiff(tab.originalContent, tab.content)
+            withContext(Dispatchers.Main) {
+                lineDiffMap = diff
             }
         }
-        starts.toIntArray()
     }
-    val lineCount = lineStarts.size
-    val verticalScroll = rememberSaveable(tab.filePath, saver = ScrollState.Saver) {
-        ScrollState(initial = 0)
-    }
-    val horizontalScroll = rememberSaveable(tab.filePath, saver = ScrollState.Saver) {
-        ScrollState(initial = 0)
-    }
-    val isDark = isSystemInDarkTheme()
-    val lineDiffMap = remember(tab.content, tab.originalContent) {
-        LineDiffCalculator.computeDiff(tab.originalContent, tab.content)
-    }
-    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Find / Replace Bar Overlay
@@ -1180,11 +1161,12 @@ private fun CodeCanvas(
 
                         IconButton(
                             onClick = {
-                                if (tab.findQuery.isNotEmpty() && textFieldValue.text.contains(tab.findQuery, true)) {
-                                    val nextPos = textFieldValue.text.indexOf(tab.findQuery, textFieldValue.selection.start + 1, true)
-                                        .let { if (it < 0) textFieldValue.text.indexOf(tab.findQuery, ignoreCase = true) else it }
+                                if (tab.findQuery.isNotEmpty() && tab.content.contains(tab.findQuery, ignoreCase = true)) {
+                                    val nextPos = tab.content.indexOf(tab.findQuery, tab.cursorPosition + 1, ignoreCase = true)
+                                        .let { if (it < 0) tab.content.indexOf(tab.findQuery, ignoreCase = true) else it }
                                     if (nextPos >= 0) {
-                                        textFieldValue = textFieldValue.copy(selection = TextRange(nextPos, nextPos + tab.findQuery.length))
+                                        tab.updateCursor(nextPos)
+                                        onCursorChange(nextPos)
                                     }
                                 }
                             },
@@ -1247,8 +1229,7 @@ private fun CodeCanvas(
                             Button(
                                 onClick = {
                                     if (tab.findQuery.isNotEmpty()) {
-                                        val newText = textFieldValue.text.replaceFirst(tab.findQuery, tab.replaceQuery, ignoreCase = true)
-                                        textFieldValue = TextFieldValue(newText, TextRange(textFieldValue.selection.start))
+                                        val newText = tab.content.replaceFirst(tab.findQuery, tab.replaceQuery, ignoreCase = true)
                                         onContentChange(newText)
                                     }
                                 },
@@ -1260,8 +1241,7 @@ private fun CodeCanvas(
                             Button(
                                 onClick = {
                                     if (tab.findQuery.isNotEmpty()) {
-                                        val newText = textFieldValue.text.replace(tab.findQuery, tab.replaceQuery, ignoreCase = true)
-                                        textFieldValue = TextFieldValue(newText, TextRange(0))
+                                        val newText = tab.content.replace(tab.findQuery, tab.replaceQuery, ignoreCase = true)
                                         onContentChange(newText)
                                     }
                                 },
@@ -1275,308 +1255,38 @@ private fun CodeCanvas(
             }
         }
 
-        Row(
+        // High-performance virtualized DroidCodeEngine
+        DroidCodeEditor(
+            tab = tab,
+            settings = settings,
+            ctrlActive = ctrlActive,
+            shiftActive = shiftActive,
+            altActive = altActive,
+            lineDiffMap = lineDiffMap,
+            onContentChange = onContentChange,
+            onCursorChange = { line, col ->
+                tab.line = line
+                tab.column = col
+                if (tab.lineStartOffsets.isNotEmpty() && line - 1 < tab.lineStartOffsets.size) {
+                    val offset = tab.lineStartOffsets[line - 1] + (col - 1)
+                    tab.updateCursor(offset)
+                    onCursorChange(offset)
+                }
+            },
+            onSaveRequested = onSaveRequested,
+            onUndoRequested = { editorMgr.undoActiveTab() },
+            onRedoRequested = { editorMgr.redoActiveTab() },
+            onOpenCommandPalette = onOpenCommandPalette,
+            onOpenWorkspaceSearch = onOpenWorkspaceSearch,
+            onOpenFind = {
+                tab.showFindBar = true
+                tab.showReplaceBar = false
+            },
+            onResetModifiers = onResetModifiers,
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            // Line Numbers Gutter
-            if (settings.isLineNumbersEnabled) {
-                val density = LocalDensity.current
-                val layout = textLayoutResult
-                val primaryColor = MaterialTheme.colorScheme.primary
-                val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
-                val primaryContainerColor = MaterialTheme.colorScheme.primaryContainer
-
-                val textPaint = remember(activeFontFamily, settings.fontSizeSp, density) {
-                    android.graphics.Paint().apply {
-                        isAntiAlias = true
-                        textSize = with(density) { settings.fontSizeSp.sp.toPx() }
-                        textAlign = android.graphics.Paint.Align.RIGHT
-                    }
-                }
-
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(46.dp)
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(horizontal = 4.dp)
-                ) {
-                    val canvasWidth = size.width
-                    val canvasHeight = size.height
-                    val scrollY = verticalScroll.value.toFloat()
-                    val topPaddingPx = with(density) { 8.dp.toPx() }
-
-                    if (layout != null && layout.lineCount > 0) {
-                        val visualLineCount = layout.lineCount
-                        val firstVisual = layout.getLineForVerticalPosition(scrollY).coerceIn(0, visualLineCount - 1)
-                        val lastVisual = layout.getLineForVerticalPosition(scrollY + canvasHeight).coerceIn(firstVisual, visualLineCount - 1)
-
-                        val fullText = textFieldValue.text
-                        for (vLine in firstVisual..lastVisual) {
-                            val startOffset = layout.getLineStart(vLine)
-                            val isLogicalLineStart = (vLine == 0 || (startOffset > 0 && startOffset <= fullText.length && fullText[startOffset - 1] == '\n'))
-
-                            if (isLogicalLineStart) {
-                                val lineIndex = lineStarts.binarySearch(startOffset).let { if (it < 0) -it - 2 else it }.coerceAtLeast(0)
-                                val lineNumber = lineIndex + 1
-                                val isActiveLine = (lineNumber == tab.line)
-
-                                val lineTop = layout.getLineTop(vLine) - scrollY + topPaddingPx
-                                val lineBottom = layout.getLineBottom(vLine) - scrollY + topPaddingPx
-                                val lineHeight = (lineBottom - lineTop).coerceAtLeast(1f)
-
-                                if (isActiveLine) {
-                                    drawRoundRect(
-                                        color = primaryContainerColor.copy(alpha = 0.6f),
-                                        topLeft = Offset(0f, lineTop),
-                                        size = Size(canvasWidth, lineHeight),
-                                        cornerRadius = CornerRadius(6f, 6f)
-                                    )
-                                    textPaint.color = primaryColor.toArgb()
-                                    textPaint.isFakeBoldText = true
-                                } else {
-                                    textPaint.color = onSurfaceVariantColor.copy(alpha = 0.5f).toArgb()
-                                    textPaint.isFakeBoldText = false
-                                }
-
-                                // Git Diff Gutter Indicator
-                                when (lineDiffMap[lineIndex]) {
-                                    LineDiffStatus.ADDED -> {
-                                        drawRect(
-                                            color = Color(0xFF10B981),
-                                            topLeft = Offset(canvasWidth - 3.dp.toPx(), lineTop),
-                                            size = Size(3.dp.toPx(), lineHeight)
-                                        )
-                                    }
-                                    LineDiffStatus.MODIFIED -> {
-                                        drawRect(
-                                            color = Color(0xFF3B82F6),
-                                            topLeft = Offset(canvasWidth - 3.dp.toPx(), lineTop),
-                                            size = Size(3.dp.toPx(), lineHeight)
-                                        )
-                                    }
-                                    else -> {}
-                                }
-
-                                val fontMetrics = textPaint.fontMetrics
-                                val baseline = lineTop + (lineHeight - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent
-                                drawContext.canvas.nativeCanvas.drawText(
-                                    lineNumber.toString(),
-                                    canvasWidth - 4f,
-                                    baseline,
-                                    textPaint
-                                )
-                            }
-                        }
-                    } else {
-                        val lineHeightPx = with(density) { (settings.fontSizeSp * 1.4).sp.toPx() }
-                        val firstLine = ((scrollY - topPaddingPx) / lineHeightPx).toInt().coerceAtLeast(0)
-                        val lastLine = (((scrollY + canvasHeight) - topPaddingPx) / lineHeightPx).toInt().coerceAtMost(lineCount - 1)
-
-                        for (i in firstLine..lastLine) {
-                            val lineNumber = i + 1
-                            val isActiveLine = (lineNumber == tab.line)
-                            val lineTop = i * lineHeightPx - scrollY + topPaddingPx
-
-                            if (isActiveLine) {
-                                drawRoundRect(
-                                    color = primaryContainerColor.copy(alpha = 0.6f),
-                                    topLeft = Offset(0f, lineTop),
-                                    size = Size(canvasWidth, lineHeightPx),
-                                    cornerRadius = CornerRadius(6f, 6f)
-                                )
-                                textPaint.color = primaryColor.toArgb()
-                                textPaint.isFakeBoldText = true
-                            } else {
-                                textPaint.color = onSurfaceVariantColor.copy(alpha = 0.5f).toArgb()
-                                textPaint.isFakeBoldText = false
-                            }
-
-                            // Git Diff Gutter Indicator
-                            when (lineDiffMap[i]) {
-                                LineDiffStatus.ADDED -> {
-                                    drawRect(
-                                        color = Color(0xFF10B981),
-                                        topLeft = Offset(canvasWidth - 3.dp.toPx(), lineTop),
-                                        size = Size(3.dp.toPx(), lineHeightPx)
-                                    )
-                                }
-                                LineDiffStatus.MODIFIED -> {
-                                    drawRect(
-                                        color = Color(0xFF3B82F6),
-                                        topLeft = Offset(canvasWidth - 3.dp.toPx(), lineTop),
-                                        size = Size(3.dp.toPx(), lineHeightPx)
-                                    )
-                                }
-                                else -> {}
-                            }
-
-                            val fontMetrics = textPaint.fontMetrics
-                            val baseline = lineTop + (lineHeightPx - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent
-                            drawContext.canvas.nativeCanvas.drawText(
-                                lineNumber.toString(),
-                                canvasWidth - 4f,
-                                baseline,
-                                textPaint
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Main Editor Canvas Input
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(verticalScroll)
-                    .then(if (!settings.isWordWrap) Modifier.horizontalScroll(horizontalScroll) else Modifier)
-                    .padding(8.dp)
-            ) {
-                BasicTextField(
-                    value = textFieldValue,
-                    onValueChange = { newValue ->
-                        if (ctrlActive) {
-                            val oldText = textFieldValue.text
-                            val newText = newValue.text
-                            val addedChar = if (newText.length > oldText.length) {
-                                val selStart = newValue.selection.start
-                                if (selStart > 0 && selStart <= newText.length) {
-                                    newText.substring(selStart - 1, selStart)
-                                } else ""
-                            } else ""
-
-                            when (addedChar.lowercase()) {
-                                "s" -> {
-                                    try {
-                                        editorMgr.saveActiveTab()
-                                        onSaveRequested()
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("EditorView", "Failed saving file from quick bar", e)
-                                        Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                                    onResetModifiers()
-                                }
-                                "z" -> {
-                                    editorMgr.undoActiveTab()
-                                    onResetModifiers()
-                                }
-                                "y" -> {
-                                    editorMgr.redoActiveTab()
-                                    onResetModifiers()
-                                }
-                                "p" -> {
-                                    onOpenCommandPalette()
-                                    onResetModifiers()
-                                }
-                                else -> {
-                                    onResetModifiers()
-                                }
-                            }
-                        } else {
-                            textFieldValue = newValue
-                            tab.updateSelection(newValue.selection.start, newValue.selection.end)
-                            onContentChange(newValue.text)
-                            onCursorChange(newValue.selection.start)
-                        }
-                    },
-                    onTextLayout = { textLayoutResult = it },
-                    textStyle = TextStyle(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = settings.fontSizeSp.sp,
-                        fontFamily = activeFontFamily,
-                        lineHeight = (settings.fontSizeSp * 1.4).sp
-                    ),
-                    visualTransformation = remember(tab.filePath, tab.languageId, isDark) {
-                        IncrementalSyntaxHighlighter(tab.languageId, isDark)
-                    },
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onPreviewKeyEvent { keyEvent ->
-                            if (keyEvent.type == KeyEventType.KeyDown) {
-                                if (keyEvent.key == Key.Tab) {
-                                    val currentText = textFieldValue.text
-                                    val sel = textFieldValue.selection
-                                    val indentStr = "    " // Standard 4 spaces
-                                    val newText = currentText.substring(0, sel.start) + indentStr + currentText.substring(sel.end)
-                                    val newPos = sel.start + indentStr.length
-                                    textFieldValue = TextFieldValue(newText, TextRange(newPos))
-                                    onContentChange(newText)
-                                    onCursorChange(newPos)
-                                    true
-                                } else if (keyEvent.key == Key.Enter) {
-                                    val currentText = textFieldValue.text
-                                    val sel = textFieldValue.selection
-                                    val lineStart = currentText.lastIndexOf('\n', (sel.start - 1).coerceAtLeast(0)) + 1
-                                    val currentLine = currentText.substring(lineStart, sel.start)
-                                    val indent = currentLine.takeWhile { it == ' ' || it == '\t' }
-                                    val newText = currentText.substring(0, sel.start) + "\n" + indent + currentText.substring(sel.end)
-                                    val newPos = sel.start + 1 + indent.length
-                                    textFieldValue = TextFieldValue(newText, TextRange(newPos))
-                                    onContentChange(newText)
-                                    onCursorChange(newPos)
-                                    true
-                                } else {
-                                    val isCtrl = ctrlActive || keyEvent.isCtrlPressed
-                                    val isShift = shiftActive || keyEvent.isShiftPressed
-                                    if (isCtrl) {
-                                        if (isShift && keyEvent.key == Key.F) {
-                                            onOpenWorkspaceSearch()
-                                            onResetModifiers()
-                                            true
-                                        } else {
-                                            when (keyEvent.key) {
-                                                Key.S -> {
-                                                    try {
-                                                        editorMgr.saveActiveTab()
-                                                        onSaveRequested()
-                                                    } catch (e: Exception) {
-                                                        android.util.Log.e("EditorView", "Failed saving file from shortcut", e)
-                                                        Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                    onResetModifiers()
-                                                    true
-                                                }
-                                                Key.Z -> {
-                                                    editorMgr.undoActiveTab()
-                                                    onResetModifiers()
-                                                    true
-                                                }
-                                                Key.Y -> {
-                                                    editorMgr.redoActiveTab()
-                                                    onResetModifiers()
-                                                    true
-                                                }
-                                                Key.P -> {
-                                                    onOpenCommandPalette()
-                                                    onResetModifiers()
-                                                    true
-                                                }
-                                                Key.F -> {
-                                                    tab.showFindBar = true
-                                                    tab.showReplaceBar = false
-                                                    onResetModifiers()
-                                                    true
-                                                }
-                                                Key.H -> {
-                                                    tab.showFindBar = true
-                                                    tab.showReplaceBar = true
-                                                    onResetModifiers()
-                                                    true
-                                                }
-                                                else -> false
-                                            }
-                                        }
-                                    } else false
-                                }
-                            } else false
-                        }
-                        .testTag("code_editor_text_input")
-                )
-            }
-        }
+                .testTag("code_editor_text_input")
+        )
     }
 }
 

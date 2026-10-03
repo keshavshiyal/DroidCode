@@ -1,0 +1,104 @@
+package com.droidcode.editor.engine
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
+import com.droidcode.editor.EditorTab
+import com.droidcode.editor.LineDiffStatus
+import com.droidcode.settings.AppSettings
+
+/**
+ * Jetpack Compose wrapper for the native virtualized DroidCodeEngine.
+ *
+ * Replaces non-virtualized BasicTextField with our custom 120 FPS hardware-accelerated
+ * CodeEditorView, allowing frictionless editing across 100,000+ line codebases.
+ */
+@Composable
+fun DroidCodeEditor(
+    tab: EditorTab,
+    settings: AppSettings,
+    ctrlActive: Boolean = false,
+    shiftActive: Boolean = false,
+    altActive: Boolean = false,
+    lineDiffMap: Map<Int, LineDiffStatus> = emptyMap(),
+    onContentChange: (String) -> Unit,
+    onCursorChange: (line: Int, col: Int) -> Unit,
+    onSaveRequested: () -> Unit = {},
+    onUndoRequested: () -> Unit = {},
+    onRedoRequested: () -> Unit = {},
+    onOpenCommandPalette: () -> Unit = {},
+    onOpenWorkspaceSearch: () -> Unit = {},
+    onOpenFind: () -> Unit = {},
+    onResetModifiers: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val isDark = isSystemInDarkTheme()
+    val theme = remember(isDark) {
+        if (isDark) EditorTheme.darkTheme() else EditorTheme.lightTheme()
+    }
+
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            CodeEditorView(ctx).apply {
+                this.theme = theme
+                this.languageId = tab.languageId
+                this.fontSizeSp = settings.fontSizeSp.toFloat()
+                this.isLineNumbersEnabled = settings.isLineNumbersEnabled
+                this.lineDiffMap = lineDiffMap
+                this.ctrlActive = ctrlActive
+                this.shiftActive = shiftActive
+                this.altActive = altActive
+                this.setBufferText(tab.content)
+
+                this.onContentChanged = onContentChange
+                this.onCursorChanged = onCursorChange
+                this.onSaveShortcut = onSaveRequested
+                this.onUndoShortcut = onUndoRequested
+                this.onRedoShortcut = onRedoRequested
+                this.onCommandPaletteShortcut = onOpenCommandPalette
+                this.onWorkspaceSearchShortcut = onOpenWorkspaceSearch
+                this.onFindShortcut = onOpenFind
+                this.onResetModifiers = onResetModifiers
+
+                if (tab.line > 0 && tab.column > 0) {
+                    this.setCursorPosition(CursorPos(tab.line - 1, tab.column - 1))
+                }
+            }
+        },
+        update = { view ->
+            view.theme = theme
+            view.languageId = tab.languageId
+            view.fontSizeSp = settings.fontSizeSp.toFloat()
+            view.isLineNumbersEnabled = settings.isLineNumbersEnabled
+            view.lineDiffMap = lineDiffMap
+            view.ctrlActive = ctrlActive
+            view.shiftActive = shiftActive
+            view.altActive = altActive
+            view.onContentChanged = onContentChange
+            view.onCursorChanged = onCursorChange
+            view.onSaveShortcut = onSaveRequested
+            view.onUndoShortcut = onUndoRequested
+            view.onRedoShortcut = onRedoRequested
+            view.onCommandPaletteShortcut = onOpenCommandPalette
+            view.onWorkspaceSearchShortcut = onOpenWorkspaceSearch
+            view.onFindShortcut = onOpenFind
+            view.onResetModifiers = onResetModifiers
+
+            // Sync buffer if external update occurred (e.g. file reload or replace all)
+            if (view.lastSyncedText !== tab.content && view.lastSyncedText != tab.content) {
+                view.setBufferText(tab.content)
+            }
+
+            if (tab.line > 0 && tab.column > 0) {
+                val targetPos = CursorPos(tab.line - 1, tab.column - 1)
+                if (view.cursorPosition != targetPos) {
+                    view.setCursorPosition(targetPos)
+                }
+            }
+        }
+    )
+}
