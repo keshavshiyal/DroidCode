@@ -75,11 +75,13 @@ class WorkspaceManager @Inject constructor() {
     }
 
     val workspaceFileTree: List<FileNode>
-        get() {
-            val proj = _currentProject ?: return emptyList()
-            if (!File(proj.path).exists()) return emptyList()
-            return fileSystem.listDirectoryRecursive(proj.directory)
-        }
+        get() = getWorkspaceFileTree(emptySet())
+
+    fun getWorkspaceFileTree(expandedPaths: Set<String> = emptySet()): List<FileNode> {
+        val proj = _currentProject ?: return emptyList()
+        if (!File(proj.path).exists()) return emptyList()
+        return fileSystem.listDirectory(proj.directory, expandedPaths)
+    }
 
     fun getRecentWorkspacesFlow(context: Context): Flow<List<WorkspaceEntity>> {
         val db = AppDatabase.getInstance(context)

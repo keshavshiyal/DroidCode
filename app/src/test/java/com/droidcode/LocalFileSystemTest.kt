@@ -51,6 +51,15 @@ class LocalFileSystemTest {
 
         val shallow = fs.listDirectory(root)
         assertEquals(2, shallow.size)
+        val shallowSubNode = shallow.find { it.name == "sub" }
+        assertNotNull(shallowSubNode)
+        assertTrue(shallowSubNode!!.children.isEmpty())
+
+        val lazyExpanded = fs.listDirectory(root, setOf(sub.absolutePath))
+        val lazySubNode = lazyExpanded.find { it.name == "sub" }
+        assertNotNull(lazySubNode)
+        assertEquals(1, lazySubNode!!.children.size)
+        assertEquals("fileB.txt", lazySubNode.children[0].name)
 
         val recursive = fs.listDirectoryRecursive(root)
         assertEquals(2, recursive.size) // sub and fileA at root level

@@ -128,7 +128,7 @@ fun ExplorerPanel(
     val currentProject by workspaceMgr.currentProjectFlow.collectAsState()
     val treeVersion by workspaceMgr.treeVersion.collectAsState()
 
-    var treeNodes by remember { mutableStateOf(workspaceMgr.workspaceFileTree) }
+    var treeNodes by remember { mutableStateOf(workspaceMgr.getWorkspaceFileTree(expandedPaths)) }
     val expandedPathsSaver = listSaver<Set<String>, String>(
         save = { it.toList() },
         restore = { it.toSet() }
@@ -141,11 +141,11 @@ fun ExplorerPanel(
     var selectedNode by remember { mutableStateOf<FileNode?>(null) }
     var clipboardItem by remember { mutableStateOf<FileClipboardItem?>(null) }
 
-    // Auto-refresh file navigation tree whenever workspace changes or treeVersion updates
-    LaunchedEffect(currentProject?.path, treeVersion) {
+    // Auto-refresh file navigation tree whenever workspace changes, treeVersion updates, or folders expand/collapse
+    LaunchedEffect(currentProject?.path, treeVersion, expandedPaths) {
         isLoadingTree = true
         val nodes = withContext(Dispatchers.IO) {
-            workspaceMgr.workspaceFileTree
+            workspaceMgr.getWorkspaceFileTree(expandedPaths)
         }
         treeNodes = nodes
         isLoadingTree = false
@@ -235,7 +235,7 @@ fun ExplorerPanel(
         coroutineScope.launch {
             isLoadingTree = true
             val nodes = withContext(Dispatchers.IO) {
-                workspaceMgr.workspaceFileTree
+                workspaceMgr.getWorkspaceFileTree(expandedPaths)
             }
             treeNodes = nodes
             isLoadingTree = false
@@ -277,7 +277,7 @@ fun ExplorerPanel(
                     }
                     expandedPaths = expandedPaths + targetDir.absolutePath
                     val nodes = withContext(Dispatchers.IO) {
-                        workspaceMgr.workspaceFileTree
+                        workspaceMgr.getWorkspaceFileTree(expandedPaths)
                     }
                     treeNodes = nodes
                     FileNode.fromFile(resultFile)?.let { selectedNode = it }

@@ -9,11 +9,19 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class LocalFileSystem {
 
     private static final LocalFileSystem INSTANCE = new LocalFileSystem();
+
+    private static final Set<String> DEFAULT_IGNORED_DIRS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            ".git", ".gradle", ".idea", ".cxx", ".externalNativeBuild", "__pycache__"
+    )));
 
     private LocalFileSystem() {}
 
@@ -21,11 +29,24 @@ public class LocalFileSystem {
         return INSTANCE;
     }
 
-    public List<FileNode> listDirectory(File directory) {
-        return listDirectoryRecursive(directory);
+    public static boolean isIgnoredDirectory(String dirName) {
+        return dirName != null && DEFAULT_IGNORED_DIRS.contains(dirName);
     }
 
-    public List<FileNode> listDirectoryRecursive(File directory) {
+    /**
+     * Shallow listing of directory contents (depth = 1).
+     * Subdirectories have empty children lists, enabling on-demand lazy expansion.
+     */
+    public List<FileNode> listDirectory(File directory) {
+        return listDirectory(directory, Collections.emptySet());
+    }
+
+    /**
+     * Lazy hierarchical listing of directory contents.
+     * Only subdirectories whose absolute paths are present in expandedPaths
+     * will have their children recursively resolved.
+     */
+    public List<FileNode> listDirectory(File directory, Set<String> expandedPaths) {
         List<FileNode> nodes = new ArrayList<>();
         if (directory == null || !directory.exists() || !directory.isDirectory()) {
             return nodes;
@@ -33,6 +54,13 @@ public class LocalFileSystem {
 
         File[] files = directory.listFiles();
         if (files != null) {
+            Arrays.sort(files, (a, b) -> {
+                if (a.isDirectory() != b.isDirectory()) {
+                    return a.isDirectory() ? -1 : 1;
+                }
+                return a.getName().compareToIgnoreCase(b.getName());
+            });
+
             for (File file : files) {
                 if (file.getName().equals(".DS_Store")) continue;
                 String cleanName = SafUtils.getCleanFileName(file.getName());
@@ -49,17 +77,66 @@ public class LocalFileSystem {
                 FileNode node = FileNode.fromFile(file);
                 if (node != null) {
                     if (node.isFolder()) {
-                        List<FileNode> subChildren = listDirectoryRecursive(file);
+                        if (expandedPaths != null && expandedPaths.contains(file.getAbsolutePath())) {
+                            List<FileNode> subChildren = listDirectory(file, expandedPaths);
+                            node.setChildren(subChildren);
+                        } else {
+                            node.setChildren(new ArrayList<>());
+                        }
+                    }
+                    nodes.add(node);
+                }
+            }
+        }
+        return nodes;
+    }
+
+    /**
+     * Recursive directory listing for complete tree inspections / exports.
+     */
+    public List<FileNode> listDirectoryRecursive(File directory) {
+        return listDirectoryRecursiveInternal(directory, 0, 30);
+    }
+
+    private List<FileNode> listDirectoryRecursiveInternal(File directory, int depth, int maxDepth) {
+        List<FileNode> nodes = new ArrayList<>();
+        if (directory == null || !directory.exists() || !directory.isDirectory() || depth >= maxDepth) {
+            return nodes;
+        }
+
+        File[] files = directory.listFiles();
+        if (files != null) {
+            Arrays.sort(files, (a, b) -> {
+                if (a.isDirectory() != b.isDirectory()) {
+                    return a.isDirectory() ? -1 : 1;
+                }
+                return a.getName().compareToIgnoreCase(b.getName());
+            });
+
+            for (File file : files) {
+                if (file.getName().equals(".DS_Store")) continue;
+                String cleanName = SafUtils.getCleanFileName(file.getName());
+                if (!cleanName.equals(file.getName())) {
+                    File cleanTarget = new File(file.getParentFile(), cleanName);
+                    if (!cleanTarget.exists()) {
+                        SafUtils.renameInSaf(file, cleanName);
+                        boolean renamed = file.renameTo(cleanTarget);
+                        if (renamed) {
+                            file = cleanTarget;
+                        }
+                    }
+                }
+                FileNode node = FileNode.fromFile(file);
+                if (node != null) {
+                    if (node.isFolder()) {
+                        List<FileNode> subChildren = listDirectoryRecursiveInternal(file, depth + 1, maxDepth);
                         node.setChildren(subChildren);
                     }
                     nodes.add(node);
                 }
             }
         }
-
-        FileNode dummy = new FileNode("root", directory.getAbsolutePath(), true, 0, 0);
-        dummy.setChildren(nodes);
-        return dummy.getChildren();
+        return nodes;
     }
 
     public File createFile(File parentDir, String fileName) throws Exception {

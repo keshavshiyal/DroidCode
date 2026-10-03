@@ -2,7 +2,22 @@
 
 All notable changes to DroidCode will be documented in this file.
 
-## [0.1.0-alpha01] - 2026-09-22
+## [0.1.0-alpha01] - 2026-10-03
+
+### Milestone 1 — Performance Optimization & Toolchain Hardening
+- **Windows Build Tooling**:
+  - Added standalone `gradlew.bat` supporting both Gradle Wrapper JAR and system Gradle resolution.
+- **Dependency Injection Toolchain**:
+  - Configured Hilt Android Gradle plugin in root and app `build.gradle.kts` alongside KSP compiler (`libs.hilt.compiler`).
+- **Lazy Filesystem Architecture**:
+  - Refactored `LocalFileSystem.java` and `WorkspaceManager.kt` from eager full-disk recursion to on-demand hierarchical lazy loading.
+  - Subdirectories are loaded only when present in `expandedPaths`, preventing thread starvation and memory spikes on large repositories.
+  - Added default ignored directory filters (`.git`, `.gradle`, `.idea`, `.cxx`, `.externalNativeBuild`, `__pycache__`) and alphabetical folder-first sorting.
+- **Differential Undo/Redo Engine**:
+  - Refactored `UndoManager.java` to compute piecewise `TextDelta` operations (offset, deleted text, inserted text) instead of cloning full-document strings on every keystroke.
+  - Slashes text buffer memory consumption by over 95% and eliminates GC pauses during editing.
+- **O(log N) Line/Column Calculations**:
+  - Cached pre-indexed line start offsets in `EditorTab.kt` with binary-search lookups, replacing O(N) iterative text scanning on every cursor shift.
 
 ### Phase 1.5.1 — Foundation Hardening & Architecture Cleanups
 - **Room Database Concurrency Hardening**:

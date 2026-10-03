@@ -29,10 +29,14 @@ class EditorTab(
     var content: String by mutableStateOf(initialContent ?: "")
         private set
 
+    private var lineStartOffsets: IntArray = computeLineStartOffsets(content)
+
     fun forceOpenAsText(rawText: String) {
         this.content = rawText
         this.originalContent = rawText
+        this.lineStartOffsets = computeLineStartOffsets(rawText)
         this.viewerType = FileViewerType.TEXT
+        calculateLineColumn()
     }
 
     var originalContent: String = content
@@ -75,6 +79,7 @@ class EditorTab(
 
     fun updateContent(newContent: String) {
         this.content = newContent
+        this.lineStartOffsets = computeLineStartOffsets(newContent)
         this.isModified = (this.content != this.originalContent)
         calculateLineColumn()
     }
@@ -97,16 +102,32 @@ class EditorTab(
 
     private fun calculateLineColumn() {
         val pos = cursorPosition.coerceIn(0, content.length)
-        var currentLine = 1
-        var lastLineBreak = -1
-        for (i in 0 until pos) {
-            if (content[i] == '\n') {
-                currentLine++
-                lastLineBreak = i
+        val offsets = lineStartOffsets
+        var low = 0
+        var high = offsets.size - 1
+        var lineIdx = 0
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            if (offsets[mid] <= pos) {
+                lineIdx = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
             }
         }
-        this.line = currentLine
-        this.column = pos - lastLineBreak
+        this.line = lineIdx + 1
+        this.column = pos - offsets[lineIdx] + 1
+    }
+
+    private fun computeLineStartOffsets(text: String): IntArray {
+        val starts = ArrayList<Int>()
+        starts.add(0)
+        for (i in 0 until text.length) {
+            if (text[i] == '\n') {
+                starts.add(i + 1)
+            }
+        }
+        return starts.toIntArray()
     }
 
     companion object {
