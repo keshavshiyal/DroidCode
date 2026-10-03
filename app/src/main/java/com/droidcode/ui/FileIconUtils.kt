@@ -111,11 +111,11 @@ object FileIconUtils {
     fun getFileIconColor(nameOrExt: String): Color {
         return when (classifyFile(nameOrExt)) {
             "DOCKER" -> Color(0xFF0288D1)
-            "BUILD" -> Color(0xFF607D8B)
+            "BUILD" -> Color(0xFF80CBC4)
             "MAVEN" -> Color(0xFFC71A36)
             "ENV" -> Color(0xFFFFD54F)
             "LICENSE" -> Color(0xFF66BB6A)
-            "CONFIG" -> Color(0xFF78909C)
+            "CONFIG" -> Color(0xFF90A4AE)
             "README" -> Color(0xFF00ACC1)
             "GIT" -> Color(0xFFF4511E)
             "HTML" -> Color(0xFFE65100)
@@ -140,14 +140,14 @@ object FileIconUtils {
             "YAML" -> Color(0xFF388E3C)
             "TOML" -> Color(0xFF9E9D24)
             "DATA" -> Color(0xFF43A047)
-            "GRADLE" -> Color(0xFF02303A)
+            "GRADLE" -> Color(0xFF00C7B7)
             "IMAGE" -> Color(0xFFAB47BC)
             "PDF" -> Color(0xFFE53935)
             "VIDEO" -> Color(0xFF5E35B1)
-            "DOCUMENTATION" -> MaterialTheme.colorScheme.outline
+            "DOCUMENTATION" -> Color(0xFF81D4FA)
             "ARCHIVE" -> Color(0xFFFFA000)
             "SHELL" -> Color(0xFF2E7D32)
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
+            else -> MaterialTheme.colorScheme.onSurface
         }
     }
 }

@@ -101,6 +101,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FindReplace
@@ -108,6 +109,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Splitscreen
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -231,69 +233,271 @@ fun EditorView(
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
         if (tabs.isNotEmpty() && activeTab != null) {
-            // Top Navigation Header Bars (Tab Bar, Breadcrumbs, Editor Toolbar)
+            // Pinned Top Navigation Header Bars (Tab Bar, Breadcrumbs, Editor Toolbar)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .zIndex(5f)
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
                 // Tab Bar
                 Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    val isActive = index == editorMgr.activeTabIndex
-                    val bg = if (isActive) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
-                    val tabBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                        .background(MaterialTheme.colorScheme.surface),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(
                         modifier = Modifier
+                            .weight(1f)
                             .fillMaxHeight()
-                            .background(bg)
-                            .border(1.dp, tabBorderColor)
-                            .clickable { editorMgr.activeTabIndex = index }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = getEditorFileIcon(tab.fileName),
-                            contentDescription = null,
-                            tint = getEditorFileIconColor(tab.fileName),
-                            modifier = Modifier
-                                .size(16.dp)
-                                .padding(end = 4.dp)
-                        )
+                        tabs.forEachIndexed { index, tab ->
+                            val isActive = index == editorMgr.activeTabIndex
+                            val bg = if (isActive) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+                            val tabBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
 
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .background(bg)
+                                    .border(1.dp, tabBorderColor)
+                                    .clickable { editorMgr.activeTabIndex = index }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = getEditorFileIcon(tab.fileName),
+                                    contentDescription = null,
+                                    tint = getEditorFileIconColor(tab.fileName),
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .padding(end = 4.dp)
+                                )
+
+                                Text(
+                                    text = tab.fileName + (if (tab.isModified) " *" else ""),
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Spacer(modifier = Modifier.width(SpacingS))
+
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.action_close_tab),
+                                    tint = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .clickable {
+                                            val tabToClose = tabs[index]
+                                            if (tabToClose.isModified) {
+                                                tabToPromptCloseIndex = index
+                                            } else {
+                                                editorMgr.closeTab(index)
+                                            }
+                                        }
+                                )
+                            }
+                        }
+                    }
+
+                    // Pinned File & Tab Actions Menu at the right of the Tab Bar
+                    IconButton(
+                        onClick = {
+                            if (onOpenGeneralMenu != null) {
+                                onOpenGeneralMenu()
+                            } else {
+                                showContextMenu = true
+                            }
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .padding(end = 4.dp)
+                            .testTag("tab_bar_file_menu_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "File & Editor Menu",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Breadcrumbs Navigation Bar
+                BreadcrumbsBar(
+                    tab = activeTab,
+                    workspaceDir = currentProject?.directory,
+                    onOpenFile = { file ->
+                        try {
+                            editorMgr.openFile(file)
+                        } catch (e: Exception) {
+                            android.util.Log.e("EditorView", "Failed to open file: ${file.name}", e)
+                        }
+                    },
+                    onShowGoToLine = { showGoToLineDialog = true },
+                    onShowFind = {
+                        activeTab.showFindBar = true
+                        activeTab.showReplaceBar = false
+                    }
+                )
+
+                // Editor Toolbar & Language / Line Stats
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = tab.fileName + (if (tab.isModified) " *" else ""),
-                            fontSize = 12.sp,
+                            text = activeTab.languageId.uppercase(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
                             fontFamily = FontFamily.Monospace,
-                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(modifier = Modifier.width(SpacingS))
-
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = stringResource(R.string.action_close_tab),
-                            tint = if (isActive) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier
-                                .size(14.dp)
-                                .clickable {
-                                    val tabToClose = tabs[index]
-                                    if (tabToClose.isModified) {
-                                        tabToPromptCloseIndex = index
-                                    } else {
-                                        editorMgr.closeTab(index)
-                                    }
-                                }
+                                .clickable { showChangeLanguageDialog = true }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = activeTab.encoding,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .clickable { showChangeEncodingDialog = true }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = activeTab.lineEnding,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .clickable { showChangeLineEndingDialog = true }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(SpacingM))
+                        Text(
+                            text = stringResource(R.string.status_line_col, activeTab.line, activeTab.column),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.wrapContentWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        IconButton(
+                            onClick = { showWorkspaceSearchDialog = true },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("editor_find_in_files_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Find in Files (Ctrl+Shift+F)",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                splitMode = when (splitMode) {
+                                    EditorSplitMode.NONE -> EditorSplitMode.HORIZONTAL
+                                    EditorSplitMode.HORIZONTAL -> EditorSplitMode.VERTICAL
+                                    EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
+                                }
+                            },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("editor_split_mode_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Splitscreen,
+                                contentDescription = "Toggle Split Editor",
+                                tint = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                try {
+                                    editorMgr.saveActiveTab()
+                                    onSaveRequested()
+                                } catch (e: Exception) {
+                                    android.util.Log.e("EditorView", "Failed saving active tab", e)
+                                    Toast.makeText(context, "Failed to save file: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("editor_save_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Save,
+                                contentDescription = "Save",
+                                tint = if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                if (onOpenGeneralMenu != null) {
+                                    onOpenGeneralMenu()
+                                } else {
+                                    showContextMenu = true
+                                }
+                            },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("editor_general_menu_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "File & Project Menubar",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showContextMenu = true },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("editor_context_menu_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "IDE Context Menu",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -336,168 +540,6 @@ fun EditorView(
                     }
                 }
             )
-        }
-
-        // Breadcrumbs Navigation Bar
-        if (activeTab != null) {
-            BreadcrumbsBar(
-                tab = activeTab,
-                workspaceDir = currentProject?.directory,
-                onOpenFile = { file ->
-                    try {
-                        editorMgr.openFile(file)
-                    } catch (e: Exception) {
-                        android.util.Log.e("EditorView", "Failed to open file: ${file.name}", e)
-                    }
-                },
-                onShowGoToLine = { showGoToLineDialog = true },
-                onShowFind = {
-                    activeTab.showFindBar = true
-                    activeTab.showReplaceBar = false
-                }
-            )
-        }
-
-        // Editor Toolbar & Language / Line Stats
-        if (activeTab != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = activeTab.languageId.uppercase(),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .clickable { showChangeLanguageDialog = true }
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = activeTab.encoding,
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .clickable { showChangeEncodingDialog = true }
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = activeTab.lineEnding,
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .clickable { showChangeLineEndingDialog = true }
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                    Spacer(modifier = Modifier.width(SpacingM))
-                    Text(
-                        text = stringResource(R.string.status_line_col, activeTab.line, activeTab.column),
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = { showWorkspaceSearchDialog = true },
-                        modifier = Modifier
-                            .size(32.dp)
-                            .testTag("editor_find_in_files_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Find in Files (Ctrl+Shift+F)",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            splitMode = when (splitMode) {
-                                EditorSplitMode.NONE -> EditorSplitMode.HORIZONTAL
-                                EditorSplitMode.HORIZONTAL -> EditorSplitMode.VERTICAL
-                                EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
-                            }
-                        },
-                        modifier = Modifier
-                            .size(32.dp)
-                            .testTag("editor_split_mode_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Splitscreen,
-                            contentDescription = "Toggle Split Editor",
-                            tint = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            try {
-                                editorMgr.saveActiveTab()
-                                onSaveRequested()
-                            } catch (e: Exception) {
-                                android.util.Log.e("EditorView", "Failed saving active tab", e)
-                                Toast.makeText(context, "Failed to save file: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier
-                            .size(32.dp)
-                            .testTag("editor_save_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Save,
-                            contentDescription = "Save",
-                            tint = if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    if (onOpenGeneralMenu != null) {
-                        IconButton(
-                            onClick = { onOpenGeneralMenu() },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .testTag("editor_general_menu_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "General Menu",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = { showContextMenu = true },
-                        modifier = Modifier
-                            .size(32.dp)
-                            .testTag("editor_context_menu_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "IDE Context Menu",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
         }
 
         // Split-Pane or Single Editor Container
@@ -860,7 +902,7 @@ private fun BreadcrumbsBar(
                             imageVector = getEditorFileIcon(node.name),
                             contentDescription = null,
                             tint = getEditorFileIconColor(node.name),
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(4.dp))
@@ -871,12 +913,19 @@ private fun BreadcrumbsBar(
                         color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         fontFamily = FontFamily.Monospace
                     )
+                    Spacer(modifier = Modifier.width(2.dp))
                     if (node.isDirectory) {
-                        Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = "▾",
                             fontSize = 9.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "File actions menu",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }
