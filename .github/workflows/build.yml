@@ -91,10 +91,37 @@ jobs:
       - name: Run Unit Tests
         run: |
           if [ -s ./gradlew ]; then
-            ./gradlew :app:testDebugUnitTest --stacktrace
+            ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee test_output.txt || {
+              echo "=== UNIT TEST FAILURE REPORT ==="
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git checkout -B ci-test-failure
+              git add -f test_output.txt 2>/dev/null || true
+              find app/build/reports/tests -type f -exec git add -f {} + 2>/dev/null || true
+              git commit -m "ci: test failure log [skip ci]" || true
+              git push origin ci-test-failure --force || true
+              exit 1
+            }
           else
-            gradle :app:testDebugUnitTest --stacktrace
+            gradle :app:testDebugUnitTest --stacktrace 2>&1 | tee test_output.txt || {
+              echo "=== UNIT TEST FAILURE REPORT ==="
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git checkout -B ci-test-failure
+              git add -f test_output.txt 2>/dev/null || true
+              find app/build/reports/tests -type f -exec git add -f {} + 2>/dev/null || true
+              git commit -m "ci: test failure log [skip ci]" || true
+              git push origin ci-test-failure --force || true
+              exit 1
+            }
           fi
+
+      - name: Upload Test Report on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: app/build/reports/tests/**
 
       - name: Build Debug APK
         run: |
