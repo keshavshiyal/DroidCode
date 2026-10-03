@@ -56,6 +56,7 @@ DroidCode is architected as a native Android IDE designed for high reliability, 
 - **`FileNode`**: Tree node data structure representing hierarchical files and directories for `ExplorerPanel`.
 
 ### 3.3 Editor Subsystem (`com.droidcode.editor`)
+- **`DroidCodeEngine`**: High-performance, hardware-accelerated virtualized code editor engine capable of fluid 60–120 FPS typing on files with 100,000+ lines. Features Monospace $O(1)$ spatial coordinate projection, viewport-only syntax tokenization (`LineTokenizer`), and direct canvas rendering (`CodeEditorView`). See [Editor Engine Architecture](editor_engine.md).
 - **`EditorManager`**: Central controller managing open tabs (`tabs`), active tab tracking (`activeTabIndex`), multi-file lifecycle, and undo/redo histories.
 - **`EditorTab`**: Encapsulates active file path, title, in-memory buffer, cursor position (line and column), dirty state (`isModified`), and viewer type (Text, Image, PDF, Video, Audio, Binary).
 - **`UndoManager`**: Bounded double-ended stack providing undo and redo capabilities for buffer edits.
