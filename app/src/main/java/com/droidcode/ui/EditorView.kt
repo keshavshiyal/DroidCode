@@ -116,6 +116,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.zIndex
 import com.droidcode.editor.LineDiffCalculator
 import com.droidcode.editor.LineDiffStatus
 import com.droidcode.project.WorkspaceManager
@@ -229,15 +230,15 @@ fun EditorView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        // Top Navigation Header Bars (Tab Bar, Breadcrumbs, Editor Toolbar)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .zIndex(5f)
-        ) {
-            // Tab Bar
-            if (tabs.isNotEmpty()) {
-            Row(
+        if (tabs.isNotEmpty() && activeTab != null) {
+            // Top Navigation Header Bars (Tab Bar, Breadcrumbs, Editor Toolbar)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .zIndex(5f)
+            ) {
+                // Tab Bar
+                Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(38.dp)
@@ -637,7 +638,6 @@ fun EditorView(
                     )
                 }
             }
-        }
         } else {
             // Empty State
             Box(
