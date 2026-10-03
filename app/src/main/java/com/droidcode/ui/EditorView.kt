@@ -1265,13 +1265,8 @@ private fun CodeCanvas(
             lineDiffMap = lineDiffMap,
             onContentChange = onContentChange,
             onCursorChange = { line, col ->
-                tab.line = line
-                tab.column = col
-                if (tab.lineStartOffsets.isNotEmpty() && line - 1 < tab.lineStartOffsets.size) {
-                    val offset = tab.lineStartOffsets[line - 1] + (col - 1)
-                    tab.updateCursor(offset)
-                    onCursorChange(offset)
-                }
+                tab.updateCursor(line, col)
+                onCursorChange(tab.cursorPosition)
             },
             onSaveRequested = onSaveRequested,
             onUndoRequested = { editorMgr.undoActiveTab() },

@@ -29,7 +29,8 @@ class EditorTab(
     var content: String by mutableStateOf(initialContent ?: "")
         private set
 
-    private var lineStartOffsets: IntArray = computeLineStartOffsets(initialContent ?: "")
+    var lineStartOffsets: IntArray = computeLineStartOffsets(initialContent ?: "")
+        private set
 
     fun forceOpenAsText(rawText: String) {
         this.content = rawText
@@ -92,6 +93,20 @@ class EditorTab(
     fun updateCursor(position: Int) {
         this.cursorPosition = position.coerceIn(0, content.length)
         calculateLineColumn()
+    }
+
+    fun updateCursor(targetLine: Int, targetColumn: Int) {
+        val lineIdx = (targetLine - 1).coerceIn(0, (lineStartOffsets.size - 1).coerceAtLeast(0))
+        val lineStart = lineStartOffsets.getOrElse(lineIdx) { 0 }
+        val lineEnd = if (lineIdx + 1 < lineStartOffsets.size) {
+            (lineStartOffsets[lineIdx + 1] - 1).coerceAtLeast(lineStart)
+        } else {
+            content.length
+        }
+        val colOffset = (targetColumn - 1).coerceIn(0, (lineEnd - lineStart).coerceAtLeast(0))
+        this.line = lineIdx + 1
+        this.column = colOffset + 1
+        this.cursorPosition = (lineStart + colOffset).coerceIn(0, content.length)
     }
 
     val file: File

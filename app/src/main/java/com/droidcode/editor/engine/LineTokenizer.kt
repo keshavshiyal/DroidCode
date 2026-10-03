@@ -30,6 +30,10 @@ class LineTokenizer(
     private var keywords = SyntaxHighlighter.getKeywordsForLanguage(languageId)
     private val lineCache = HashMap<String, List<SyntaxToken>>()
 
+    fun clearCache() {
+        lineCache.clear()
+    }
+
     fun updateConfig(newLanguageId: String, newTheme: EditorTheme) {
         if (this.languageId != newLanguageId || this.theme != newTheme) {
             this.languageId = newLanguageId
@@ -37,6 +41,10 @@ class LineTokenizer(
             this.keywords = SyntaxHighlighter.getKeywordsForLanguage(newLanguageId)
             this.lineCache.clear()
         }
+    }
+
+    fun tokenizeLine(lineIndex: Int, lineText: String): List<SyntaxToken> {
+        return tokenizeLine(lineText)
     }
 
     fun tokenizeLine(lineText: String): List<SyntaxToken> {
