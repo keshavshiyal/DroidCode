@@ -126,9 +126,27 @@ jobs:
       - name: Build Debug APK
         run: |
           if [ -s ./gradlew ]; then
-            ./gradlew :app:assembleDebug --stacktrace
+            ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build_debug_output.txt || {
+              echo "=== ASSEMBLE DEBUG FAILURE ==="
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git checkout -B ci-build-failure
+              git add -f build_debug_output.txt 2>/dev/null || true
+              git commit -m "ci: assembleDebug failure log [skip ci]" || true
+              git push origin ci-build-failure --force || true
+              exit 1
+            }
           else
-            gradle :app:assembleDebug --stacktrace
+            gradle :app:assembleDebug --stacktrace 2>&1 | tee build_debug_output.txt || {
+              echo "=== ASSEMBLE DEBUG FAILURE ==="
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git checkout -B ci-build-failure
+              git add -f build_debug_output.txt 2>/dev/null || true
+              git commit -m "ci: assembleDebug failure log [skip ci]" || true
+              git push origin ci-build-failure --force || true
+              exit 1
+            }
           fi
 
       - name: Decode Release Keystore
@@ -145,9 +163,27 @@ jobs:
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           if [ -s ./gradlew ]; then
-            ./gradlew :app:assembleRelease --stacktrace
+            ./gradlew :app:assembleRelease --stacktrace 2>&1 | tee build_release_output.txt || {
+              echo "=== ASSEMBLE RELEASE FAILURE ==="
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git checkout -B ci-build-failure
+              git add -f build_release_output.txt 2>/dev/null || true
+              git commit -m "ci: assembleRelease failure log [skip ci]" || true
+              git push origin ci-build-failure --force || true
+              exit 1
+            }
           else
-            gradle :app:assembleRelease --stacktrace
+            gradle :app:assembleRelease --stacktrace 2>&1 | tee build_release_output.txt || {
+              echo "=== ASSEMBLE RELEASE FAILURE ==="
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git checkout -B ci-build-failure
+              git add -f build_release_output.txt 2>/dev/null || true
+              git commit -m "ci: assembleRelease failure log [skip ci]" || true
+              git push origin ci-build-failure --force || true
+              exit 1
+            }
           fi
 
       - name: Upload Debug APK
