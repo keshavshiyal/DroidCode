@@ -16,8 +16,20 @@ All notable changes to DroidCode will be documented in this file.
 - **Differential Undo/Redo Engine**:
   - Refactored `UndoManager.java` to compute piecewise `TextDelta` operations (offset, deleted text, inserted text) instead of cloning full-document strings on every keystroke.
   - Slashes text buffer memory consumption by over 95% and eliminates GC pauses during editing.
-- **O(log N) Line/Column Calculations**:
-  - Cached pre-indexed line start offsets in `EditorTab.kt` with binary-search lookups, replacing O(N) iterative text scanning on every cursor shift.
+- **Incremental Line-Viewport Syntax Tokenizer**:
+  - Implemented `IncrementalSyntaxHighlighter.kt` with line-cached token spans, avoiding full-document regex re-tokenization on every keystroke and maintaining 60–120 FPS typing speed.
+- **Breadcrumbs Navigation**:
+  - Added interactive breadcrumbs path display (`Project > dir > ... > file`) in editor header with single-tap segment navigation.
+- **Editor Gutter Git Diff**:
+  - Implemented `LineDiffCalculator.kt` with fast prefix/suffix and LCS diffing, rendering live green (added) and blue (modified) gutter indicators against disk baseline.
+- **Workspace-Wide Text Search (Project Grep — `Ctrl+Shift+F`)**:
+  - Implemented `WorkspaceSearchDialog.kt` supporting background I/O file scanning with Match Case, Whole Word, and Regex filters with jump-to-line navigation.
+- **Split-Pane Multi-Editor**:
+  - Added side-by-side (`HORIZONTAL`) and stacked (`VERTICAL`) split editor layouts with independent buffer viewports and synchronised undo/redo state.
+- **CI / Static Analysis Hardening**:
+  - Configured Android Lint with zero warnings/errors (`warningsAsErrors = true`).
+  - Transitioned syntax highlighter test suite to standard JUnit test runner.
+  - Resolved icon asset references and verified all CI stages (Lint, Detekt, JUnit, Debug APK, Signed Release APK).
 
 ### Phase 1.5.1 — Foundation Hardening & Architecture Cleanups
 - **Room Database Concurrency Hardening**:
