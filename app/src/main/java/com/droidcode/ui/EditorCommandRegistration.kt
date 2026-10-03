@@ -23,6 +23,8 @@ object EditorCommandRegistration {
         onShowChangeEncodingDialog: () -> Unit,
         onShowChangeLineEndingDialog: () -> Unit,
         onShowSaveAsDialog: () -> Unit,
+        onShowWorkspaceSearch: () -> Unit = {},
+        onToggleSplitEditor: () -> Unit = {},
         onShowInfoDialog: (title: String, text: String) -> Unit,
         onOpenTerminalPanel: () -> Unit,
         onExecuteAction: (actionType: String) -> Unit
@@ -138,13 +140,13 @@ object EditorCommandRegistration {
         ) { onExecuteAction("FIND_NEXT") })
 
         registry.registerCommand(Command(
-            "nav.find_previous", "Find Previous", "Navigation", "Shift+F3",
-            { editorMgr.activeTab?.findQuery?.isNotEmpty() == true }
-        ) { onExecuteAction("FIND_PREVIOUS") })
+            "nav.find_in_files", "Find in Files (Project Grep)", "Navigation", "Ctrl+Shift+F",
+            { workspaceMgr.hasOpenWorkspace() }
+        ) { onShowWorkspaceSearch() })
 
         // --- Code ---
         registry.registerCommand(Command(
-            "code.format_document", "Format Document", "Code", "Ctrl+Shift+F",
+            "code.format_document", "Format Document", "Code", "Shift+Alt+F",
             { editorMgr.activeTab?.viewerType == FileViewerType.TEXT }
         ) { onExecuteAction("FORMAT_DOC") })
 
@@ -226,6 +228,11 @@ object EditorCommandRegistration {
             "editor.change_line_ending", "Change Line Ending...", "Editor", "Ctrl+K L",
             { editorMgr.activeTab?.viewerType == FileViewerType.TEXT }
         ) { onShowChangeLineEndingDialog() })
+
+        registry.registerCommand(Command(
+            "view.toggle_split_editor", "Toggle Split Editor (Side-by-Side)", "View", "Alt+\\",
+            { editorMgr.tabs.isNotEmpty() }
+        ) { onToggleSplitEditor() })
 
         // --- File ---
         registry.registerCommand(Command(

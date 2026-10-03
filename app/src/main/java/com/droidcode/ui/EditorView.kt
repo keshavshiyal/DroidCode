@@ -128,12 +128,31 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FindReplace
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
-import com.droidcode.language.SyntaxHighlighter
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Splitscreen
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.input.key.isShiftPressed
+import com.droidcode.editor.LineDiffCalculator
+import com.droidcode.editor.LineDiffStatus
+import com.droidcode.language.IncrementalSyntaxHighlighter
 import com.droidcode.project.WorkspaceManager
+
+enum class EditorSplitMode {
+    NONE,
+    HORIZONTAL,
+    VERTICAL
+}
 
 @Composable
 fun EditorView(
@@ -191,6 +210,9 @@ fun EditorView(
     var showChangeEncodingDialog by rememberSaveable { mutableStateOf(false) }
     var showChangeLineEndingDialog by rememberSaveable { mutableStateOf(false) }
     var showSaveAsDialog by rememberSaveable { mutableStateOf(false) }
+    var showWorkspaceSearchDialog by rememberSaveable { mutableStateOf(false) }
+    var splitMode by rememberSaveable { mutableStateOf(EditorSplitMode.NONE) }
+    var secondaryTabIndex by rememberSaveable { mutableIntStateOf(-1) }
     var infoDialogTitle by rememberSaveable { mutableStateOf<String?>(null) }
     var infoDialogText by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingActionType by rememberSaveable { mutableStateOf<String?>(null) }
@@ -207,6 +229,14 @@ fun EditorView(
             onShowChangeEncodingDialog = { showChangeEncodingDialog = true },
             onShowChangeLineEndingDialog = { showChangeLineEndingDialog = true },
             onShowSaveAsDialog = { showSaveAsDialog = true },
+            onShowWorkspaceSearch = { showWorkspaceSearchDialog = true },
+            onToggleSplitEditor = {
+                splitMode = when (splitMode) {
+                    EditorSplitMode.NONE -> EditorSplitMode.HORIZONTAL
+                    EditorSplitMode.HORIZONTAL -> EditorSplitMode.VERTICAL
+                    EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
+                }
+            },
             onShowInfoDialog = { title, text ->
                 infoDialogTitle = title
                 infoDialogText = text
@@ -328,6 +358,14 @@ fun EditorView(
             )
         }
 
+        // Breadcrumbs Navigation Bar
+        if (activeTab != null) {
+            BreadcrumbsBar(
+                tab = activeTab,
+                workspaceDir = workspaceMgr.currentProject?.directory
+            )
+        }
+
         // Editor Toolbar & Language / Line Stats
         if (activeTab != null) {
             Row(
@@ -382,6 +420,44 @@ fun EditorView(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
+                        onClick = { showWorkspaceSearchDialog = true },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("editor_find_in_files_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Find in Files (Ctrl+Shift+F)",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            splitMode = when (splitMode) {
+                                EditorSplitMode.NONE -> EditorSplitMode.HORIZONTAL
+                                EditorSplitMode.HORIZONTAL -> EditorSplitMode.VERTICAL
+                                EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
+                            }
+                        },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("editor_split_mode_btn")
+                    ) {
+                        Icon(
+                            imageVector = when (splitMode) {
+                                EditorSplitMode.NONE -> Icons.Default.Splitscreen
+                                EditorSplitMode.HORIZONTAL -> Icons.Default.Splitscreen
+                                EditorSplitMode.VERTICAL -> Icons.Default.VerticalSplit
+                            },
+                            contentDescription = "Toggle Split Editor",
+                            tint = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
                         onClick = {
                             try {
                                 editorMgr.saveActiveTab()
@@ -435,46 +511,135 @@ fun EditorView(
                 }
             }
 
-            // Code Canvas or Media Viewer
-            when (activeTab.viewerType) {
-                FileViewerType.IMAGE -> ImageViewer(file = activeTab.file)
-                FileViewerType.VIDEO -> VideoViewer(file = activeTab.file)
-                FileViewerType.PDF -> PdfViewer(file = activeTab.file)
-                FileViewerType.UNSUPPORTED -> UnsupportedFileViewer(
+            // Split-Pane or Single Editor Container
+            val secondTab = if (splitMode != EditorSplitMode.NONE && tabs.isNotEmpty()) {
+                if (secondaryTabIndex in tabs.indices && tabs[secondaryTabIndex] != activeTab) {
+                    tabs[secondaryTabIndex]
+                } else {
+                    tabs.firstOrNull { it != activeTab } ?: activeTab
+                }
+            } else null
+
+            if (splitMode == EditorSplitMode.NONE || secondTab == null) {
+                EditorTabContent(
                     tab = activeTab,
-                    onForceOpenAsText = {
-                        try {
-                            val text = activeTab.file.readText()
-                            activeTab.forceOpenAsText(text)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Cannot read file as text: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
+                    settings = settings,
+                    ctrlActive = ctrlActive,
+                    shiftActive = shiftActive,
+                    altActive = altActive,
+                    pendingActionType = pendingActionType,
+                    onClearPendingAction = { pendingActionType = null },
+                    onResetModifiers = onResetModifiers,
+                    onOpenCommandPalette = onOpenCommandPalette,
+                    onOpenContextMenu = { showContextMenu = true },
+                    onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
+                    onShowInfoDialog = { title, text ->
+                        infoDialogTitle = title
+                        infoDialogText = text
+                    },
+                    onSaveRequested = onSaveRequested,
+                    onContentChange = { newText: String ->
+                        editorMgr.updateActiveTabContent(newText)
+                    },
+                    onCursorChange = { pos: Int ->
+                        activeTab.updateCursor(pos)
                     }
                 )
-                FileViewerType.TEXT -> {
-                    CodeCanvas(
-                        tab = activeTab,
-                        settings = settings,
-                        ctrlActive = ctrlActive,
-                        shiftActive = shiftActive,
-                        altActive = altActive,
-                        pendingActionType = pendingActionType,
-                        onClearPendingAction = { pendingActionType = null },
-                        onResetModifiers = onResetModifiers,
-                        onOpenCommandPalette = onOpenCommandPalette,
-                        onOpenContextMenu = { showContextMenu = true },
-                        onShowInfoDialog = { title, text ->
-                            infoDialogTitle = title
-                            infoDialogText = text
-                        },
-                        onSaveRequested = onSaveRequested,
-                        onContentChange = { newText: String ->
-                            editorMgr.updateActiveTabContent(newText)
-                        },
-                        onCursorChange = { pos: Int ->
-                            activeTab.updateCursor(pos)
-                        }
+            } else if (splitMode == EditorSplitMode.HORIZONTAL) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        EditorTabContent(
+                            tab = activeTab,
+                            settings = settings,
+                            ctrlActive = ctrlActive,
+                            shiftActive = shiftActive,
+                            altActive = altActive,
+                            pendingActionType = pendingActionType,
+                            onClearPendingAction = { pendingActionType = null },
+                            onResetModifiers = onResetModifiers,
+                            onOpenCommandPalette = onOpenCommandPalette,
+                            onOpenContextMenu = { showContextMenu = true },
+                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
+                            onShowInfoDialog = { title, text ->
+                                infoDialogTitle = title
+                                infoDialogText = text
+                            },
+                            onSaveRequested = onSaveRequested,
+                            onContentChange = { newText: String ->
+                                editorMgr.updateActiveTabContent(newText)
+                            },
+                            onCursorChange = { pos: Int ->
+                                activeTab.updateCursor(pos)
+                            }
+                        )
+                    }
+                    VerticalDivider(
+                        modifier = Modifier.width(1.dp).fillMaxHeight(),
+                        color = MaterialTheme.colorScheme.outlineVariant
                     )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        SecondaryEditorPane(
+                            tab = secondTab,
+                            allTabs = tabs,
+                            settings = settings,
+                            onSelectTab = { selectedTab ->
+                                secondaryTabIndex = tabs.indexOf(selectedTab)
+                            },
+                            onCloseSplit = {
+                                splitMode = EditorSplitMode.NONE
+                            },
+                            onSaveRequested = onSaveRequested,
+                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
+                        )
+                    }
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        EditorTabContent(
+                            tab = activeTab,
+                            settings = settings,
+                            ctrlActive = ctrlActive,
+                            shiftActive = shiftActive,
+                            altActive = altActive,
+                            pendingActionType = pendingActionType,
+                            onClearPendingAction = { pendingActionType = null },
+                            onResetModifiers = onResetModifiers,
+                            onOpenCommandPalette = onOpenCommandPalette,
+                            onOpenContextMenu = { showContextMenu = true },
+                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
+                            onShowInfoDialog = { title, text ->
+                                infoDialogTitle = title
+                                infoDialogText = text
+                            },
+                            onSaveRequested = onSaveRequested,
+                            onContentChange = { newText: String ->
+                                editorMgr.updateActiveTabContent(newText)
+                            },
+                            onCursorChange = { pos: Int ->
+                                activeTab.updateCursor(pos)
+                            }
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.height(1.dp).fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        SecondaryEditorPane(
+                            tab = secondTab,
+                            allTabs = tabs,
+                            settings = settings,
+                            onSelectTab = { selectedTab ->
+                                secondaryTabIndex = tabs.indexOf(selectedTab)
+                            },
+                            onCloseSplit = {
+                                splitMode = EditorSplitMode.NONE
+                            },
+                            onSaveRequested = onSaveRequested,
+                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
+                        )
+                    }
                 }
             }
         } else {
@@ -573,6 +738,18 @@ fun EditorView(
         )
     }
 
+    if (showWorkspaceSearchDialog) {
+        WorkspaceSearchDialog(
+            rootDirectory = workspaceMgr.currentProject?.directory,
+            onDismiss = { showWorkspaceSearchDialog = false },
+            onResultClick = { file, lineNum ->
+                showWorkspaceSearchDialog = false
+                editorMgr.openFile(file)
+                pendingActionType = "GO_TO_LINE:$lineNum"
+            }
+        )
+    }
+
     if (infoDialogTitle != null && infoDialogText != null) {
         InfoDetailDialog(
             title = infoDialogTitle!!,
@@ -582,6 +759,250 @@ fun EditorView(
                 infoDialogText = null
             }
         )
+    }
+}
+
+@Composable
+private fun BreadcrumbsBar(
+    tab: EditorTab,
+    workspaceDir: File?
+) {
+    val relPath = remember(tab.filePath, workspaceDir?.path) {
+        if (workspaceDir != null && tab.file.startsWith(workspaceDir)) {
+            tab.file.relativeToOrNull(workspaceDir)?.path
+        } else {
+            tab.fileName
+        }
+    }
+
+    val segments = remember(relPath) {
+        relPath?.split(File.separatorChar, '/')?.filter { it.isNotEmpty() } ?: listOf(tab.fileName)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(26.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.FolderOpen,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = workspaceDir?.name ?: "Workspace",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = FontFamily.Monospace
+        )
+
+        segments.forEachIndexed { index, seg ->
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(12.dp)
+            )
+            val isLast = (index == segments.size - 1)
+            if (isLast) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+            }
+            Text(
+                text = seg,
+                fontSize = 11.sp,
+                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+@Composable
+private fun EditorTabContent(
+    tab: EditorTab,
+    settings: AppSettings,
+    ctrlActive: Boolean,
+    shiftActive: Boolean,
+    altActive: Boolean,
+    pendingActionType: String?,
+    onClearPendingAction: () -> Unit,
+    onResetModifiers: () -> Unit,
+    onOpenCommandPalette: () -> Unit,
+    onOpenContextMenu: () -> Unit,
+    onOpenWorkspaceSearch: () -> Unit,
+    onShowInfoDialog: (String, String) -> Unit,
+    onSaveRequested: () -> Unit,
+    onContentChange: (String) -> Unit,
+    onCursorChange: (Int) -> Unit
+) {
+    val context = LocalContext.current
+    when (tab.viewerType) {
+        FileViewerType.IMAGE -> ImageViewer(file = tab.file)
+        FileViewerType.VIDEO -> VideoViewer(file = tab.file)
+        FileViewerType.PDF -> PdfViewer(file = tab.file)
+        FileViewerType.UNSUPPORTED -> UnsupportedFileViewer(
+            tab = tab,
+            onForceOpenAsText = {
+                try {
+                    val text = tab.file.readText()
+                    tab.forceOpenAsText(text)
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Cannot read file as text: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+        FileViewerType.TEXT -> {
+            CodeCanvas(
+                tab = tab,
+                settings = settings,
+                ctrlActive = ctrlActive,
+                shiftActive = shiftActive,
+                altActive = altActive,
+                pendingActionType = pendingActionType,
+                onClearPendingAction = onClearPendingAction,
+                onResetModifiers = onResetModifiers,
+                onOpenCommandPalette = onOpenCommandPalette,
+                onOpenContextMenu = onOpenContextMenu,
+                onOpenWorkspaceSearch = onOpenWorkspaceSearch,
+                onShowInfoDialog = onShowInfoDialog,
+                onSaveRequested = onSaveRequested,
+                onContentChange = onContentChange,
+                onCursorChange = onCursorChange
+            )
+        }
+    }
+}
+
+@Composable
+private fun SecondaryEditorPane(
+    tab: EditorTab,
+    allTabs: List<EditorTab>,
+    settings: AppSettings,
+    onSelectTab: (EditorTab) -> Unit,
+    onCloseSplit: () -> Unit,
+    onSaveRequested: () -> Unit,
+    onOpenWorkspaceSearch: () -> Unit = {}
+) {
+    var showTabDropdown by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(34.dp)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { showTabDropdown = true }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = tab.fileName,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "▾",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showTabDropdown,
+                    onDismissRequest = { showTabDropdown = false }
+                ) {
+                    allTabs.forEach { itemTab ->
+                        DropdownMenuItem(
+                            text = { Text(itemTab.fileName) },
+                            onClick = {
+                                onSelectTab(itemTab)
+                                showTabDropdown = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (tab.isModified) {
+                    IconButton(
+                        onClick = {
+                            try {
+                                EditorManager.getInstance().saveTab(tab)
+                                onSaveRequested()
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = "Save Split Tab",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = onCloseSplit,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close Split",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            EditorTabContent(
+                tab = tab,
+                settings = settings,
+                ctrlActive = false,
+                shiftActive = false,
+                altActive = false,
+                pendingActionType = null,
+                onClearPendingAction = {},
+                onResetModifiers = {},
+                onOpenCommandPalette = {},
+                onOpenContextMenu = {},
+                onOpenWorkspaceSearch = onOpenWorkspaceSearch,
+                onShowInfoDialog = { _, _ -> },
+                onSaveRequested = onSaveRequested,
+                onContentChange = { newText ->
+                    EditorManager.getInstance().updateTabContent(tab, newText)
+                },
+                onCursorChange = { pos ->
+                    tab.updateCursor(pos)
+                }
+            )
+        }
     }
 }
 
@@ -597,6 +1018,7 @@ private fun CodeCanvas(
     onResetModifiers: () -> Unit,
     onOpenCommandPalette: () -> Unit,
     onOpenContextMenu: () -> Unit,
+    onOpenWorkspaceSearch: () -> Unit,
     onShowInfoDialog: (String, String) -> Unit,
     onSaveRequested: () -> Unit,
     onContentChange: (String) -> Unit,
@@ -726,6 +1148,9 @@ private fun CodeCanvas(
         ScrollState(initial = 0)
     }
     val isDark = isSystemInDarkTheme()
+    val lineDiffMap = remember(tab.content, tab.originalContent) {
+        LineDiffCalculator.computeDiff(tab.originalContent, tab.content)
+    }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -936,6 +1361,25 @@ private fun CodeCanvas(
                                     textPaint.isFakeBoldText = false
                                 }
 
+                                // Git Diff Gutter Indicator
+                                when (lineDiffMap[lineIndex]) {
+                                    LineDiffStatus.ADDED -> {
+                                        drawRect(
+                                            color = Color(0xFF10B981),
+                                            topLeft = Offset(canvasWidth - 3.dp.toPx(), lineTop),
+                                            size = Size(3.dp.toPx(), lineHeight)
+                                        )
+                                    }
+                                    LineDiffStatus.MODIFIED -> {
+                                        drawRect(
+                                            color = Color(0xFF3B82F6),
+                                            topLeft = Offset(canvasWidth - 3.dp.toPx(), lineTop),
+                                            size = Size(3.dp.toPx(), lineHeight)
+                                        )
+                                    }
+                                    else -> {}
+                                }
+
                                 val fontMetrics = textPaint.fontMetrics
                                 val baseline = lineTop + (lineHeight - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent
                                 drawContext.canvas.nativeCanvas.drawText(
@@ -968,6 +1412,25 @@ private fun CodeCanvas(
                             } else {
                                 textPaint.color = onSurfaceVariantColor.copy(alpha = 0.5f).toArgb()
                                 textPaint.isFakeBoldText = false
+                            }
+
+                            // Git Diff Gutter Indicator
+                            when (lineDiffMap[i]) {
+                                LineDiffStatus.ADDED -> {
+                                    drawRect(
+                                        color = Color(0xFF10B981),
+                                        topLeft = Offset(canvasWidth - 3.dp.toPx(), lineTop),
+                                        size = Size(3.dp.toPx(), lineHeightPx)
+                                    )
+                                }
+                                LineDiffStatus.MODIFIED -> {
+                                    drawRect(
+                                        color = Color(0xFF3B82F6),
+                                        topLeft = Offset(canvasWidth - 3.dp.toPx(), lineTop),
+                                        size = Size(3.dp.toPx(), lineHeightPx)
+                                    )
+                                }
+                                else -> {}
                             }
 
                             val fontMetrics = textPaint.fontMetrics
@@ -1045,7 +1508,9 @@ private fun CodeCanvas(
                         fontFamily = activeFontFamily,
                         lineHeight = (settings.fontSizeSp * 1.4).sp
                     ),
-                    visualTransformation = CodeSyntaxVisualTransformation(tab.languageId, isDark),
+                    visualTransformation = remember(tab.filePath, tab.languageId, isDark) {
+                        IncrementalSyntaxHighlighter(tab.languageId, isDark)
+                    },
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier
                         .fillMaxSize()
@@ -1075,47 +1540,54 @@ private fun CodeCanvas(
                                     true
                                 } else {
                                     val isCtrl = ctrlActive || keyEvent.isCtrlPressed
+                                    val isShift = shiftActive || keyEvent.isShiftPressed
                                     if (isCtrl) {
-                                        when (keyEvent.key) {
-                                            Key.S -> {
-                                                try {
-                                                    editorMgr.saveActiveTab()
-                                                    onSaveRequested()
-                                                } catch (e: Exception) {
-                                                    android.util.Log.e("EditorView", "Failed saving file from shortcut", e)
-                                                    Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        if (isShift && keyEvent.key == Key.F) {
+                                            onOpenWorkspaceSearch()
+                                            onResetModifiers()
+                                            true
+                                        } else {
+                                            when (keyEvent.key) {
+                                                Key.S -> {
+                                                    try {
+                                                        editorMgr.saveActiveTab()
+                                                        onSaveRequested()
+                                                    } catch (e: Exception) {
+                                                        android.util.Log.e("EditorView", "Failed saving file from shortcut", e)
+                                                        Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                    onResetModifiers()
+                                                    true
                                                 }
-                                                onResetModifiers()
-                                                true
+                                                Key.Z -> {
+                                                    editorMgr.undoActiveTab()
+                                                    onResetModifiers()
+                                                    true
+                                                }
+                                                Key.Y -> {
+                                                    editorMgr.redoActiveTab()
+                                                    onResetModifiers()
+                                                    true
+                                                }
+                                                Key.P -> {
+                                                    onOpenCommandPalette()
+                                                    onResetModifiers()
+                                                    true
+                                                }
+                                                Key.F -> {
+                                                    tab.showFindBar = true
+                                                    tab.showReplaceBar = false
+                                                    onResetModifiers()
+                                                    true
+                                                }
+                                                Key.H -> {
+                                                    tab.showFindBar = true
+                                                    tab.showReplaceBar = true
+                                                    onResetModifiers()
+                                                    true
+                                                }
+                                                else -> false
                                             }
-                                            Key.Z -> {
-                                                editorMgr.undoActiveTab()
-                                                onResetModifiers()
-                                                true
-                                            }
-                                            Key.Y -> {
-                                                editorMgr.redoActiveTab()
-                                                onResetModifiers()
-                                                true
-                                            }
-                                            Key.P -> {
-                                                onOpenCommandPalette()
-                                                onResetModifiers()
-                                                true
-                                            }
-                                            Key.F -> {
-                                                tab.showFindBar = true
-                                                tab.showReplaceBar = false
-                                                onResetModifiers()
-                                                true
-                                            }
-                                            Key.H -> {
-                                                tab.showFindBar = true
-                                                tab.showReplaceBar = true
-                                                onResetModifiers()
-                                                true
-                                            }
-                                            else -> false
                                         }
                                     } else false
                                 }
@@ -1587,73 +2059,3 @@ private fun formatFileSize(bytes: Long): String {
     return String.format("%.1f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
 }
 
-class CodeSyntaxVisualTransformation(
-    private val languageId: String,
-    private val isDarkTheme: Boolean
-) : VisualTransformation {
-
-    companion object {
-        private val wordRegex = Regex("\\b[A-Za-z_][A-Za-z0-9_]*\\b")
-        private val stringRegex = Regex("\"[^\"]*\"|'[^']*'|`[^`]*`")
-        private val numberRegex = Regex("\\b\\d+(\\.\\d+)?\\b")
-        private val commentRegex = Regex("//.*|/\\*[\\s\\S]*?\\*/|#.*")
-    }
-
-    private var cachedInputText: String? = null
-    private var cachedTransformedText: TransformedText? = null
-
-    override fun filter(text: AnnotatedString): TransformedText {
-        if (text.text == cachedInputText && cachedTransformedText != null) {
-            return cachedTransformedText!!
-        }
-
-        val code = text.text
-        if (code.isEmpty()) {
-            val empty = TransformedText(text, OffsetMapping.Identity)
-            cachedInputText = code
-            cachedTransformedText = empty
-            return empty
-        }
-
-        // Limit highlighting for large codebases to avoid locking frame budget
-        val shouldHighlight = code.length <= 40000
-
-        val highlighted = buildAnnotatedString {
-            append(code)
-            if (!shouldHighlight) return@buildAnnotatedString
-
-            val keywordColor = if (isDarkTheme) Color(0xFFCF92D7) else Color(0xFF8E24AA)
-            val stringColor = if (isDarkTheme) Color(0xFF81C784) else Color(0xFF2E7D32)
-            val numberColor = if (isDarkTheme) Color(0xFFFFB74D) else Color(0xFFE65100)
-            val commentColor = if (isDarkTheme) Color(0xFF78909C) else Color(0xFF546E7A)
-            val typeColor = if (isDarkTheme) Color(0xFF64B5F6) else Color(0xFF1565C0)
-
-            val keywords = SyntaxHighlighter.getKeywordsForLanguage(languageId)
-
-            for (match in commentRegex.findAll(code)) {
-                addStyle(SpanStyle(color = commentColor, fontWeight = FontWeight.Normal), match.range.first, match.range.last + 1)
-            }
-
-            for (match in stringRegex.findAll(code)) {
-                addStyle(SpanStyle(color = stringColor), match.range.first, match.range.last + 1)
-            }
-
-            for (match in numberRegex.findAll(code)) {
-                addStyle(SpanStyle(color = numberColor), match.range.first, match.range.last + 1)
-            }
-
-            for (match in wordRegex.findAll(code)) {
-                val word = match.value
-                if (keywords.contains(word) || keywords.contains(word.lowercase())) {
-                    addStyle(SpanStyle(color = keywordColor, fontWeight = FontWeight.Bold), match.range.first, match.range.last + 1)
-                } else if (word.first().isUpperCase()) {
-                    addStyle(SpanStyle(color = typeColor, fontWeight = FontWeight.Medium), match.range.first, match.range.last + 1)
-                }
-            }
-        }
-        val result = TransformedText(highlighted, OffsetMapping.Identity)
-        cachedInputText = code
-        cachedTransformedText = result
-        return result
-    }
-}

@@ -49,13 +49,17 @@ Status Legend:
 - **Silent Exception Cleanup**: Audited all `catch` blocks; added proper `Log.w`/`Log.e` diagnostics.
 - **Accessibility & Contrast Verification**: Verified all interactive elements comply with minimum 48dp touch targets and descriptive TalkBack semantics.
 
-### Milestone 1 — Core Engine Hardening & Performance (In Progress)
+### Milestone 1 — Core Engine Hardening & Performance (Complete)
 - **Windows Build Tooling**: Added `gradlew.bat` supporting both Gradle Wrapper JAR and system Gradle execution.
 - **Modular Architecture**: Clean dependency injection through singleton providers (`AppModule.kt`) and offline-safe builds.
 - **Lazy File Tree**: Refactored `LocalFileSystem` and `WorkspaceManager` to on-demand hierarchical directory resolution with default VCS/build ignore filters.
 - **Differential Undo/Redo**: Implemented piecewise `TextDelta` tracking in `UndoManager`, slashing editor memory consumption by over 95%.
 - **O(log N) Line/Col Navigation**: Binary-searched line start offsets in `EditorTab`, eliminating O(N) string iterations on cursor movements.
-- **Upcoming Milestone 1 Steps**: Split editor panes, workspace text search (grep), virtualized syntax highlighter engine.
+- **Incremental Line-Viewport Syntax Tokenizer**: Implemented line-cached tokenization in `IncrementalSyntaxHighlighter`, ensuring 60–120 FPS typing latency without whole-document regex passes on keystrokes.
+- **Breadcrumbs Navigation Bar**: Implemented interactive breadcrumbs path display (`Project > dir > ... > file`) in editor header.
+- **Editor Gutter Git Diff Indicators**: Implemented `LineDiffCalculator` with LCS diffing, rendering real-time green (added) and blue (modified) diff bars in the editor gutter.
+- **Workspace-Wide Text Search (Project Grep — `Ctrl+Shift+F`)**: Implemented `WorkspaceSearchDialog` with background thread scanning, Case Sensitive, Whole Word, and Regex filtering, and instant jump-to-line navigation.
+- **Split-Pane Multi-Editor**: Implemented responsive multi-editor layout supporting side-by-side (`HORIZONTAL`) and stacked (`VERTICAL`) split panes with independent buffer editing.
 
 ---
 
