@@ -428,11 +428,7 @@ fun EditorView(
                             .testTag("editor_split_mode_btn")
                     ) {
                         Icon(
-                            imageVector = when (splitMode) {
-                                EditorSplitMode.NONE -> Icons.Default.Splitscreen
-                                EditorSplitMode.HORIZONTAL -> Icons.Default.Splitscreen
-                                EditorSplitMode.VERTICAL -> Icons.Default.VerticalSplit
-                            },
+                            imageVector = Icons.Default.Splitscreen,
                             contentDescription = "Toggle Split Editor",
                             tint = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
