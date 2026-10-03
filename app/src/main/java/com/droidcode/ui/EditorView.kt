@@ -638,6 +638,7 @@ fun EditorView(
                     )
                 }
             }
+        }
         } else {
             // Empty State
             Box(
