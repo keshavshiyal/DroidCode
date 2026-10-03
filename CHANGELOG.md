@@ -7,8 +7,8 @@ All notable changes to DroidCode will be documented in this file.
 ### Milestone 1 — Performance Optimization & Toolchain Hardening
 - **Windows Build Tooling**:
   - Added standalone `gradlew.bat` supporting both Gradle Wrapper JAR and system Gradle resolution.
-- **Dependency Injection Toolchain**:
-  - Configured Hilt Android Gradle plugin in root and app `build.gradle.kts` alongside KSP compiler (`libs.hilt.compiler`).
+- **Dependency Injection Architecture**:
+  - Maintained lightweight `@Singleton` provider architecture (`AppModule.kt`) to ensure clean offline and fast CI builds.
 - **Lazy Filesystem Architecture**:
   - Refactored `LocalFileSystem.java` and `WorkspaceManager.kt` from eager full-disk recursion to on-demand hierarchical lazy loading.
   - Subdirectories are loaded only when present in `expandedPaths`, preventing thread starvation and memory spikes on large repositories.

@@ -128,7 +128,6 @@ fun ExplorerPanel(
     val currentProject by workspaceMgr.currentProjectFlow.collectAsState()
     val treeVersion by workspaceMgr.treeVersion.collectAsState()
 
-    var treeNodes by remember { mutableStateOf(workspaceMgr.getWorkspaceFileTree(expandedPaths)) }
     val expandedPathsSaver = listSaver<Set<String>, String>(
         save = { it.toList() },
         restore = { it.toSet() }
@@ -136,6 +135,7 @@ fun ExplorerPanel(
     var expandedPaths by rememberSaveable(stateSaver = expandedPathsSaver) {
         mutableStateOf(setOf<String>())
     }
+    var treeNodes by remember { mutableStateOf(workspaceMgr.getWorkspaceFileTree(expandedPaths)) }
     var isLoadingTree by remember { mutableStateOf(false) }
 
     var selectedNode by remember { mutableStateOf<FileNode?>(null) }

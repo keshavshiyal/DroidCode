@@ -29,7 +29,7 @@ class EditorTab(
     var content: String by mutableStateOf(initialContent ?: "")
         private set
 
-    private var lineStartOffsets: IntArray = computeLineStartOffsets(content)
+    private var lineStartOffsets: IntArray = computeLineStartOffsets(initialContent ?: "")
 
     fun forceOpenAsText(rawText: String) {
         this.content = rawText
@@ -120,7 +120,7 @@ class EditorTab(
     }
 
     private fun computeLineStartOffsets(text: String): IntArray {
-        val starts = ArrayList<Int>()
+        val starts = mutableListOf<Int>()
         starts.add(0)
         for (i in 0 until text.length) {
             if (text[i] == '\n') {

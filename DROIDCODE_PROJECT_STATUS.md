@@ -51,7 +51,7 @@ Status Legend:
 
 ### Milestone 1 — Core Engine Hardening & Performance (In Progress)
 - **Windows Build Tooling**: Added `gradlew.bat` supporting both Gradle Wrapper JAR and system Gradle execution.
-- **Hilt Toolchain**: Applied Hilt Android Gradle plugin and configured KSP compiler (`libs.hilt.compiler`).
+- **Modular Architecture**: Clean dependency injection through singleton providers (`AppModule.kt`) and offline-safe builds.
 - **Lazy File Tree**: Refactored `LocalFileSystem` and `WorkspaceManager` to on-demand hierarchical directory resolution with default VCS/build ignore filters.
 - **Differential Undo/Redo**: Implemented piecewise `TextDelta` tracking in `UndoManager`, slashing editor memory consumption by over 95%.
 - **O(log N) Line/Col Navigation**: Binary-searched line start offsets in `EditorTab`, eliminating O(N) string iterations on cursor movements.

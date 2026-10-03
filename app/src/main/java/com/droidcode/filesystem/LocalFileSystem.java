@@ -62,7 +62,7 @@ public class LocalFileSystem {
             });
 
             for (File file : files) {
-                if (file.getName().equals(".DS_Store")) continue;
+                if (file.getName().equals(".DS_Store") || isIgnoredDirectory(file.getName())) continue;
                 String cleanName = SafUtils.getCleanFileName(file.getName());
                 if (!cleanName.equals(file.getName())) {
                     File cleanTarget = new File(file.getParentFile(), cleanName);
@@ -114,7 +114,7 @@ public class LocalFileSystem {
             });
 
             for (File file : files) {
-                if (file.getName().equals(".DS_Store")) continue;
+                if (file.getName().equals(".DS_Store") || isIgnoredDirectory(file.getName())) continue;
                 String cleanName = SafUtils.getCleanFileName(file.getName());
                 if (!cleanName.equals(file.getName())) {
                     File cleanTarget = new File(file.getParentFile(), cleanName);
