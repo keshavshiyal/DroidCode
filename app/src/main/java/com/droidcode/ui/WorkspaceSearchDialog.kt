@@ -166,7 +166,7 @@ fun WorkspaceSearchDialog(
                                     lineNum++
                                 }
                             }
-                        } catch (_: Exception) {
+                        } catch (e: Exception) {
                             // Skip unreadable files safely
                         }
                     }

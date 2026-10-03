@@ -38,8 +38,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FileOpen
@@ -60,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.foundation.ScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -69,7 +66,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -78,13 +74,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import com.droidcode.R
-import com.droidcode.ui.theme.CornerLarge
-import com.droidcode.ui.theme.CornerMedium
 import com.droidcode.ui.theme.CornerSmall
-import com.droidcode.ui.theme.SpacingL
 import com.droidcode.ui.theme.SpacingM
 import com.droidcode.ui.theme.SpacingS
-import com.droidcode.ui.theme.SpacingXL
 import com.droidcode.ui.theme.SpacingXS
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -102,18 +94,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -121,16 +107,13 @@ import androidx.core.content.FileProvider
 import com.droidcode.editor.EditorManager
 import com.droidcode.editor.EditorTab
 import com.droidcode.editor.FileViewerType
-import com.droidcode.filesystem.LocalFileSystem
 import com.droidcode.settings.AppSettings
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.FolderOpen
@@ -954,7 +937,9 @@ private fun SecondaryEditorPane(
                             try {
                                 EditorManager.getInstance().saveTab(tab)
                                 onSaveRequested()
-                            } catch (_: Exception) {}
+                            } catch (e: Exception) {
+                                android.util.Log.e("EditorView", "Failed saving split tab", e)
+                            }
                         },
                         modifier = Modifier.size(28.dp)
                     ) {

@@ -4,6 +4,7 @@ import androidx.compose.ui.text.AnnotatedString
 import com.droidcode.language.IncrementalSyntaxHighlighter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -20,7 +21,7 @@ class IncrementalSyntaxHighlighterTest {
         assertEquals(text.text, transformed.text.text)
         // Ensure span styles are applied to keyword / string / comment / number
         val spanStyles = transformed.text.spanStyles
-        assert(spanStyles.isNotEmpty())
+        assertTrue(spanStyles.isNotEmpty())
     }
 
     @Test
