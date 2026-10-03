@@ -76,6 +76,12 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+  lint {
+    textReport = true
+    textOutput = file("stdout")
+    abortOnError = true
+    warningsAsErrors = true
+  }
 }
 
 // Some unused dependencies are commented out below instead of being removed.

@@ -46,10 +46,25 @@ jobs:
         run: |
           echo "Running Android Lint with warnings as errors..."
           if [ -s ./gradlew ]; then
-            ./gradlew lintDebug -Dlint.htmlReport=true -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace
+            ./gradlew lintDebug -Dlint.htmlReport=true -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace || {
+              echo "=== LINT FAILURE REPORT ==="
+              cat app/build/reports/lint-results-debug.txt 2>/dev/null || cat app/build/reports/lint-results-debug.xml 2>/dev/null || true
+              exit 1
+            }
           else
-            gradle lintDebug -Dlint.htmlReport=true -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace
+            gradle lintDebug -Dlint.htmlReport=true -Dlint.abortOnError=true -Dlint.warningsAsErrors=true --stacktrace || {
+              echo "=== LINT FAILURE REPORT ==="
+              cat app/build/reports/lint-results-debug.txt 2>/dev/null || cat app/build/reports/lint-results-debug.xml 2>/dev/null || true
+              exit 1
+            }
           fi
+
+      - name: Upload Lint Report on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.*
 
       - name: Run Detekt Static Analysis
         run: |
