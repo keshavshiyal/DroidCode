@@ -35,8 +35,8 @@ fun DroidCodeEditor(
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
-    val theme = remember(isDark) {
-        if (isDark) EditorTheme.darkTheme() else EditorTheme.lightTheme()
+    val theme = remember(settings.themeMode, isDark) {
+        EditorTheme.forThemeMode(settings.themeMode, isDark)
     }
 
     AndroidView(

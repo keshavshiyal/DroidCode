@@ -203,6 +203,7 @@ class CodeEditorView @JvmOverloads constructor(
             menu.findItem(android.R.id.copy)?.isVisible = hasSelection
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             menu.findItem(android.R.id.paste)?.isVisible = clipboard?.hasPrimaryClip() == true
+            menu.findItem(android.R.id.selectAll)?.isVisible = true
             return true
         }
 
@@ -256,10 +257,6 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     fun showSelectionActionMode() {
-        if (selection.isEmpty) {
-            dismissSelectionActionMode()
-            return
-        }
         if (selectionActionMode == null) {
             selectionActionMode = startActionMode(actionModeCallback, ActionMode.TYPE_FLOATING)
         } else {
@@ -308,12 +305,24 @@ class CodeEditorView @JvmOverloads constructor(
         }
 
         override fun onLongPress(e: MotionEvent) {
+            requestFocus()
+            showSoftKeyboard()
             val pos = screenToCursor(e.x, e.y)
-            selectWordAt(pos)
-            isLongPressDragging = true
-            selectionAnchor = selection.normalizedStart
+            setCursorPositionInternal(pos)
+            val wordSelected = selectWordAt(pos)
+            if (wordSelected) {
+                isLongPressDragging = true
+                selectionAnchor = selection.normalizedStart
+            } else {
+                isLongPressDragging = false
+                selectionAnchor = null
+                selection = SelectionRange(pos, pos)
+            }
+            notifySelectionAndCursor()
+            resetCursorBlink()
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             showSelectionActionMode()
+            invalidate()
         }
 
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
@@ -410,6 +419,13 @@ class CodeEditorView @JvmOverloads constructor(
             selectionActionMode?.invalidate()
             invalidate()
         }
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        clampScroll()
+        selectionActionMode?.invalidate()
+        invalidate()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -529,13 +545,27 @@ class CodeEditorView @JvmOverloads constructor(
         return CursorPos(line, col)
     }
 
-    private fun selectWordAt(pos: CursorPos) {
+    private fun selectWordAt(pos: CursorPos): Boolean {
         val line = buffer.getLine(pos.line)
-        if (line.isEmpty()) return
+        if (line.isEmpty()) {
+            selection = SelectionRange(pos, pos)
+            cursorPosition = pos
+            return false
+        }
 
-        var start = pos.col.coerceIn(0, line.length - 1)
+        val col = pos.col.coerceIn(0, line.length)
+        var start = (if (col >= line.length) col - 1 else col).coerceAtLeast(0)
+        if (start >= line.length || (!line[start].isLetterOrDigit() && line[start] != '_')) {
+            if (start > 0 && (line[start - 1].isLetterOrDigit() || line[start - 1] == '_')) {
+                start--
+            } else {
+                selection = SelectionRange(pos, pos)
+                cursorPosition = pos
+                return false
+            }
+        }
+
         var end = start
-
         while (start > 0 && (line[start - 1].isLetterOrDigit() || line[start - 1] == '_')) {
             start--
         }
@@ -543,11 +573,18 @@ class CodeEditorView @JvmOverloads constructor(
             end++
         }
 
+        if (start == end) {
+            selection = SelectionRange(pos, pos)
+            cursorPosition = pos
+            return false
+        }
+
         selection = SelectionRange(CursorPos(pos.line, start), CursorPos(pos.line, end))
         cursorPosition = selection.end
         notifySelectionAndCursor()
         resetCursorBlink()
         invalidate()
+        return true
     }
 
     fun setCursorPosition(pos: CursorPos) {

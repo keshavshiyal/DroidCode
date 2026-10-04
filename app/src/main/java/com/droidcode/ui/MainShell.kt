@@ -119,6 +119,7 @@ fun MainShell(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isTablet = configuration.smallestScreenWidthDp >= 600
     val isExpanded = isTablet && (sizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded)
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     var isSidebarVisible by rememberSaveable { mutableStateOf(true) }
 
     val navController = rememberNavController()
@@ -199,7 +200,11 @@ fun MainShell(
         }
     }
 
-    var showBottomPanel by remember { mutableStateOf(true) }
+    var showBottomPanel by rememberSaveable { mutableStateOf(false) }
+    var panelActiveTab by rememberSaveable { mutableStateOf(PanelTab.TERMINAL) }
+    var panelDockPosition by rememberSaveable { mutableStateOf(PanelDockPosition.RIGHT) }
+    var panelSizePreset by rememberSaveable { mutableStateOf(PanelSizePreset.NORMAL) }
+    var isPanelUndocked by rememberSaveable { mutableStateOf(false) }
     var showCommandPalette by remember { mutableStateOf(false) }
     var showProjectMenubar by remember { mutableStateOf(false) }
     var showWorkspaceDropdown by remember { mutableStateOf(false) }
@@ -249,7 +254,14 @@ fun MainShell(
             }
         })
         commandRegistry.registerCommand(Command("view.toggle_terminal", "Toggle Terminal Panel", "View", "Ctrl+`") {
-            showBottomPanel = !showBottomPanel
+            if (!showBottomPanel) {
+                showBottomPanel = true
+                panelActiveTab = PanelTab.TERMINAL
+            } else if (panelActiveTab == PanelTab.TERMINAL) {
+                showBottomPanel = false
+            } else {
+                panelActiveTab = PanelTab.TERMINAL
+            }
         })
         commandRegistry.registerCommand(Command("workspace.open", "Open Workspace / Project", "Workspace", "Ctrl+O") {
             navigateTo(Screen.Home.route)
@@ -696,7 +708,16 @@ fun MainShell(
 
                                     // Terminal toggle
                                     IconButton(
-                                        onClick = { showBottomPanel = !showBottomPanel },
+                                        onClick = {
+                                            if (!showBottomPanel) {
+                                                showBottomPanel = true
+                                                panelActiveTab = PanelTab.TERMINAL
+                                            } else if (panelActiveTab == PanelTab.TERMINAL) {
+                                                showBottomPanel = false
+                                            } else {
+                                                panelActiveTab = PanelTab.TERMINAL
+                                            }
+                                        },
                                         modifier = Modifier
                                             .size(36.dp)
                                             .testTag("top_bar_terminal_btn")
@@ -704,7 +725,7 @@ fun MainShell(
                                         Icon(
                                             imageVector = Icons.Default.Terminal,
                                             contentDescription = "Toggle Terminal",
-                                            tint = if (showBottomPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = if (showBottomPanel && panelActiveTab == PanelTab.TERMINAL) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -939,11 +960,210 @@ fun MainShell(
                                     }
 
                                     // Multi-Pane Right Pane: Editor Workstation Area
+                                    val effectiveDockPosition = if (isLandscape) panelDockPosition else PanelDockPosition.BOTTOM
+                                    val showDockedPanel = showBottomPanel && !isPanelUndocked
+
+                                    if (effectiveDockPosition == PanelDockPosition.RIGHT && showDockedPanel) {
+                                        Row(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight()
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .fillMaxHeight()
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .weight(1f)
+                                                ) {
+                                                    EditorView(
+                                                        settings = settingsState,
+                                                        ctrlActive = ctrlActive,
+                                                        shiftActive = shiftActive,
+                                                        altActive = altActive,
+                                                        onResetModifiers = {
+                                                            ctrlActive = false
+                                                            shiftActive = false
+                                                            altActive = false
+                                                        },
+                                                        onOpenCommandPalette = { showCommandPalette = true },
+                                                        onOpenGeneralMenu = { showProjectMenubar = true },
+                                                        onSaveRequested = {},
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+
+                                                if (settingsState.isQuickKeyBarEnabled) {
+                                                    DeveloperQuickKeyBar(
+                                                        density = settingsState.quickKeyBarDensity,
+                                                        ctrlActive = ctrlActive,
+                                                        shiftActive = shiftActive,
+                                                        altActive = altActive,
+                                                        onToggleCtrl = { ctrlActive = !ctrlActive },
+                                                        onToggleShift = { shiftActive = !shiftActive },
+                                                        onToggleAlt = { altActive = !altActive },
+                                                        onInsertText = insertText,
+                                                        onActionKey = triggerActionKey
+                                                    )
+                                                }
+                                            }
+
+                                            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                                            BottomOrSidePanel(
+                                                activeTab = panelActiveTab,
+                                                onTabSelected = { panelActiveTab = it },
+                                                dockPosition = PanelDockPosition.RIGHT,
+                                                sizePreset = panelSizePreset,
+                                                onSizePresetChange = { panelSizePreset = it },
+                                                onToggleDockPosition = {
+                                                    panelDockPosition = PanelDockPosition.BOTTOM
+                                                },
+                                                onUndock = { isPanelUndocked = true },
+                                                onClose = { showBottomPanel = false },
+                                                supportsDockRight = isLandscape
+                                            )
+                                        }
+                                    } else {
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight()
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .weight(1f)
+                                                ) {
+                                                EditorView(
+                                                    settings = settingsState,
+                                                    ctrlActive = ctrlActive,
+                                                    shiftActive = shiftActive,
+                                                    altActive = altActive,
+                                                    onResetModifiers = {
+                                                        ctrlActive = false
+                                                        shiftActive = false
+                                                        altActive = false
+                                                    },
+                                                    onOpenCommandPalette = { showCommandPalette = true },
+                                                    onOpenGeneralMenu = { showProjectMenubar = true },
+                                                    onSaveRequested = {},
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
+
+                                            if (settingsState.isQuickKeyBarEnabled) {
+                                                DeveloperQuickKeyBar(
+                                                    density = settingsState.quickKeyBarDensity,
+                                                    ctrlActive = ctrlActive,
+                                                    shiftActive = shiftActive,
+                                                    altActive = altActive,
+                                                    onToggleCtrl = { ctrlActive = !ctrlActive },
+                                                    onToggleShift = { shiftActive = !shiftActive },
+                                                    onToggleAlt = { altActive = !altActive },
+                                                    onInsertText = insertText,
+                                                    onActionKey = triggerActionKey
+                                                )
+                                            }
+
+                                            if (showDockedPanel) {
+                                                BottomOrSidePanel(
+                                                    activeTab = panelActiveTab,
+                                                    onTabSelected = { panelActiveTab = it },
+                                                    dockPosition = PanelDockPosition.BOTTOM,
+                                                    sizePreset = panelSizePreset,
+                                                    onSizePresetChange = { panelSizePreset = it },
+                                                    onToggleDockPosition = {
+                                                        panelDockPosition = PanelDockPosition.RIGHT
+                                                    },
+                                                    onUndock = { isPanelUndocked = true },
+                                                    onClose = { showBottomPanel = false },
+                                                    supportsDockRight = isLandscape
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                val effectiveDockPosition = if (isLandscape) panelDockPosition else PanelDockPosition.BOTTOM
+                                val showDockedPanel = showBottomPanel && !isPanelUndocked
+
+                                if (isLandscape && effectiveDockPosition == PanelDockPosition.RIGHT && showDockedPanel) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .imePadding()
+                                            .navigationBarsPadding()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight()
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .weight(1f)
+                                            ) {
+                                                EditorView(
+                                                    settings = settingsState,
+                                                    ctrlActive = ctrlActive,
+                                                    shiftActive = shiftActive,
+                                                    altActive = altActive,
+                                                    onResetModifiers = {
+                                                        ctrlActive = false
+                                                        shiftActive = false
+                                                        altActive = false
+                                                    },
+                                                    onOpenCommandPalette = { showCommandPalette = true },
+                                                    onOpenGeneralMenu = { showProjectMenubar = true },
+                                                    onSaveRequested = {},
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
+
+                                            if (settingsState.isQuickKeyBarEnabled) {
+                                                DeveloperQuickKeyBar(
+                                                    density = settingsState.quickKeyBarDensity,
+                                                    ctrlActive = ctrlActive,
+                                                    shiftActive = shiftActive,
+                                                    altActive = altActive,
+                                                    onToggleCtrl = { ctrlActive = !ctrlActive },
+                                                    onToggleShift = { shiftActive = !shiftActive },
+                                                    onToggleAlt = { altActive = !altActive },
+                                                    onInsertText = insertText,
+                                                    onActionKey = triggerActionKey
+                                                )
+                                            }
+                                        }
+
+                                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                                        BottomOrSidePanel(
+                                            activeTab = panelActiveTab,
+                                            onTabSelected = { panelActiveTab = it },
+                                            dockPosition = PanelDockPosition.RIGHT,
+                                            sizePreset = panelSizePreset,
+                                            onSizePresetChange = { panelSizePreset = it },
+                                            onToggleDockPosition = {
+                                                panelDockPosition = PanelDockPosition.BOTTOM
+                                            },
+                                            onUndock = { isPanelUndocked = true },
+                                            onClose = { showBottomPanel = false },
+                                            supportsDockRight = true
+                                        )
+                                    }
+                                } else {
                                     Column(
                                         modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight()
+                                            .fillMaxSize()
+                                            .imePadding()
+                                            .navigationBarsPadding()
                                     ) {
+                                        // Main Editor Workstation Area
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -966,6 +1186,7 @@ fun MainShell(
                                             )
                                         }
 
+                                        // Developer Quick Key Bar
                                         if (settingsState.isQuickKeyBarEnabled) {
                                             DeveloperQuickKeyBar(
                                                 density = settingsState.quickKeyBarDensity,
@@ -980,64 +1201,37 @@ fun MainShell(
                                             )
                                         }
 
-                                        if (showBottomPanel) {
-                                            BottomPanel()
+                                        // Bottom Panel (Git / Terminal / Database / Problems)
+                                        if (showDockedPanel) {
+                                            BottomOrSidePanel(
+                                                activeTab = panelActiveTab,
+                                                onTabSelected = { panelActiveTab = it },
+                                                dockPosition = PanelDockPosition.BOTTOM,
+                                                sizePreset = panelSizePreset,
+                                                onSizePresetChange = { panelSizePreset = it },
+                                                onToggleDockPosition = {
+                                                    panelDockPosition = PanelDockPosition.RIGHT
+                                                },
+                                                onUndock = { isPanelUndocked = true },
+                                                onClose = { showBottomPanel = false },
+                                                supportsDockRight = isLandscape
+                                            )
                                         }
-                                    }
-                                }
-                            } else {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .imePadding()
-                                        .navigationBarsPadding()
-                                ) {
-                                    // Main Editor Workstation Area
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .weight(1f)
-                                    ) {
-                                        EditorView(
-                                            settings = settingsState,
-                                            ctrlActive = ctrlActive,
-                                            shiftActive = shiftActive,
-                                            altActive = altActive,
-                                            onResetModifiers = {
-                                                ctrlActive = false
-                                                shiftActive = false
-                                                altActive = false
-                                            },
-                                            onOpenCommandPalette = { showCommandPalette = true },
-                                            onOpenGeneralMenu = { showProjectMenubar = true },
-                                            onSaveRequested = {},
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-
-                                    // Developer Quick Key Bar
-                                    if (settingsState.isQuickKeyBarEnabled) {
-                                        DeveloperQuickKeyBar(
-                                            density = settingsState.quickKeyBarDensity,
-                                            ctrlActive = ctrlActive,
-                                            shiftActive = shiftActive,
-                                            altActive = altActive,
-                                            onToggleCtrl = { ctrlActive = !ctrlActive },
-                                            onToggleShift = { shiftActive = !shiftActive },
-                                            onToggleAlt = { altActive = !altActive },
-                                            onInsertText = insertText,
-                                            onActionKey = triggerActionKey
-                                        )
-                                    }
-
-                                    // Bottom Panel (Git / Terminal / Database / Problems)
-                                    if (showBottomPanel) {
-                                        BottomPanel()
                                     }
                                 }
                             }
                         }
                     )
+
+                    // Floating Panel Dialog when Undocked
+                    if (isPanelUndocked && showBottomPanel) {
+                        FloatingPanelDialog(
+                            activeTab = panelActiveTab,
+                            onTabSelected = { panelActiveTab = it },
+                            onDock = { isPanelUndocked = false },
+                            onDismiss = { showBottomPanel = false }
+                        )
+                    }
 
                     // Command Palette Modal Dialog
                     if (showCommandPalette) {

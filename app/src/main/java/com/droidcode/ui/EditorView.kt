@@ -59,6 +59,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.foundation.ScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -200,7 +204,7 @@ fun EditorView(
     val isTablet = configuration.smallestScreenWidthDp >= 600
 
     val toggleSplit: () -> Unit = {
-        splitMode = if (!isTablet) {
+        val nextMode = if (!isTablet) {
             if (splitMode == EditorSplitMode.NONE) {
                 if (isLandscape) EditorSplitMode.HORIZONTAL else EditorSplitMode.VERTICAL
             } else {
@@ -212,6 +216,10 @@ fun EditorView(
                 EditorSplitMode.HORIZONTAL -> EditorSplitMode.VERTICAL
                 EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
             }
+        }
+        splitMode = nextMode
+        if (nextMode == EditorSplitMode.NONE) {
+            secondaryTabIndex = -1
         }
     }
 
@@ -693,11 +701,11 @@ fun EditorView(
             if (secondaryTabIndex in tabs.indices && tabs[secondaryTabIndex] != activeTab) {
                 tabs[secondaryTabIndex]
             } else {
-                tabs.firstOrNull { it != activeTab } ?: activeTab
+                tabs.firstOrNull { it != activeTab }
             }
         } else null
 
-        if (effectiveSplitMode == EditorSplitMode.NONE || secondTab == null) {
+        if (effectiveSplitMode == EditorSplitMode.NONE) {
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -761,20 +769,40 @@ fun EditorView(
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    SecondaryEditorPane(
-                        tab = secondTab,
-                        allTabs = tabs,
-                        settings = settings,
-                        workspaceDir = currentProject?.directory,
-                        onSelectTab = { selectedTab ->
-                            secondaryTabIndex = tabs.indexOf(selectedTab)
-                        },
-                        onCloseSplit = {
-                            splitMode = EditorSplitMode.NONE
-                        },
-                        onSaveRequested = onSaveRequested,
-                        onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
-                    )
+                    if (secondTab != null) {
+                        SecondaryEditorPane(
+                            tab = secondTab,
+                            allTabs = tabs,
+                            settings = settings,
+                            workspaceDir = currentProject?.directory,
+                            onSelectTab = { selectedTab ->
+                                secondaryTabIndex = tabs.indexOf(selectedTab)
+                            },
+                            onCloseSplit = {
+                                splitMode = EditorSplitMode.NONE
+                                secondaryTabIndex = -1
+                            },
+                            onSaveRequested = onSaveRequested,
+                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
+                        )
+                    } else {
+                        SplitSelectFileView(
+                            workspaceDir = currentProject?.directory,
+                            onFileSelected = { file ->
+                                val prevActive = editorMgr.activeTabIndex
+                                val openedTab = editorMgr.openFile(file)
+                                val newIndex = editorMgr.tabs.indexOf(openedTab)
+                                if (prevActive in editorMgr.tabs.indices) {
+                                    editorMgr.activeTabIndex = prevActive
+                                    secondaryTabIndex = newIndex
+                                }
+                            },
+                            onCloseSplit = {
+                                splitMode = EditorSplitMode.NONE
+                                secondaryTabIndex = -1
+                            }
+                        )
+                    }
                 }
             }
         } else {
@@ -810,20 +838,40 @@ fun EditorView(
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    SecondaryEditorPane(
-                        tab = secondTab,
-                        allTabs = tabs,
-                        settings = settings,
-                        workspaceDir = currentProject?.directory,
-                        onSelectTab = { selectedTab ->
-                            secondaryTabIndex = tabs.indexOf(selectedTab)
-                        },
-                        onCloseSplit = {
-                            splitMode = EditorSplitMode.NONE
-                        },
-                        onSaveRequested = onSaveRequested,
-                        onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
-                    )
+                    if (secondTab != null) {
+                        SecondaryEditorPane(
+                            tab = secondTab,
+                            allTabs = tabs,
+                            settings = settings,
+                            workspaceDir = currentProject?.directory,
+                            onSelectTab = { selectedTab ->
+                                secondaryTabIndex = tabs.indexOf(selectedTab)
+                            },
+                            onCloseSplit = {
+                                splitMode = EditorSplitMode.NONE
+                                secondaryTabIndex = -1
+                            },
+                            onSaveRequested = onSaveRequested,
+                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
+                        )
+                    } else {
+                        SplitSelectFileView(
+                            workspaceDir = currentProject?.directory,
+                            onFileSelected = { file ->
+                                val prevActive = editorMgr.activeTabIndex
+                                val openedTab = editorMgr.openFile(file)
+                                val newIndex = editorMgr.tabs.indexOf(openedTab)
+                                if (prevActive in editorMgr.tabs.indices) {
+                                    editorMgr.activeTabIndex = prevActive
+                                    secondaryTabIndex = newIndex
+                                }
+                            },
+                            onCloseSplit = {
+                                splitMode = EditorSplitMode.NONE
+                                secondaryTabIndex = -1
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1249,6 +1297,211 @@ private fun EditorTabContent(
                 onContentChange = onContentChange,
                 onCursorChange = onCursorChange
             )
+        }
+    }
+}
+
+@Composable
+private fun SplitSelectFileView(
+    workspaceDir: File?,
+    onFileSelected: (File) -> Unit,
+    onCloseSplit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    val allFiles = remember(workspaceDir) {
+        if (workspaceDir == null || !workspaceDir.exists()) emptyList<File>()
+        else {
+            try {
+                workspaceDir.walkTopDown()
+                    .maxDepth(4)
+                    .filter { it.isFile && !it.name.startsWith(".") && it.length() < 5_000_000 }
+                    .take(60)
+                    .toList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    val filteredFiles = remember(allFiles, searchQuery) {
+        if (searchQuery.isBlank()) allFiles
+        else allFiles.filter { it.name.contains(searchQuery, ignoreCase = true) || it.path.contains(searchQuery, ignoreCase = true) }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(34.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Splitscreen,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Split Editor - Select File",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Surface(
+                onClick = onCloseSplit,
+                shape = RoundedCornerShape(4.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+                modifier = Modifier.height(24.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close Split",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "Cancel Split",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+
+        // Search & File List
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
+        ) {
+            Text(
+                text = "Open a second file to edit side-by-side",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Select any workspace file below to load it into this split pane",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+            )
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                placeholder = { Text("Filter workspace files...", fontSize = 12.sp) },
+                singleLine = true,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(14.dp))
+                        }
+                    }
+                },
+                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (filteredFiles.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (searchQuery.isNotEmpty()) "No files matching \"$searchQuery\"" else "No files found in workspace",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(filteredFiles) { file ->
+                        val relPath = if (workspaceDir != null) {
+                            file.relativeToOrSelf(workspaceDir).path
+                        } else file.name
+
+                        Surface(
+                            onClick = { onFileSelected(file) },
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = getEditorFileIcon(file.name),
+                                    contentDescription = null,
+                                    tint = getEditorFileIconColor(file.name),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = file.name,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = relPath,
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

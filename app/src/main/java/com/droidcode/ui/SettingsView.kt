@@ -233,12 +233,24 @@ private fun AppearanceSettingsSection(
             val isSelected = settings.themeMode == mode
             val modeIcon = when (mode) {
                 AppSettings.ThemeMode.DARK -> Icons.Default.DarkMode
+                AppSettings.ThemeMode.ONE_DARK -> Icons.Default.DarkMode
+                AppSettings.ThemeMode.DRACULA -> Icons.Default.DarkMode
+                AppSettings.ThemeMode.MONOKAI -> Icons.Default.DarkMode
+                AppSettings.ThemeMode.SOLARIZED_DARK -> Icons.Default.DarkMode
+                AppSettings.ThemeMode.NORD -> Icons.Default.DarkMode
                 AppSettings.ThemeMode.LIGHT -> Icons.Default.LightMode
+                AppSettings.ThemeMode.SOLARIZED_LIGHT -> Icons.Default.LightMode
                 AppSettings.ThemeMode.SYSTEM -> Icons.Default.SettingsSystemDaydream
             }
             val modeDesc = when (mode) {
-                AppSettings.ThemeMode.DARK -> "Deep neutral slate dark canvas with high contrast code syntax"
-                AppSettings.ThemeMode.LIGHT -> "Soft light canvas ideal for bright environments"
+                AppSettings.ThemeMode.DARK -> "Official VS Code Dark+ theme with high-contrast syntax highlighting"
+                AppSettings.ThemeMode.ONE_DARK -> "One Dark Pro palette with vibrant accents and soft dark canvas"
+                AppSettings.ThemeMode.DRACULA -> "Renowned Dracula theme featuring rich purples, pinks, and cyans"
+                AppSettings.ThemeMode.MONOKAI -> "Classic Monokai coding theme with iconic vivid colors"
+                AppSettings.ThemeMode.SOLARIZED_DARK -> "Ergonomic low-blue-light palette designed for eye protection & fatigue reduction"
+                AppSettings.ThemeMode.NORD -> "Arctic, north-bluish clean color palette with optimal contrast"
+                AppSettings.ThemeMode.LIGHT -> "Official VS Code Light+ clean white canvas"
+                AppSettings.ThemeMode.SOLARIZED_LIGHT -> "Warm sepia paper-tone palette for comfortable daytime reading"
                 AppSettings.ThemeMode.SYSTEM -> "Automatically synchronize theme with Android system preferences"
             }
 

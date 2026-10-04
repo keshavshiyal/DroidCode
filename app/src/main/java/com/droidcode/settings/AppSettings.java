@@ -3,8 +3,14 @@ package com.droidcode.settings;
 public class AppSettings {
 
     public enum ThemeMode {
-        DARK("Dark (Deep Neutral)"),
-        LIGHT("Light (Soft Neutral)"),
+        DARK("VS Code Dark+"),
+        ONE_DARK("One Dark Pro"),
+        DRACULA("Dracula"),
+        MONOKAI("Monokai"),
+        SOLARIZED_DARK("Solarized Dark (Eye Care)"),
+        NORD("Nord (Arctic Blue)"),
+        LIGHT("VS Code Light+"),
+        SOLARIZED_LIGHT("Solarized Light (Sepia)"),
         SYSTEM("Follow System");
 
         private final String label;
