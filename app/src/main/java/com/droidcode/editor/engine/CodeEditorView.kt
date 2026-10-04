@@ -941,6 +941,8 @@ class CodeEditorView @JvmOverloads constructor(
         canvas.drawColor(theme.backgroundColor)
 
         val gutterW = calculateGutterWidth()
+        val padStart = textPaddingStart
+        val lineContentStartX = gutterW + padStart
         val firstVisibleLine = (scrollY / lineHeight).toInt().coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
         val lastVisibleLine = ((scrollY + height) / lineHeight + 1).toInt().coerceIn(firstVisibleLine, (buffer.lineCount - 1).coerceAtLeast(0))
 
@@ -960,7 +962,6 @@ class CodeEditorView @JvmOverloads constructor(
             uiPaint.color = theme.selectionColor
             val normStart = selection.normalizedStart
             val normEnd = selection.normalizedEnd
-            val lineContentStartX = gutterW + textPaddingStart
 
             for (l in normStart.line..normEnd.line) {
                 if (l in firstVisibleLine..lastVisibleLine) {
@@ -984,7 +985,6 @@ class CodeEditorView @JvmOverloads constructor(
         val density = resources.displayMetrics.density
         val gutterPaddingRight = 8f * density
         val diffBarWidth = 3f * density
-        val padStart = textPaddingStart
 
         for (lineIndex in firstVisibleLine..lastVisibleLine) {
             val lineTop = lineIndex * lineHeight
@@ -1079,7 +1079,6 @@ class CodeEditorView @JvmOverloads constructor(
         }
 
         // 6. Draw Selection Handles & Blinking Cursor
-        val padStart = textPaddingStart
         if (!selection.isEmpty) {
             val normStart = selection.normalizedStart
             val normEnd = selection.normalizedEnd
