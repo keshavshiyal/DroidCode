@@ -167,7 +167,7 @@ fun BottomOrSidePanel(
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Icon(
-                                imageVector = androidx.compose.material.icons.filled.SwapHoriz,
+                                imageVector = Icons.Default.SwapHoriz,
                                 contentDescription = if (dockPosition == PanelDockPosition.BOTTOM) "Dock to Right" else "Dock to Bottom",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(14.dp)
@@ -202,7 +202,7 @@ fun BottomOrSidePanel(
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
-                            imageVector = androidx.compose.material.icons.automirrored.filled.OpenInNew,
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                             contentDescription = "Undock Panel",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(13.dp)
@@ -218,7 +218,7 @@ fun BottomOrSidePanel(
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
-                            imageVector = androidx.compose.material.icons.filled.Close,
+                            imageVector = Icons.Default.Close,
                             contentDescription = "Close Panel",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp)
@@ -345,7 +345,7 @@ fun FloatingPanelDialog(
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
-                                    imageVector = androidx.compose.material.icons.filled.Close,
+                                    imageVector = Icons.Default.Close,
                                     contentDescription = "Close",
                                     tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(15.dp)
