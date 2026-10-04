@@ -11,6 +11,7 @@ import android.webkit.MimeTypeMap
 import android.widget.MediaController
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -308,7 +309,7 @@ fun EditorView(
                     }
 
                     // Pinned File & Tab Actions Menu at the right of the Tab Bar
-                    IconButton(
+                    Surface(
                         onClick = {
                             if (onOpenGeneralMenu != null) {
                                 onOpenGeneralMenu()
@@ -316,19 +317,29 @@ fun EditorView(
                                 showContextMenu = true
                             }
                         },
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
                         modifier = Modifier
-                            .size(36.dp)
-                            .padding(end = 4.dp)
+                            .padding(end = 6.dp)
+                            .size(30.dp)
                             .testTag("tab_bar_file_menu_btn")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "File & Editor Menu",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "File & Editor Menu",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
+
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
 
                 // Breadcrumbs Navigation Bar
                 BreadcrumbsBar(
@@ -348,82 +359,171 @@ fun EditorView(
                     }
                 )
 
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+
                 // Editor Toolbar & Language / Line Stats
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(34.dp)
+                        .height(36.dp)
                         .background(MaterialTheme.colorScheme.surface)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                         .padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Left Section: File Stats & Quick Configuration Chips
                     Row(
                         modifier = Modifier
-                            .weight(1f, fill = false)
+                            .weight(1f)
                             .horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = activeTab.languageId.uppercase(),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier
-                                .clickable { showChangeLanguageDialog = true }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = activeTab.encoding,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier
-                                .clickable { showChangeEncodingDialog = true }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = activeTab.lineEnding,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier
-                                .clickable { showChangeLineEndingDialog = true }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                        Spacer(modifier = Modifier.width(SpacingM))
-                        Text(
-                            text = stringResource(R.string.status_line_col, activeTab.line, activeTab.column),
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        // Language Badge
+                        Surface(
+                            onClick = { showChangeLanguageDialog = true },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = activeTab.languageId.uppercase(),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "▾",
+                                    fontSize = 9.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        // Encoding Badge
+                        Surface(
+                            onClick = { showChangeEncodingDialog = true },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = activeTab.encoding,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "▾",
+                                    fontSize = 9.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // Line Ending Badge
+                        Surface(
+                            onClick = { showChangeLineEndingDialog = true },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = activeTab.lineEnding,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "▾",
+                                    fontSize = 9.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // Line / Col Position Badge (Clickable to Jump to Line)
+                        Surface(
+                            onClick = { showGoToLineDialog = true },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.status_line_col, activeTab.line, activeTab.column),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
                     }
 
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    VerticalDivider(
+                        modifier = Modifier
+                            .height(18.dp)
+                            .padding(horizontal = 2.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Right Section: Action Buttons
                     Row(
                         modifier = Modifier.wrapContentWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        IconButton(
+                        // Find in Files
+                        Surface(
                             onClick = { showWorkspaceSearchDialog = true },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(28.dp)
                                 .testTag("editor_find_in_files_btn")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Find in Files (Ctrl+Shift+F)",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Find in Files (Ctrl+Shift+F)",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
 
-                        IconButton(
+                        // Split Editor
+                        Surface(
                             onClick = {
                                 splitMode = when (splitMode) {
                                     EditorSplitMode.NONE -> EditorSplitMode.HORIZONTAL
@@ -431,19 +531,25 @@ fun EditorView(
                                     EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
                                 }
                             },
+                            shape = RoundedCornerShape(4.dp),
+                            color = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(28.dp)
                                 .testTag("editor_split_mode_btn")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Splitscreen,
-                                contentDescription = "Toggle Split Editor",
-                                tint = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = Icons.Default.Splitscreen,
+                                    contentDescription = "Toggle Split Editor",
+                                    tint = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
 
-                        IconButton(
+                        // Save Active File
+                        Surface(
                             onClick = {
                                 try {
                                     editorMgr.saveActiveTab()
@@ -453,19 +559,25 @@ fun EditorView(
                                     Toast.makeText(context, "Failed to save file: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             },
+                            shape = RoundedCornerShape(4.dp),
+                            color = if (activeTab.isModified) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(28.dp)
                                 .testTag("editor_save_btn")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Save,
-                                contentDescription = "Save",
-                                tint = if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = Icons.Default.Save,
+                                    contentDescription = "Save",
+                                    tint = if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
 
-                        IconButton(
+                        // File & Project Menubar
+                        Surface(
                             onClick = {
                                 if (onOpenGeneralMenu != null) {
                                     onOpenGeneralMenu()
@@ -473,33 +585,49 @@ fun EditorView(
                                     showContextMenu = true
                                 }
                             },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(28.dp)
                                 .testTag("editor_general_menu_btn")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "File & Project Menubar",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "File & Project Menubar",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
                         }
 
-                        IconButton(
+                        // IDE Context Menu
+                        Surface(
                             onClick = { showContextMenu = true },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(28.dp)
                                 .testTag("editor_context_menu_btn")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "IDE Context Menu",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "IDE Context Menu",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
+
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
             }
 
         // Unsaved Changes Confirmation Dialog
@@ -862,8 +990,8 @@ private fun BreadcrumbsBar(
         modifier = modifier
             .fillMaxWidth()
             .height(30.dp)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(width = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .border(width = 1.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -873,59 +1001,64 @@ private fun BreadcrumbsBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(12.dp)
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(13.dp)
                 )
-                Spacer(modifier = Modifier.width(2.dp))
+                Spacer(modifier = Modifier.width(3.dp))
             }
 
             val isLast = index == nodes.size - 1
             val isExpanded = activeDropdownIndex == index
 
             Box {
-                Row(
-                    modifier = Modifier
-                        .clickable { activeDropdownIndex = if (isExpanded) null else index }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (isLast) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                    border = if (isLast) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)) else null,
+                    modifier = Modifier.clickable { activeDropdownIndex = if (isExpanded) null else index }
                 ) {
-                    if (node.isDirectory) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = getEditorFileIcon(node.name),
-                            contentDescription = null,
-                            tint = getEditorFileIconColor(node.name),
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = node.name,
-                        fontSize = 11.sp,
-                        fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.width(2.dp))
-                    if (node.isDirectory) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (node.isDirectory) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = getEditorFileIcon(node.name),
+                                contentDescription = null,
+                                tint = getEditorFileIconColor(node.name),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "▾",
-                            fontSize = 9.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            text = node.name,
+                            fontSize = 11.sp,
+                            fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            fontFamily = FontFamily.Monospace
                         )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "File actions menu",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(15.dp)
-                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        if (node.isDirectory) {
+                            Text(
+                                text = "▾",
+                                fontSize = 9.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "File actions menu",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
                 }
 

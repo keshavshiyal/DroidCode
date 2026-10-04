@@ -20,6 +20,7 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = DarkEditorCanvas,
     onSurfaceVariant = DarkTextSecondary,
     outline = DarkBorder,
+    outlineVariant = Color(0xFF383844),
     error = StatusError
 )
 
@@ -36,6 +37,7 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = LightEditorCanvas,
     onSurfaceVariant = LightTextSecondary,
     outline = LightBorder,
+    outlineVariant = Color(0xFFCBD5E1),
     error = StatusError
 )
 
