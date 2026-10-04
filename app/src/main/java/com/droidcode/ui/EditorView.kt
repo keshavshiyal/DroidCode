@@ -88,6 +88,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -194,6 +195,36 @@ fun EditorView(
     var infoDialogText by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingActionType by rememberSaveable { mutableStateOf<String?>(null) }
 
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val isTablet = configuration.smallestScreenWidthDp >= 600
+
+    val toggleSplit: () -> Unit = {
+        splitMode = if (!isTablet) {
+            if (splitMode == EditorSplitMode.NONE) {
+                if (isLandscape) EditorSplitMode.HORIZONTAL else EditorSplitMode.VERTICAL
+            } else {
+                EditorSplitMode.NONE
+            }
+        } else {
+            when (splitMode) {
+                EditorSplitMode.NONE -> EditorSplitMode.HORIZONTAL
+                EditorSplitMode.HORIZONTAL -> EditorSplitMode.VERTICAL
+                EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
+            }
+        }
+    }
+
+    val effectiveSplitMode = remember(splitMode, isTablet, isLandscape) {
+        if (splitMode == EditorSplitMode.NONE) {
+            EditorSplitMode.NONE
+        } else if (!isTablet) {
+            if (isLandscape) EditorSplitMode.HORIZONTAL else EditorSplitMode.VERTICAL
+        } else {
+            splitMode
+        }
+    }
+
     LaunchedEffect(Unit) {
         EditorCommandRegistration.registerAllCommands(
             context = context,
@@ -207,13 +238,7 @@ fun EditorView(
             onShowChangeLineEndingDialog = { showChangeLineEndingDialog = true },
             onShowSaveAsDialog = { showSaveAsDialog = true },
             onShowWorkspaceSearch = { showWorkspaceSearchDialog = true },
-            onToggleSplitEditor = {
-                splitMode = when (splitMode) {
-                    EditorSplitMode.NONE -> EditorSplitMode.HORIZONTAL
-                    EditorSplitMode.HORIZONTAL -> EditorSplitMode.VERTICAL
-                    EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
-                }
-            },
+            onToggleSplitEditor = toggleSplit,
             onShowInfoDialog = { title, text ->
                 infoDialogTitle = title
                 infoDialogText = text
@@ -524,16 +549,10 @@ fun EditorView(
 
                         // Split Editor
                         Surface(
-                            onClick = {
-                                splitMode = when (splitMode) {
-                                    EditorSplitMode.NONE -> EditorSplitMode.HORIZONTAL
-                                    EditorSplitMode.HORIZONTAL -> EditorSplitMode.VERTICAL
-                                    EditorSplitMode.VERTICAL -> EditorSplitMode.NONE
-                                }
-                            },
+                            onClick = toggleSplit,
                             shape = RoundedCornerShape(4.dp),
-                            color = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                            color = if (effectiveSplitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, if (effectiveSplitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
                             modifier = Modifier
                                 .size(28.dp)
                                 .testTag("editor_split_mode_btn")
@@ -542,7 +561,7 @@ fun EditorView(
                                 Icon(
                                     imageVector = Icons.Default.Splitscreen,
                                     contentDescription = "Toggle Split Editor",
-                                    tint = if (splitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    tint = if (effectiveSplitMode != EditorSplitMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -670,7 +689,7 @@ fun EditorView(
         }
 
         // Split-Pane or Single Editor Container
-        val secondTab = if (splitMode != EditorSplitMode.NONE && tabs.isNotEmpty()) {
+        val secondTab = if (effectiveSplitMode != EditorSplitMode.NONE && tabs.isNotEmpty()) {
             if (secondaryTabIndex in tabs.indices && tabs[secondaryTabIndex] != activeTab) {
                 tabs[secondaryTabIndex]
             } else {
@@ -678,7 +697,7 @@ fun EditorView(
             }
         } else null
 
-        if (splitMode == EditorSplitMode.NONE || secondTab == null) {
+        if (effectiveSplitMode == EditorSplitMode.NONE || secondTab == null) {
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -709,7 +728,7 @@ fun EditorView(
                     }
                 )
             }
-        } else if (splitMode == EditorSplitMode.HORIZONTAL) {
+        } else if (effectiveSplitMode == EditorSplitMode.HORIZONTAL) {
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     EditorTabContent(
@@ -1251,33 +1270,47 @@ private fun SecondaryEditorPane(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(34.dp)
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                .height(32.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                 .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable { showTabDropdown = true }
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                    modifier = Modifier.clickable { showTabDropdown = true }
                 ) {
-                    Text(
-                        text = tab.fileName,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "▾",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = getEditorFileIcon(tab.fileName),
+                            contentDescription = null,
+                            tint = getEditorFileIconColor(tab.fileName),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = tab.fileName,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "▾",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 DropdownMenu(
@@ -1296,9 +1329,9 @@ private fun SecondaryEditorPane(
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (tab.isModified) {
-                    IconButton(
+                    Surface(
                         onClick = {
                             try {
                                 EditorManager.getInstance().saveTab(tab)
@@ -1307,47 +1340,49 @@ private fun SecondaryEditorPane(
                                 android.util.Log.e("EditorView", "Failed saving split tab", e)
                             }
                         },
-                        modifier = Modifier.size(28.dp)
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                imageVector = Icons.Default.Save,
+                                contentDescription = "Save Split Tab",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    onClick = onCloseSplit,
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+                    modifier = Modifier.height(26.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 6.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Save,
-                            contentDescription = "Save Split Tab",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Split",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Close",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
                 }
-                IconButton(
-                    onClick = onCloseSplit,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Split",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
             }
         }
-
-        BreadcrumbsBar(
-            tab = tab,
-            workspaceDir = workspaceDir,
-            onOpenFile = { file ->
-                val existing = allTabs.firstOrNull { it.filePath == file.absolutePath }
-                if (existing != null) {
-                    onSelectTab(existing)
-                } else {
-                    try {
-                        val opened = EditorManager.getInstance().openFile(file)
-                        onSelectTab(opened)
-                    } catch (e: Exception) {
-                        android.util.Log.e("SecondaryEditorPane", "Failed to open file: ${file.name}", e)
-                    }
-                }
-            }
-        )
 
         Box(modifier = Modifier.fillMaxSize()) {
             EditorTabContent(

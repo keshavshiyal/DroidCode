@@ -58,6 +58,9 @@ class CodeEditorView @JvmOverloads constructor(
             invalidate()
         }
 
+    val textPaddingStart: Float
+        get() = 12f * resources.displayMetrics.density
+
     var fontOption: AppSettings.EditorFontFamily? = null
         set(value) {
             if (field != value) {
@@ -70,6 +73,8 @@ class CodeEditorView @JvmOverloads constructor(
         set(value) {
             field = value
             updateMetrics()
+            clampScroll()
+            requestLayout()
             invalidate()
         }
 
@@ -233,16 +238,17 @@ class CodeEditorView @JvmOverloads constructor(
 
         override fun onGetContentRect(mode: ActionMode, view: View, outRect: Rect) {
             val gutterW = calculateGutterWidth()
+            val padStart = textPaddingStart
             if (!selection.isEmpty) {
                 val normStart = selection.normalizedStart
                 val normEnd = selection.normalizedEnd
-                val left = (gutterW + normStart.col * charWidth - scrollX).toInt().coerceIn(0, width)
-                val right = (gutterW + normEnd.col * charWidth - scrollX).toInt().coerceIn(left, width)
+                val left = (gutterW + padStart + normStart.col * charWidth - scrollX).toInt().coerceIn(0, width)
+                val right = (gutterW + padStart + normEnd.col * charWidth - scrollX).toInt().coerceIn(left, width)
                 val top = (normStart.line * lineHeight - scrollY).toInt().coerceIn(0, height)
                 val bottom = ((normEnd.line + 1) * lineHeight - scrollY).toInt().coerceIn(top, height)
                 outRect.set(left, top, max(left + 1, right), max(top + 1, bottom))
             } else {
-                val x = (gutterW + cursorPosition.col * charWidth - scrollX).toInt().coerceIn(0, width)
+                val x = (gutterW + padStart + cursorPosition.col * charWidth - scrollX).toInt().coerceIn(0, width)
                 val y = (cursorPosition.line * lineHeight - scrollY).toInt().coerceIn(0, height)
                 outRect.set(x, y, x + 1, (y + lineHeight).toInt())
             }
@@ -349,6 +355,8 @@ class CodeEditorView @JvmOverloads constructor(
         boldTextPaint.typeface = Typeface.create(tf, Typeface.BOLD)
         gutterPaint.typeface = tf
         updateMetrics()
+        clampScroll()
+        requestLayout()
         invalidate()
     }
 
@@ -374,7 +382,7 @@ class CodeEditorView @JvmOverloads constructor(
 
     private fun getMaxScrollX(): Int {
         val maxLen = (0 until min(buffer.lineCount, 500)).maxOfOrNull { buffer.getLineLength(it) } ?: 80
-        return max(0, (maxLen * charWidth + width * 0.5f).toInt())
+        return max(0, (maxLen * charWidth + textPaddingStart + width * 0.5f).toInt())
     }
 
     private fun getMaxScrollY(): Int {
@@ -415,14 +423,15 @@ class CodeEditorView @JvmOverloads constructor(
                     val touchRadius = 36f * density
                     val rSq = touchRadius * touchRadius
                     val gutterW = calculateGutterWidth()
+                    val padStart = textPaddingStart
 
                     val normStart = selection.normalizedStart
                     val normEnd = selection.normalizedEnd
 
-                    val startCenterX = gutterW + normStart.col * charWidth - scrollX - handleRadius / 2f
+                    val startCenterX = gutterW + padStart + normStart.col * charWidth - scrollX - handleRadius / 2f
                     val startCenterY = (normStart.line + 1) * lineHeight - scrollY + handleRadius
 
-                    val endCenterX = gutterW + normEnd.col * charWidth - scrollX + handleRadius / 2f
+                    val endCenterX = gutterW + padStart + normEnd.col * charWidth - scrollX + handleRadius / 2f
                     val endCenterY = (normEnd.line + 1) * lineHeight - scrollY + handleRadius
 
                     val distStartSq = (event.x - startCenterX) * (event.x - startCenterX) +
@@ -506,7 +515,8 @@ class CodeEditorView @JvmOverloads constructor(
 
     private fun screenToCursor(screenX: Float, screenY: Float): CursorPos {
         val gutterW = calculateGutterWidth()
-        val contentX = screenX + scrollX - gutterW
+        val padStart = textPaddingStart
+        val contentX = screenX + scrollX - gutterW - padStart
         val contentY = screenY + scrollY
 
         val line = (contentY / lineHeight).toInt().coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
@@ -619,15 +629,16 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun scrollToCursor() {
         val gutterW = calculateGutterWidth()
-        val cursorX = gutterW + cursorPosition.col * charWidth
+        val padStart = textPaddingStart
+        val cursorX = gutterW + padStart + cursorPosition.col * charWidth
         val cursorY = cursorPosition.line * lineHeight
 
         var targetScrollX = scrollX
         var targetScrollY = scrollY
 
         val padding = 40f
-        if (cursorX < scrollX + gutterW + padding) {
-            targetScrollX = max(0, (cursorX - gutterW - padding).toInt())
+        if (cursorX < scrollX + gutterW + padStart + padding) {
+            targetScrollX = max(0, (cursorX - gutterW - padStart - padding).toInt())
         } else if (cursorX > scrollX + width - padding) {
             targetScrollX = (cursorX - width + padding).toInt()
         }
@@ -949,6 +960,7 @@ class CodeEditorView @JvmOverloads constructor(
             uiPaint.color = theme.selectionColor
             val normStart = selection.normalizedStart
             val normEnd = selection.normalizedEnd
+            val lineContentStartX = gutterW + textPaddingStart
 
             for (l in normStart.line..normEnd.line) {
                 if (l in firstVisibleLine..lastVisibleLine) {
@@ -956,11 +968,11 @@ class CodeEditorView @JvmOverloads constructor(
                     val lineBottom = lineTop + lineHeight
                     val lineStr = buffer.getLine(l)
 
-                    val startX = if (l == normStart.line) gutterW + normStart.col * charWidth else gutterW
+                    val startX = if (l == normStart.line) lineContentStartX + normStart.col * charWidth else lineContentStartX
                     val endX = if (l == normEnd.line) {
-                        gutterW + normEnd.col * charWidth
+                        lineContentStartX + normEnd.col * charWidth
                     } else {
-                        gutterW + (lineStr.length + 1) * charWidth
+                        lineContentStartX + (lineStr.length + 1) * charWidth
                     }
 
                     canvas.drawRect(startX, lineTop, endX, lineBottom, uiPaint)
@@ -972,6 +984,7 @@ class CodeEditorView @JvmOverloads constructor(
         val density = resources.displayMetrics.density
         val gutterPaddingRight = 8f * density
         val diffBarWidth = 3f * density
+        val padStart = textPaddingStart
 
         for (lineIndex in firstVisibleLine..lastVisibleLine) {
             val lineTop = lineIndex * lineHeight
@@ -981,7 +994,7 @@ class CodeEditorView @JvmOverloads constructor(
             // Draw line text with syntax highlighting
             val tokens = tokenizer.tokenizeLine(lineText)
             var currentCol = 0
-            val textStartX = gutterW
+            val textStartX = gutterW + padStart
 
             for (token in tokens) {
                 // Unstyled prefix before token
@@ -1066,6 +1079,7 @@ class CodeEditorView @JvmOverloads constructor(
         }
 
         // 6. Draw Selection Handles & Blinking Cursor
+        val padStart = textPaddingStart
         if (!selection.isEmpty) {
             val normStart = selection.normalizedStart
             val normEnd = selection.normalizedEnd
@@ -1074,7 +1088,7 @@ class CodeEditorView @JvmOverloads constructor(
 
             // Start handle
             if (normStart.line in firstVisibleLine..lastVisibleLine) {
-                val startX = gutterW + normStart.col * charWidth
+                val startX = gutterW + padStart + normStart.col * charWidth
                 val startY = (normStart.line + 1) * lineHeight
                 canvas.drawRect(startX - 1f * density, startY - lineHeight, startX + 1f * density, startY, uiPaint)
                 canvas.drawCircle(startX - handleRadius / 2f, startY + handleRadius, handleRadius, uiPaint)
@@ -1082,13 +1096,13 @@ class CodeEditorView @JvmOverloads constructor(
 
             // End handle
             if (normEnd.line in firstVisibleLine..lastVisibleLine) {
-                val endX = gutterW + normEnd.col * charWidth
+                val endX = gutterW + padStart + normEnd.col * charWidth
                 val endY = (normEnd.line + 1) * lineHeight
                 canvas.drawRect(endX - 1f * density, endY - lineHeight, endX + 1f * density, endY, uiPaint)
                 canvas.drawCircle(endX + handleRadius / 2f, endY + handleRadius, handleRadius, uiPaint)
             }
         } else if (isFocused && cursorVisible) {
-            val cursorX = gutterW + cursorPosition.col * charWidth
+            val cursorX = gutterW + padStart + cursorPosition.col * charWidth
             val cursorY = cursorPosition.line * lineHeight
             val cursorW = 2f * density
 

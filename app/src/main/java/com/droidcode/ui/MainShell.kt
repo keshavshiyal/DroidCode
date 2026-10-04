@@ -116,7 +116,10 @@ fun MainShell(
     val context = LocalContext.current
     val activity = context as? Activity
     val sizeClass = windowSizeClass ?: activity?.let { calculateWindowSizeClass(it) }
-    val isExpanded = sizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isTablet = configuration.smallestScreenWidthDp >= 600
+    val isExpanded = isTablet && (sizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded)
+    var isSidebarVisible by rememberSaveable { mutableStateOf(true) }
 
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -671,8 +674,12 @@ fun MainShell(
                                     IconButton(
                                         onClick = {
                                             focusManager.clearFocus(force = true)
-                                            coroutineScope.launch {
-                                                if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                            if (isExpanded) {
+                                                isSidebarVisible = !isSidebarVisible
+                                            } else {
+                                                coroutineScope.launch {
+                                                    if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                                }
                                             }
                                         },
                                         modifier = Modifier
@@ -682,7 +689,7 @@ fun MainShell(
                                         Icon(
                                             imageVector = Icons.Default.Folder,
                                             contentDescription = "Toggle Project Explorer",
-                                            tint = if (drawerState.isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = if ((isExpanded && isSidebarVisible) || (!isExpanded && drawerState.isOpen)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -901,33 +908,35 @@ fun MainShell(
                                         .imePadding()
                                         .navigationBarsPadding()
                                 ) {
-                                    // Multi-Pane Left Pane: Explorer Panel on Tablet / Expanded Screen
-                                    val activePath = workspaceMgr.currentProject?.path ?: savedWorkspacePath
-                                    key(activePath) {
-                                        Box(
-                                            modifier = Modifier
-                                                .zIndex(10f)
-                                                .width(280.dp)
-                                                .fillMaxHeight()
-                                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                        ) {
-                                            ExplorerPanel(
-                                                onOpenFile = { file ->
-                                                    try {
-                                                        editorMgr.openFile(file)
-                                                    } catch (e: Exception) {
-                                                        android.util.Log.e("MainShell", "Failed to open file: ${file.absolutePath}", e)
-                                                    }
-                                                },
-                                                onCloseProject = {
-                                                    closeCurrentWorkspace()
-                                                },
-                                                modifier = Modifier.fillMaxSize()
-                                            )
+                                    if (isSidebarVisible) {
+                                        // Multi-Pane Left Pane: Explorer Panel on Tablet / Expanded Screen
+                                        val activePath = workspaceMgr.currentProject?.path ?: savedWorkspacePath
+                                        key(activePath) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .zIndex(10f)
+                                                    .width(280.dp)
+                                                    .fillMaxHeight()
+                                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                            ) {
+                                                ExplorerPanel(
+                                                    onOpenFile = { file ->
+                                                        try {
+                                                            editorMgr.openFile(file)
+                                                        } catch (e: Exception) {
+                                                            android.util.Log.e("MainShell", "Failed to open file: ${file.absolutePath}", e)
+                                                        }
+                                                    },
+                                                    onCloseProject = {
+                                                        closeCurrentWorkspace()
+                                                    },
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
                                         }
-                                    }
 
-                                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    }
 
                                     // Multi-Pane Right Pane: Editor Workstation Area
                                     Column(
