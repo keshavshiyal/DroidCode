@@ -130,12 +130,28 @@ class CodeEditorView @JvmOverloads constructor(
         onSaveShortcut?.invoke()
     }
 
-    fun setBufferText(text: String) {
-        if (lastSyncedText === text) return
+    var currentFilePath: String? = null
+    var onScrollPositionChanged: ((x: Int, y: Int) -> Unit)? = null
+
+    fun setBufferText(text: String, filePath: String? = null) {
+        val fileChanged = filePath != null && filePath != currentFilePath
+        if (filePath != null) {
+            currentFilePath = filePath
+        }
+        if (!fileChanged && lastSyncedText === text) return
         lastSyncedText = text
         removeCallbacks(notifyContentRunnable)
         buffer.setText(text)
         tokenizer.clearCache()
+        if (fileChanged) {
+            cursorPosition = CursorPos(0, 0)
+            selection = SelectionRange(cursorPosition, cursorPosition)
+            scrollTo(0, 0)
+        } else {
+            cursorPosition = buffer.clampPosition(cursorPosition)
+            selection = SelectionRange(buffer.clampPosition(selection.start), buffer.clampPosition(selection.end))
+            clampScroll()
+        }
         invalidate()
     }
 
@@ -389,28 +405,41 @@ class CodeEditorView @JvmOverloads constructor(
         return (digits * charWidth * 0.9f) + (16f * resources.displayMetrics.density)
     }
 
-    private fun getMaxScrollX(): Int {
+    fun getMaxScrollX(): Int {
         val maxLen = (0 until min(buffer.lineCount, 500)).maxOfOrNull { buffer.getLineLength(it) } ?: 80
         return max(0, (maxLen * charWidth + textPaddingStart + width * 0.5f).toInt())
     }
 
-    private fun getMaxScrollY(): Int {
+    fun getMaxScrollY(): Int {
         val contentHeight = (buffer.lineCount * lineHeight).toInt()
         val visibleHeight = height
-        return if (contentHeight <= visibleHeight) {
+        return if (visibleHeight <= 0 || contentHeight <= visibleHeight) {
             0
         } else {
             max(0, contentHeight - (visibleHeight * 0.3f).toInt())
         }
     }
 
-    private fun clampScroll() {
+    fun clampScroll() {
         val clampedX = scrollX.coerceIn(0, getMaxScrollX())
         val clampedY = scrollY.coerceIn(0, getMaxScrollY())
         if (clampedX != scrollX || clampedY != scrollY) {
             scrollTo(clampedX, clampedY)
         }
     }
+
+    override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+        super.onScrollChanged(l, t, oldl, oldt)
+        onScrollPositionChanged?.invoke(l, t)
+    }
+
+    fun setScrollPositions(x: Int, y: Int) {
+        scrollTo(x.coerceIn(0, getMaxScrollX()), y.coerceIn(0, getMaxScrollY()))
+        clampScroll()
+        invalidate()
+    }
+
+    fun getScrollPositions(): Pair<Int, Int> = Pair(scrollX, scrollY)
 
     override fun computeScroll() {
         if (scroller.computeScrollOffset()) {
@@ -973,6 +1002,10 @@ class CodeEditorView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+
+        if (lineHeight > 0f) {
+            clampScroll()
+        }
 
         // 1. Fill editor background
         canvas.drawColor(theme.backgroundColor)

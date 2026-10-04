@@ -125,6 +125,17 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.zIndex
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.runtime.key
+import kotlin.math.roundToInt
 import com.droidcode.editor.LineDiffCalculator
 import com.droidcode.editor.LineDiffStatus
 import com.droidcode.project.WorkspaceManager
@@ -198,6 +209,10 @@ fun EditorView(
     var infoDialogTitle by rememberSaveable { mutableStateOf<String?>(null) }
     var infoDialogText by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingActionType by rememberSaveable { mutableStateOf<String?>(null) }
+    var tabContextMenuIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    var draggingTabIndex by remember { mutableStateOf<Int?>(null) }
+    var dragCurrentWindowPos by remember { mutableStateOf<Offset?>(null) }
+    var editorContainerBounds by remember { mutableStateOf<Rect?>(null) }
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -293,14 +308,63 @@ fun EditorView(
                             val isActive = index == editorMgr.activeTabIndex
                             val bg = if (isActive) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
                             val tabBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                            var tabGlobalPos by remember { mutableStateOf(Offset.Zero) }
 
                             Row(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .background(bg)
                                     .border(1.dp, tabBorderColor)
+                                    .onGloballyPositioned { coords ->
+                                        tabGlobalPos = coords.positionInWindow()
+                                    }
+                                    .pointerInput(tab.filePath) {
+                                        var totalDrag = Offset.Zero
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = { localOffset ->
+                                                totalDrag = Offset.Zero
+                                                draggingTabIndex = index
+                                                dragCurrentWindowPos = tabGlobalPos + localOffset
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                totalDrag += dragAmount
+                                                dragCurrentWindowPos = (dragCurrentWindowPos ?: tabGlobalPos) + dragAmount
+                                            },
+                                            onDragEnd = {
+                                                val pos = dragCurrentWindowPos
+                                                val bounds = editorContainerBounds
+                                                if (totalDrag.getDistance() < 12f) {
+                                                    tabContextMenuIndex = index
+                                                } else if (pos != null && bounds != null && pos.x in bounds.left..bounds.right && pos.y in bounds.top..bounds.bottom) {
+                                                    val isRight = isLandscape && pos.x > bounds.left + bounds.width * 0.4f
+                                                    if (isLandscape && isRight) {
+                                                        splitMode = EditorSplitMode.HORIZONTAL
+                                                        secondaryTabIndex = index
+                                                        if (editorMgr.activeTabIndex == index) {
+                                                            val other = tabs.indices.firstOrNull { it != index } ?: 0
+                                                            editorMgr.activeTabIndex = other
+                                                        }
+                                                    } else {
+                                                        splitMode = EditorSplitMode.VERTICAL
+                                                        secondaryTabIndex = index
+                                                        if (editorMgr.activeTabIndex == index) {
+                                                            val other = tabs.indices.firstOrNull { it != index } ?: 0
+                                                            editorMgr.activeTabIndex = other
+                                                        }
+                                                    }
+                                                }
+                                                draggingTabIndex = null
+                                                dragCurrentWindowPos = null
+                                            },
+                                            onDragCancel = {
+                                                draggingTabIndex = null
+                                                dragCurrentWindowPos = null
+                                            }
+                                        )
+                                    }
                                     .clickable { editorMgr.activeTabIndex = index }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -322,6 +386,25 @@ fun EditorView(
 
                                 Spacer(modifier = Modifier.width(SpacingS))
 
+                                if (tabs.size > 1) {
+                                    Icon(
+                                        imageVector = Icons.Default.Splitscreen,
+                                        contentDescription = "Split with this tab",
+                                        tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier
+                                            .size(13.dp)
+                                            .clickable {
+                                                splitMode = if (isLandscape) EditorSplitMode.HORIZONTAL else EditorSplitMode.VERTICAL
+                                                secondaryTabIndex = index
+                                                if (editorMgr.activeTabIndex == index) {
+                                                    val other = tabs.indices.firstOrNull { it != index } ?: 0
+                                                    editorMgr.activeTabIndex = other
+                                                }
+                                            }
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = stringResource(R.string.action_close_tab),
@@ -337,6 +420,65 @@ fun EditorView(
                                             }
                                         }
                                 )
+
+                                DropdownMenu(
+                                    expanded = tabContextMenuIndex == index,
+                                    onDismissRequest = { tabContextMenuIndex = null }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Split Down (Vertical)") },
+                                        leadingIcon = { Icon(Icons.Default.Splitscreen, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                        onClick = {
+                                            splitMode = EditorSplitMode.VERTICAL
+                                            secondaryTabIndex = index
+                                            if (editorMgr.activeTabIndex == index) {
+                                                val other = tabs.indices.firstOrNull { it != index } ?: 0
+                                                editorMgr.activeTabIndex = other
+                                            }
+                                            tabContextMenuIndex = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Split Right (Horizontal)") },
+                                        leadingIcon = { Icon(Icons.Default.Splitscreen, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                        onClick = {
+                                            splitMode = EditorSplitMode.HORIZONTAL
+                                            secondaryTabIndex = index
+                                            if (editorMgr.activeTabIndex == index) {
+                                                val other = tabs.indices.firstOrNull { it != index } ?: 0
+                                                editorMgr.activeTabIndex = other
+                                            }
+                                            tabContextMenuIndex = null
+                                        }
+                                    )
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Close Tab") },
+                                        leadingIcon = { Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                        onClick = {
+                                            if (tab.isModified) {
+                                                tabToPromptCloseIndex = index
+                                            } else {
+                                                editorMgr.closeTab(index)
+                                            }
+                                            tabContextMenuIndex = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Close Other Tabs") },
+                                        onClick = {
+                                            editorMgr.closeOtherTabs(index)
+                                            tabContextMenuIndex = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Close Tabs to Right") },
+                                        onClick = {
+                                            editorMgr.closeTabsToRight(index)
+                                            tabContextMenuIndex = null
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -705,40 +847,16 @@ fun EditorView(
             }
         } else null
 
-        if (effectiveSplitMode == EditorSplitMode.NONE) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                EditorTabContent(
-                    tab = activeTab,
-                    settings = settings,
-                    ctrlActive = ctrlActive,
-                    shiftActive = shiftActive,
-                    altActive = altActive,
-                    pendingActionType = pendingActionType,
-                    onClearPendingAction = { pendingActionType = null },
-                    onResetModifiers = onResetModifiers,
-                    onOpenCommandPalette = onOpenCommandPalette,
-                    onOpenContextMenu = { showContextMenu = true },
-                    onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
-                    onShowInfoDialog = { title, text ->
-                        infoDialogTitle = title
-                        infoDialogText = text
-                    },
-                    onSaveRequested = onSaveRequested,
-                    onContentChange = { newText: String ->
-                        editorMgr.updateActiveTabContent(newText)
-                    },
-                    onCursorChange = { pos: Int ->
-                        activeTab.updateCursor(pos)
-                    }
-                )
-            }
-        } else if (effectiveSplitMode == EditorSplitMode.HORIZONTAL) {
-            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .onGloballyPositioned { coords ->
+                    editorContainerBounds = coords.boundsInWindow()
+                }
+        ) {
+            if (effectiveSplitMode == EditorSplitMode.NONE) {
+                key("primary_${activeTab.filePath}") {
                     EditorTabContent(
                         tab = activeTab,
                         settings = settings,
@@ -764,113 +882,226 @@ fun EditorView(
                         }
                     )
                 }
-                VerticalDivider(
-                    modifier = Modifier.width(1.dp).fillMaxHeight(),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    if (secondTab != null) {
-                        SecondaryEditorPane(
-                            tab = secondTab,
-                            allTabs = tabs,
-                            settings = settings,
-                            workspaceDir = currentProject?.directory,
-                            onSelectTab = { selectedTab ->
-                                secondaryTabIndex = tabs.indexOf(selectedTab)
-                            },
-                            onCloseSplit = {
-                                splitMode = EditorSplitMode.NONE
-                                secondaryTabIndex = -1
-                            },
-                            onSaveRequested = onSaveRequested,
-                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
-                        )
-                    } else {
-                        SplitSelectFileView(
-                            workspaceDir = currentProject?.directory,
-                            onFileSelected = { file ->
-                                val prevActive = editorMgr.activeTabIndex
-                                val openedTab = editorMgr.openFile(file)
-                                val newIndex = editorMgr.tabs.indexOf(openedTab)
-                                if (prevActive in editorMgr.tabs.indices) {
-                                    editorMgr.activeTabIndex = prevActive
-                                    secondaryTabIndex = newIndex
+            } else if (effectiveSplitMode == EditorSplitMode.HORIZONTAL) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        key("primary_${activeTab.filePath}") {
+                            EditorTabContent(
+                                tab = activeTab,
+                                settings = settings,
+                                ctrlActive = ctrlActive,
+                                shiftActive = shiftActive,
+                                altActive = altActive,
+                                pendingActionType = pendingActionType,
+                                onClearPendingAction = { pendingActionType = null },
+                                onResetModifiers = onResetModifiers,
+                                onOpenCommandPalette = onOpenCommandPalette,
+                                onOpenContextMenu = { showContextMenu = true },
+                                onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
+                                onShowInfoDialog = { title, text ->
+                                    infoDialogTitle = title
+                                    infoDialogText = text
+                                },
+                                onSaveRequested = onSaveRequested,
+                                onContentChange = { newText: String ->
+                                    editorMgr.updateActiveTabContent(newText)
+                                },
+                                onCursorChange = { pos: Int ->
+                                    activeTab.updateCursor(pos)
                                 }
-                            },
-                            onCloseSplit = {
-                                splitMode = EditorSplitMode.NONE
-                                secondaryTabIndex = -1
+                            )
+                        }
+                    }
+                    VerticalDivider(
+                        modifier = Modifier.width(1.dp).fillMaxHeight(),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        if (secondTab != null) {
+                            key("secondary_${secondTab.filePath}") {
+                                SecondaryEditorPane(
+                                    tab = secondTab,
+                                    allTabs = tabs,
+                                    settings = settings,
+                                    workspaceDir = currentProject?.directory,
+                                    onSelectTab = { selectedTab ->
+                                        secondaryTabIndex = tabs.indexOf(selectedTab)
+                                    },
+                                    onCloseSplit = {
+                                        splitMode = EditorSplitMode.NONE
+                                        secondaryTabIndex = -1
+                                    },
+                                    onSaveRequested = onSaveRequested,
+                                    onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
+                                )
                             }
-                        )
+                        } else {
+                            SplitSelectFileView(
+                                workspaceDir = currentProject?.directory,
+                                onFileSelected = { file ->
+                                    val prevActive = editorMgr.activeTabIndex
+                                    val openedTab = editorMgr.openFile(file)
+                                    val newIndex = editorMgr.tabs.indexOf(openedTab)
+                                    if (prevActive in editorMgr.tabs.indices) {
+                                        editorMgr.activeTabIndex = prevActive
+                                        secondaryTabIndex = newIndex
+                                    }
+                                },
+                                onCloseSplit = {
+                                    splitMode = EditorSplitMode.NONE
+                                    secondaryTabIndex = -1
+                                }
+                            )
+                        }
+                    }
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        key("primary_${activeTab.filePath}") {
+                            EditorTabContent(
+                                tab = activeTab,
+                                settings = settings,
+                                ctrlActive = ctrlActive,
+                                shiftActive = shiftActive,
+                                altActive = altActive,
+                                pendingActionType = pendingActionType,
+                                onClearPendingAction = { pendingActionType = null },
+                                onResetModifiers = onResetModifiers,
+                                onOpenCommandPalette = onOpenCommandPalette,
+                                onOpenContextMenu = { showContextMenu = true },
+                                onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
+                                onShowInfoDialog = { title, text ->
+                                    infoDialogTitle = title
+                                    infoDialogText = text
+                                },
+                                onSaveRequested = onSaveRequested,
+                                onContentChange = { newText: String ->
+                                    editorMgr.updateActiveTabContent(newText)
+                                },
+                                onCursorChange = { pos: Int ->
+                                    activeTab.updateCursor(pos)
+                                }
+                            )
+                        }
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.height(1.dp).fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        if (secondTab != null) {
+                            key("secondary_${secondTab.filePath}") {
+                                SecondaryEditorPane(
+                                    tab = secondTab,
+                                    allTabs = tabs,
+                                    settings = settings,
+                                    workspaceDir = currentProject?.directory,
+                                    onSelectTab = { selectedTab ->
+                                        secondaryTabIndex = tabs.indexOf(selectedTab)
+                                    },
+                                    onCloseSplit = {
+                                        splitMode = EditorSplitMode.NONE
+                                        secondaryTabIndex = -1
+                                    },
+                                    onSaveRequested = onSaveRequested,
+                                    onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
+                                )
+                            }
+                        } else {
+                            SplitSelectFileView(
+                                workspaceDir = currentProject?.directory,
+                                onFileSelected = { file ->
+                                    val prevActive = editorMgr.activeTabIndex
+                                    val openedTab = editorMgr.openFile(file)
+                                    val newIndex = editorMgr.tabs.indexOf(openedTab)
+                                    if (prevActive in editorMgr.tabs.indices) {
+                                        editorMgr.activeTabIndex = prevActive
+                                        secondaryTabIndex = newIndex
+                                    }
+                                },
+                                onCloseSplit = {
+                                    splitMode = EditorSplitMode.NONE
+                                    secondaryTabIndex = -1
+                                }
+                            )
+                        }
                     }
                 }
             }
-        } else {
-            Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    EditorTabContent(
-                        tab = activeTab,
-                        settings = settings,
-                        ctrlActive = ctrlActive,
-                        shiftActive = shiftActive,
-                        altActive = altActive,
-                        pendingActionType = pendingActionType,
-                        onClearPendingAction = { pendingActionType = null },
-                        onResetModifiers = onResetModifiers,
-                        onOpenCommandPalette = onOpenCommandPalette,
-                        onOpenContextMenu = { showContextMenu = true },
-                        onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true },
-                        onShowInfoDialog = { title, text ->
-                            infoDialogTitle = title
-                            infoDialogText = text
-                        },
-                        onSaveRequested = onSaveRequested,
-                        onContentChange = { newText: String ->
-                            editorMgr.updateActiveTabContent(newText)
-                        },
-                        onCursorChange = { pos: Int ->
-                            activeTab.updateCursor(pos)
-                        }
-                    )
-                }
-                HorizontalDivider(
-                    modifier = Modifier.height(1.dp).fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    if (secondTab != null) {
-                        SecondaryEditorPane(
-                            tab = secondTab,
-                            allTabs = tabs,
-                            settings = settings,
-                            workspaceDir = currentProject?.directory,
-                            onSelectTab = { selectedTab ->
-                                secondaryTabIndex = tabs.indexOf(selectedTab)
-                            },
-                            onCloseSplit = {
-                                splitMode = EditorSplitMode.NONE
-                                secondaryTabIndex = -1
-                            },
-                            onSaveRequested = onSaveRequested,
-                            onOpenWorkspaceSearch = { showWorkspaceSearchDialog = true }
-                        )
-                    } else {
-                        SplitSelectFileView(
-                            workspaceDir = currentProject?.directory,
-                            onFileSelected = { file ->
-                                val prevActive = editorMgr.activeTabIndex
-                                val openedTab = editorMgr.openFile(file)
-                                val newIndex = editorMgr.tabs.indexOf(openedTab)
-                                if (prevActive in editorMgr.tabs.indices) {
-                                    editorMgr.activeTabIndex = prevActive
-                                    secondaryTabIndex = newIndex
+
+            // Drag Drop Target Overlay over Editor Container
+            if (draggingTabIndex != null && draggingTabIndex!! in tabs.indices) {
+                val draggedTab = tabs[draggingTabIndex!!]
+                val pos = dragCurrentWindowPos
+                val bounds = editorContainerBounds
+                val isOverContainer = pos != null && bounds != null &&
+                        pos.x in bounds.left..bounds.right && pos.y in bounds.top..bounds.bottom
+
+                if (isOverContainer) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.25f))
+                            .zIndex(10f)
+                    ) {
+                        if (isLandscape) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(0.5f)
+                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
+                                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Splitscreen,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Text(
+                                        text = "Drop to Split Right with ${draggedTab.fileName}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
                                 }
-                            },
-                            onCloseSplit = {
-                                splitMode = EditorSplitMode.NONE
-                                secondaryTabIndex = -1
                             }
-                        )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(0.5f)
+                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
+                                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Splitscreen,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Text(
+                                        text = "Drop to Split Down with ${draggedTab.fileName}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -902,6 +1133,44 @@ fun EditorView(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.padding(top = SpacingXS)
+                    )
+                }
+            }
+        }
+    }
+
+    // Floating drag badge under finger during tab drag
+    if (draggingTabIndex != null && draggingTabIndex!! in tabs.indices && dragCurrentWindowPos != null) {
+        val draggedTab = tabs[draggingTabIndex!!]
+        val pos = dragCurrentWindowPos!!
+        Popup(
+            offset = IntOffset(
+                (pos.x - 30).roundToInt().coerceAtLeast(0),
+                (pos.y - 45).roundToInt().coerceAtLeast(0)
+            )
+        ) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                shadowElevation = 8.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = getEditorFileIcon(draggedTab.fileName),
+                        contentDescription = null,
+                        tint = getEditorFileIconColor(draggedTab.fileName),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = draggedTab.fileName,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
@@ -1579,6 +1848,15 @@ private fun SecondaryEditorPane(
                             }
                         )
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Search Workspace Files...", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp)) },
+                        onClick = {
+                            showTabDropdown = false
+                            onOpenWorkspaceSearch()
+                        }
+                    )
                 }
             }
 
@@ -1637,7 +1915,7 @@ private fun SecondaryEditorPane(
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             EditorTabContent(
                 tab = tab,
                 settings = settings,
@@ -1947,33 +2225,35 @@ private fun CodeCanvas(
         }
 
         // High-performance virtualized DroidCodeEngine
-        DroidCodeEditor(
-            tab = tab,
-            settings = settings,
-            ctrlActive = ctrlActive,
-            shiftActive = shiftActive,
-            altActive = altActive,
-            lineDiffMap = lineDiffMap,
-            onContentChange = onContentChange,
-            onCursorChange = { line, col ->
-                tab.updateCursor(line, col)
-                onCursorChange(tab.cursorPosition)
-            },
-            onSaveRequested = onSaveRequested,
-            onUndoRequested = { editorMgr.undoActiveTab() },
-            onRedoRequested = { editorMgr.redoActiveTab() },
-            onOpenCommandPalette = onOpenCommandPalette,
-            onOpenWorkspaceSearch = onOpenWorkspaceSearch,
-            onOpenFind = {
-                tab.showFindBar = true
-                tab.showReplaceBar = false
-            },
-            onResetModifiers = onResetModifiers,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .testTag("code_editor_text_input")
-        )
+        key(tab.filePath) {
+            DroidCodeEditor(
+                tab = tab,
+                settings = settings,
+                ctrlActive = ctrlActive,
+                shiftActive = shiftActive,
+                altActive = altActive,
+                lineDiffMap = lineDiffMap,
+                onContentChange = onContentChange,
+                onCursorChange = { line, col ->
+                    tab.updateCursor(line, col)
+                    onCursorChange(tab.cursorPosition)
+                },
+                onSaveRequested = onSaveRequested,
+                onUndoRequested = { editorMgr.undoActiveTab() },
+                onRedoRequested = { editorMgr.redoActiveTab() },
+                onOpenCommandPalette = onOpenCommandPalette,
+                onOpenWorkspaceSearch = onOpenWorkspaceSearch,
+                onOpenFind = {
+                    tab.showFindBar = true
+                    tab.showReplaceBar = false
+                },
+                onResetModifiers = onResetModifiers,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .testTag("code_editor_text_input")
+            )
+        }
     }
 }
 

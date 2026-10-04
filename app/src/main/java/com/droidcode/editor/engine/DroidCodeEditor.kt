@@ -52,10 +52,14 @@ fun DroidCodeEditor(
                 this.ctrlActive = ctrlActive
                 this.shiftActive = shiftActive
                 this.altActive = altActive
-                this.setBufferText(tab.content)
+                this.setBufferText(tab.content, tab.filePath)
 
                 this.onContentChanged = onContentChange
                 this.onCursorChanged = onCursorChange
+                this.onScrollPositionChanged = { x, y ->
+                    tab.scrollX = x
+                    tab.scrollY = y
+                }
                 this.onSelectionChanged = { start, end ->
                     tab.updateSelection(start, end)
                 }
@@ -73,6 +77,9 @@ fun DroidCodeEditor(
                 if (tab.selectionStart != tab.selectionEnd) {
                     this.setSelectionOffsets(tab.selectionStart, tab.selectionEnd)
                 }
+                if (tab.scrollX > 0 || tab.scrollY > 0) {
+                    this.setScrollPositions(tab.scrollX, tab.scrollY)
+                }
             }
         },
         update = { view ->
@@ -87,6 +94,10 @@ fun DroidCodeEditor(
             view.altActive = altActive
             view.onContentChanged = onContentChange
             view.onCursorChanged = onCursorChange
+            view.onScrollPositionChanged = { x, y ->
+                tab.scrollX = x
+                tab.scrollY = y
+            }
             view.onSelectionChanged = { start, end ->
                 tab.updateSelection(start, end)
             }
@@ -98,9 +109,14 @@ fun DroidCodeEditor(
             view.onFindShortcut = onOpenFind
             view.onResetModifiers = onResetModifiers
 
-            // Sync buffer if external update occurred (e.g. file reload or replace all)
-            if (view.lastSyncedText !== tab.content && view.lastSyncedText != tab.content) {
-                view.setBufferText(tab.content)
+            // Sync buffer if file changed or external content change
+            val isDifferentFile = view.currentFilePath != tab.filePath
+            val isContentChanged = view.lastSyncedText !== tab.content && view.lastSyncedText != tab.content
+            if (isDifferentFile || isContentChanged) {
+                view.setBufferText(tab.content, tab.filePath)
+                if (tab.scrollX > 0 || tab.scrollY > 0) {
+                    view.setScrollPositions(tab.scrollX, tab.scrollY)
+                }
             }
 
             if (tab.selectionStart != tab.selectionEnd) {
