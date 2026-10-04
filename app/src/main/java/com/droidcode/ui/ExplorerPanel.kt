@@ -111,6 +111,7 @@ data class FileClipboardItem(
 fun ExplorerPanel(
     onOpenFile: (File) -> Unit,
     onCloseProject: (() -> Unit)? = null,
+    onCloseDrawer: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -724,6 +725,22 @@ fun ExplorerPanel(
                                 }
                             )
                         }
+                    }
+                }
+
+                if (onCloseDrawer != null) {
+                    IconButton(
+                        onClick = onCloseDrawer,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("explorer_close_drawer_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close navigation pane",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }

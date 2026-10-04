@@ -100,6 +100,64 @@ class WorkspaceManager @Inject constructor() {
         }
     }
 
+    suspend fun syncInternalProjects(context: Context) = withContext(Dispatchers.IO) {
+        try {
+            val filesDir = context.filesDir ?: return@withContext
+            val db = AppDatabase.getInstance(context)
+            val existingPaths = db.workspaceDao().getAllWorkspaces().map { it.path }.toSet()
+
+            val candidates = mutableListOf<File>()
+            filesDir.listFiles()?.forEach { file ->
+                if (file.isDirectory && !file.name.startsWith(".") && file.name != "code_cache") {
+                    if (file.name == "saf_projects") {
+                        file.listFiles()?.filter { it.isDirectory }?.let { candidates.addAll(it) }
+                    } else {
+                        candidates.add(file)
+                    }
+                }
+            }
+
+            for (dir in candidates) {
+                if (dir.absolutePath !in existingPaths) {
+                    val project = Project.fromDirectory(dir, null)
+                    if (project != null) {
+                        db.workspaceDao().insertWorkspace(
+                            WorkspaceEntity(
+                                project.path,
+                                project.name,
+                                project.type,
+                                dir.lastModified(),
+                                project.isGitRepo
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("WorkspaceManager", "Failed to sync internal projects", e)
+        }
+    }
+
+    suspend fun deleteWorkspacePermanently(context: Context, path: String?): Boolean = withContext(Dispatchers.IO) {
+        if (path == null) return@withContext false
+        try {
+            val file = File(path)
+            var deleted = false
+            if (file.exists()) {
+                deleted = file.deleteRecursively()
+            }
+            val db = AppDatabase.getInstance(context)
+            db.workspaceDao().deleteWorkspaceByPath(path)
+            if (_currentProject?.path == path) {
+                closeWorkspace()
+            }
+            deleted
+        } catch (e: Exception) {
+            android.util.Log.e("WorkspaceManager", "Failed to permanently delete workspace $path", e)
+            false
+        }
+    }
+
     companion object {
         @Volatile
         private var INSTANCE: WorkspaceManager? = null

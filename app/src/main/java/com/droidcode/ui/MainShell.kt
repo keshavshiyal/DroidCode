@@ -63,6 +63,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -413,6 +414,11 @@ fun MainShell(
     }
 
     DroidCodeTheme(themeMode = settingsState.themeMode) {
+        // High-priority BackHandler when navigation drawer is open on ANY screen
+        BackHandler(enabled = drawerState.isOpen) {
+            coroutineScope.launch { drawerState.close() }
+        }
+
         BackHandler {
             if (showCommandPalette) {
                 showCommandPalette = false
@@ -440,12 +446,13 @@ fun MainShell(
 
         ModalNavigationDrawer(
             drawerState = drawerState,
-            gesturesEnabled = !isExpanded && currentRoute == Screen.Workspace.route && isWorkspaceOpen && drawerState.isOpen,
+            gesturesEnabled = !isExpanded && isWorkspaceOpen && drawerState.isOpen,
             drawerContent = {
                 if (isWorkspaceOpen) {
                     val activePath = workspaceMgr.currentProject?.path ?: savedWorkspacePath
                     key(activePath) {
                         ModalDrawerSheet(
+                            drawerShape = RectangleShape,
                             drawerContainerColor = MaterialTheme.colorScheme.surface,
                             modifier = Modifier
                                 .zIndex(100f)
@@ -466,6 +473,9 @@ fun MainShell(
                                 onCloseProject = {
                                     coroutineScope.launch { drawerState.close() }
                                     closeCurrentWorkspace()
+                                },
+                                onCloseDrawer = {
+                                    coroutineScope.launch { drawerState.close() }
                                 },
                                 modifier = Modifier.fillMaxSize()
                             )

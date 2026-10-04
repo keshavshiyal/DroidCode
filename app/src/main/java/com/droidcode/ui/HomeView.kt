@@ -1,5 +1,6 @@
 package com.droidcode.ui
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -36,7 +38,9 @@ import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -50,6 +54,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +103,10 @@ fun HomeView(
 
     var showNewProjectDialog by rememberSaveable { mutableStateOf(false) }
     var showOpenDirDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        workspaceMgr.syncInternalProjects(context)
+    }
 
     // SAF (Storage Access Framework) Folder Picker Launcher
     val safLauncher = rememberLauncherForActivityResult(
@@ -236,16 +245,24 @@ fun HomeView(
                                     if (File(workspace.path).exists()) {
                                         onOpenWorkspace(workspace.path, workspace.type)
                                     } else {
-                                        android.widget.Toast.makeText(
+                                        Toast.makeText(
                                             context,
                                             "Workspace directory '${workspace.path}' is unavailable or moved.",
-                                            android.widget.Toast.LENGTH_LONG
+                                            Toast.LENGTH_LONG
                                         ).show()
                                     }
                                 },
                                 onRemove = {
                                     coroutineScope.launch {
                                         workspaceMgr.removeWorkspace(context, workspace.path)
+                                    }
+                                },
+                                onDeletePermanently = {
+                                    coroutineScope.launch {
+                                        val deleted = workspaceMgr.deleteWorkspacePermanently(context, workspace.path)
+                                        val msg = if (deleted) "Project '${workspace.name}' permanently deleted"
+                                                  else "Project '${workspace.name}' removed"
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             )
@@ -327,9 +344,51 @@ private fun ActionTile(
 private fun RecentWorkspaceTile(
     workspace: WorkspaceEntity,
     onClick: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    onDeletePermanently: () -> Unit
 ) {
+    val context = LocalContext.current
     val exists = remember(workspace.path) { File(workspace.path).exists() }
+    val isInternal = remember(workspace.path) {
+        workspace.path.startsWith(context.filesDir.absolutePath)
+    }
+    var showConfirmDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showConfirmDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDeleteDialog = false },
+            title = {
+                Text(
+                    text = "Delete Project Permanently?",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to permanently delete \"${workspace.name}\" and all of its files from internal app storage? This action cannot be undone.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmDeleteDialog = false
+                        onDeletePermanently()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete Permanently", color = MaterialTheme.colorScheme.onError)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDeleteDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
 
     Row(
         modifier = Modifier
@@ -352,6 +411,32 @@ private fun RecentWorkspaceTile(
                     fontWeight = FontWeight.Medium,
                     color = if (exists) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
                 )
+                if (isInternal) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(3.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Storage,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "App Storage",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
                 if (!exists) {
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
@@ -370,16 +455,32 @@ private fun RecentWorkspaceTile(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(28.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Remove from recents",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.size(16.dp)
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isInternal) {
+                IconButton(
+                    onClick = { showConfirmDeleteDialog = true },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete permanently",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(2.dp))
+            }
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Remove from recents",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }

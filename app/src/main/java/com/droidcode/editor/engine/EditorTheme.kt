@@ -201,6 +201,7 @@ data class EditorTheme(
             )
         }
 
+        // NOTE: Strictly avoid trademarked or copyrighted theme names. Use generic, descriptive names.
         fun forThemeMode(
             mode: com.droidcode.settings.AppSettings.ThemeMode,
             isSystemDark: Boolean

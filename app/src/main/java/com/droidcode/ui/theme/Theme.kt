@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.droidcode.settings.AppSettings
 
+// NOTE: Strictly avoid trademarked or copyrighted theme names. Use generic, descriptive themes.
 private val DarkColorScheme = darkColorScheme(
     primary = DarkPrimary,
     onPrimary = DarkBackground,

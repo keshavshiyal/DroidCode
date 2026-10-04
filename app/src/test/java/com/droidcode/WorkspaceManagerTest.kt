@@ -93,4 +93,24 @@ class WorkspaceManagerTest {
         val nonExistent = File(tempFolder.root, "non_existent_folder_xyz")
         workspaceMgr.openWorkspace(context, nonExistent, "GENERAL")
     }
+
+    @Test
+    fun testSyncInternalProjectsAndPermanentDeletion() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val internalProjectDir = File(context.filesDir, "InternalTestProject")
+        internalProjectDir.mkdirs()
+        File(internalProjectDir, "index.html").writeText("<h1>Hello</h1>")
+
+        workspaceMgr.syncInternalProjects(context)
+        val recents = workspaceMgr.getRecentWorkspaces(context)
+        assertTrue(recents.any { it.path == internalProjectDir.absolutePath })
+
+        // Now test permanent deletion
+        val deleted = workspaceMgr.deleteWorkspacePermanently(context, internalProjectDir.absolutePath)
+        assertTrue(deleted)
+        assertFalse(internalProjectDir.exists())
+
+        val recentsAfter = workspaceMgr.getRecentWorkspaces(context)
+        assertFalse(recentsAfter.any { it.path == internalProjectDir.absolutePath })
+    }
 }

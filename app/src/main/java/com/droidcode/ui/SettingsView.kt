@@ -243,13 +243,13 @@ private fun AppearanceSettingsSection(
                 AppSettings.ThemeMode.SYSTEM -> Icons.Default.SettingsSystemDaydream
             }
             val modeDesc = when (mode) {
-                AppSettings.ThemeMode.DARK -> "Official VS Code Dark+ theme with high-contrast syntax highlighting"
-                AppSettings.ThemeMode.ONE_DARK -> "One Dark Pro palette with vibrant accents and soft dark canvas"
-                AppSettings.ThemeMode.DRACULA -> "Renowned Dracula theme featuring rich purples, pinks, and cyans"
-                AppSettings.ThemeMode.MONOKAI -> "Classic Monokai coding theme with iconic vivid colors"
+                AppSettings.ThemeMode.DARK -> "Modern high-contrast dark theme with sharp syntax highlighting"
+                AppSettings.ThemeMode.ONE_DARK -> "Deep midnight dark palette with vibrant accents and soft dark canvas"
+                AppSettings.ThemeMode.DRACULA -> "Rich twilight purple, pink, and cyan accents on a dark velvet canvas"
+                AppSettings.ThemeMode.MONOKAI -> "High-contrast vivid colors on deep charcoal background"
                 AppSettings.ThemeMode.SOLARIZED_DARK -> "Ergonomic low-blue-light palette designed for eye protection & fatigue reduction"
-                AppSettings.ThemeMode.NORD -> "Arctic, north-bluish clean color palette with optimal contrast"
-                AppSettings.ThemeMode.LIGHT -> "Official VS Code Light+ clean white canvas"
+                AppSettings.ThemeMode.NORD -> "Arctic bluish-gray palette with gentle, balanced contrast"
+                AppSettings.ThemeMode.LIGHT -> "Clean, crisp light canvas with sharp syntax highlighting"
                 AppSettings.ThemeMode.SOLARIZED_LIGHT -> "Warm sepia paper-tone palette for comfortable daytime reading"
                 AppSettings.ThemeMode.SYSTEM -> "Automatically synchronize theme with Android system preferences"
             }
@@ -295,12 +295,45 @@ private fun AppearanceSettingsSection(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = mode.label,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = mode.label,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            // Palette Color Dots Preview
+                            val palettePreview = when (mode) {
+                                AppSettings.ThemeMode.DARK -> listOf(Color(0xFF1E1E1E), Color(0xFF0E639C), Color(0xFF4EC9B0), Color(0xFFDCDCAA))
+                                AppSettings.ThemeMode.ONE_DARK -> listOf(Color(0xFF282C34), Color(0xFF61AFEF), Color(0xFF98C379), Color(0xFFC678DD))
+                                AppSettings.ThemeMode.DRACULA -> listOf(Color(0xFF282A36), Color(0xFFBD93F9), Color(0xFFFF79C6), Color(0xFF50FA7B))
+                                AppSettings.ThemeMode.MONOKAI -> listOf(Color(0xFF272822), Color(0xFFF92672), Color(0xFFA6E22E), Color(0xFF66D9EF))
+                                AppSettings.ThemeMode.SOLARIZED_DARK -> listOf(Color(0xFF002B36), Color(0xFF268BD2), Color(0xFF2AA198), Color(0xFF859900))
+                                AppSettings.ThemeMode.NORD -> listOf(Color(0xFF2E3440), Color(0xFF88C0D0), Color(0xFFA3BE8C), Color(0xFF81A1C1))
+                                AppSettings.ThemeMode.LIGHT -> listOf(Color(0xFFFFFFFF), Color(0xFF007ACC), Color(0xFF098658), Color(0xFFAF00DB))
+                                AppSettings.ThemeMode.SOLARIZED_LIGHT -> listOf(Color(0xFFFDF6E3), Color(0xFF268BD2), Color(0xFF2AA198), Color(0xFFB58900))
+                                AppSettings.ThemeMode.SYSTEM -> listOf(Color(0xFF1E1E1E), Color(0xFFFFFFFF), Color(0xFF0E639C))
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                palettePreview.forEach { c ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(11.dp)
+                                            .background(c, CircleShape)
+                                            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), CircleShape)
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = modeDesc,
                             fontSize = 12.sp,

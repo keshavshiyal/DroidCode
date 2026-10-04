@@ -2,15 +2,16 @@ package com.droidcode.settings;
 
 public class AppSettings {
 
+    // NOTE: Strictly avoid trademarked or copyrighted theme names (e.g. VS Code, Dracula, Monokai). Use generic, descriptive names.
     public enum ThemeMode {
-        DARK("VS Code Dark+"),
-        ONE_DARK("One Dark Pro"),
-        DRACULA("Dracula"),
-        MONOKAI("Monokai"),
-        SOLARIZED_DARK("Solarized Dark (Eye Care)"),
-        NORD("Nord (Arctic Blue)"),
-        LIGHT("VS Code Light+"),
-        SOLARIZED_LIGHT("Solarized Light (Sepia)"),
+        DARK("Dark"),
+        ONE_DARK("Deep Midnight"),
+        DRACULA("Cyber Twilight"),
+        MONOKAI("Vivid Charcoal"),
+        SOLARIZED_DARK("Solar Dark (Eye Care)"),
+        NORD("Arctic Frost"),
+        LIGHT("Light"),
+        SOLARIZED_LIGHT("Warm Sepia (Paper)"),
         SYSTEM("Follow System");
 
         private final String label;
