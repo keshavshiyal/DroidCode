@@ -164,4 +164,13 @@ class LocalFileSystemTest {
         assertFalse(brokenFile.exists())
         assertTrue(File(root, "temp.bat").exists())
     }
+
+    @Test
+    fun `read and write preserve exact bytes including trailing newline`() {
+        val root = tempFolder.newFolder("byte_fidelity")
+        val file = fs.createFile(root, "exact.txt")
+        val original = "line1\nline2\nline3\n"
+        fs.writeStringToFile(file, original)
+        assertEquals(original, fs.readFileToString(file))
+    }
 }

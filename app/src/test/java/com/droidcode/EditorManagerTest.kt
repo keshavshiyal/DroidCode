@@ -102,4 +102,15 @@ class EditorManagerTest {
         assertEquals(1, editorMgr.tabs.size)
         assertEquals("file2.txt", editorMgr.activeTab?.fileName)
     }
+
+    @Test
+    fun `closing a tab before the active tab keeps the same tab active`() {
+        val a = tempFolder.newFile("a.kt").apply { writeText("a") }
+        val b = tempFolder.newFile("b.kt").apply { writeText("b") }
+        val c = tempFolder.newFile("c.kt").apply { writeText("c") }
+        editorMgr.openFile(a); editorMgr.openFile(b); editorMgr.openFile(c)
+        editorMgr.selectTab(b.id)
+        editorMgr.closeTab(0)
+        assertEquals("b.kt", editorMgr.activeTab?.fileName)
+    }
 }

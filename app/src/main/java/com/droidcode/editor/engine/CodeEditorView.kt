@@ -113,8 +113,11 @@ class CodeEditorView @JvmOverloads constructor(
         onContentChanged?.invoke(text)
     }
 
+    private var suppressExternalCallback = false
+
     fun flushContent() {
         removeCallbacks(notifyContentRunnable)
+        if (suppressExternalCallback) return
         val text = buffer.getText()
         lastSyncedText = text
         onContentChanged?.invoke(text)
@@ -135,22 +138,29 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun setBufferText(text: String, filePath: String? = null) {
         val fileChanged = filePath != null && filePath != currentFilePath
-        if (filePath != null) {
-            currentFilePath = filePath
-        }
+        if (filePath != null) currentFilePath = filePath
         if (!fileChanged && lastSyncedText === text) return
-        lastSyncedText = text
-        removeCallbacks(notifyContentRunnable)
-        buffer.setText(text)
-        tokenizer.clearCache()
-        if (fileChanged) {
-            cursorPosition = CursorPos(0, 0)
-            selection = SelectionRange(cursorPosition, cursorPosition)
-            scrollTo(0, 0)
-        } else {
-            cursorPosition = buffer.clampPosition(cursorPosition)
-            selection = SelectionRange(buffer.clampPosition(selection.start), buffer.clampPosition(selection.end))
-            clampScroll()
+
+        suppressExternalCallback = true
+        try {
+            lastSyncedText = text
+            removeCallbacks(notifyContentRunnable)
+            buffer.setText(text)
+            tokenizer.clearCache()
+            if (fileChanged) {
+                cursorPosition = CursorPos(0, 0)
+                selection = SelectionRange(cursorPosition, cursorPosition)
+                scrollTo(0, 0)
+            } else {
+                cursorPosition = buffer.clampPosition(cursorPosition)
+                selection = SelectionRange(
+                    buffer.clampPosition(selection.start),
+                    buffer.clampPosition(selection.end)
+                )
+                clampScroll()
+            }
+        } finally {
+            suppressExternalCallback = false
         }
         invalidate()
     }
@@ -370,7 +380,7 @@ class CodeEditorView @JvmOverloads constructor(
 
         buffer.onContentChanged = {
             invalidate()
-            onContentChanged?.invoke(buffer.getText())
+            scheduleContentNotification()
         }
     }
 

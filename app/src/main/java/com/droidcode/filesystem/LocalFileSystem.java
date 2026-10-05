@@ -1,12 +1,8 @@
 package com.droidcode.filesystem;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -327,19 +323,10 @@ public class LocalFileSystem {
         if (file == null || !file.exists() || !file.isFile()) {
             throw new IllegalArgumentException("File does not exist or is a directory");
         }
-        StringBuilder builder = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-            String line;
-            boolean first = true;
-            while ((line = reader.readLine()) != null) {
-                if (!first) {
-                    builder.append("\n");
-                }
-                builder.append(line);
-                first = false;
-            }
-        }
-        return builder.toString();
+        return new String(
+            java.nio.file.Files.readAllBytes(file.toPath()),
+            StandardCharsets.UTF_8
+        );
     }
 
     public void writeStringToFile(File file, String content) throws Exception {
@@ -351,11 +338,14 @@ public class LocalFileSystem {
             if (parent != null && !parent.exists()) {
                 parent.mkdirs();
             }
-            file.createNewFile();
         }
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file, false), StandardCharsets.UTF_8))) {
-            writer.write(content != null ? content : "");
-        }
+        java.nio.file.Files.write(
+            file.toPath(),
+            (content != null ? content : "").getBytes(StandardCharsets.UTF_8),
+            java.nio.file.StandardOpenOption.CREATE,
+            java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+            java.nio.file.StandardOpenOption.WRITE
+        );
         SafUtils.syncFileToSaf(file);
     }
 }

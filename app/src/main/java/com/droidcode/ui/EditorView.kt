@@ -856,9 +856,10 @@ fun EditorView(
                 }
         ) {
             if (effectiveSplitMode == EditorSplitMode.NONE) {
-                key("primary_${activeTab.filePath}") {
+                val boundTab = activeTab
+                key("primary_${boundTab.filePath}") {
                     EditorTabContent(
-                        tab = activeTab,
+                        tab = boundTab,
                         settings = settings,
                         ctrlActive = ctrlActive,
                         shiftActive = shiftActive,
@@ -875,19 +876,22 @@ fun EditorView(
                         },
                         onSaveRequested = onSaveRequested,
                         onContentChange = { newText: String ->
-                            editorMgr.updateActiveTabContent(newText)
+                            if (editorMgr.tabs.contains(boundTab)) {
+                                editorMgr.updateTabContent(boundTab, newText)
+                            }
                         },
                         onCursorChange = { pos: Int ->
-                            activeTab.updateCursor(pos)
+                            boundTab.updateCursor(pos)
                         }
                     )
                 }
             } else if (effectiveSplitMode == EditorSplitMode.HORIZONTAL) {
+                val boundTab = activeTab
                 Row(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        key("primary_${activeTab.filePath}") {
+                        key("primary_${boundTab.filePath}") {
                             EditorTabContent(
-                                tab = activeTab,
+                                tab = boundTab,
                                 settings = settings,
                                 ctrlActive = ctrlActive,
                                 shiftActive = shiftActive,
@@ -904,10 +908,12 @@ fun EditorView(
                                 },
                                 onSaveRequested = onSaveRequested,
                                 onContentChange = { newText: String ->
-                                    editorMgr.updateActiveTabContent(newText)
+                                    if (editorMgr.tabs.contains(boundTab)) {
+                                        editorMgr.updateTabContent(boundTab, newText)
+                                    }
                                 },
                                 onCursorChange = { pos: Int ->
-                                    activeTab.updateCursor(pos)
+                                    boundTab.updateCursor(pos)
                                 }
                             )
                         }
@@ -956,11 +962,12 @@ fun EditorView(
                     }
                 }
             } else {
+                val boundTab = activeTab
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        key("primary_${activeTab.filePath}") {
+                        key("primary_${boundTab.filePath}") {
                             EditorTabContent(
-                                tab = activeTab,
+                                tab = boundTab,
                                 settings = settings,
                                 ctrlActive = ctrlActive,
                                 shiftActive = shiftActive,
@@ -977,10 +984,12 @@ fun EditorView(
                                 },
                                 onSaveRequested = onSaveRequested,
                                 onContentChange = { newText: String ->
-                                    editorMgr.updateActiveTabContent(newText)
+                                    if (editorMgr.tabs.contains(boundTab)) {
+                                        editorMgr.updateTabContent(boundTab, newText)
+                                    }
                                 },
                                 onCursorChange = { pos: Int ->
-                                    activeTab.updateCursor(pos)
+                                    boundTab.updateCursor(pos)
                                 }
                             )
                         }

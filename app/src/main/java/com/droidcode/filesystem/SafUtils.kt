@@ -94,12 +94,12 @@ object SafUtils {
                 else -> "project"
             }
 
-            val folderName = extractedName.replace("[^a-zA-Z0-9_.-]".toRegex(), "_")
+            // INVARIANT: The SAF local mirror must never be deleted while the user has it open.
+            // Re-selecting the same folder must merge, not replace.
             val localProjectDir = File(context.filesDir, "saf_projects/$folderName")
-            if (localProjectDir.exists()) {
-                localProjectDir.deleteRecursively()
+            if (!localProjectDir.exists()) {
+                localProjectDir.mkdirs()
             }
-            localProjectDir.mkdirs()
 
             if (documentTree != null && documentTree.exists()) {
                 copyDocumentTreeRecursively(context, documentTree, localProjectDir)

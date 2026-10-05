@@ -61,6 +61,38 @@ class EditorManager @Inject constructor() {
         return tab
     }
 
+    fun openVirtualFile(fileName: String, content: String): EditorTab {
+        val virtualFile = File("/virtual/$fileName")
+        val path = virtualFile.absolutePath
+        tabs.forEachIndexed { index, tab ->
+            if (tab.filePath == path) {
+                activeTabIndex = index
+                return tab
+            }
+        }
+        val tab = EditorTab(
+            filePath = path,
+            fileName = fileName,
+            initialContent = content,
+            initialViewerType = FileViewerType.TEXT
+        )
+        tabs.add(tab)
+        activeTabIndex = tabs.size - 1
+
+        val undoMgr = UndoManager()
+        undoMgr.pushState(content)
+        undoManagers[path] = undoMgr
+
+        return tab
+    }
+
+    fun selectTab(tabId: String) {
+        val index = tabs.indexOfFirst { it.id == tabId }
+        if (index >= 0) {
+            activeTabIndex = index
+        }
+    }
+
     fun updateActiveTabContent(newContent: String) {
         val tab = activeTab ?: return
         updateTabContent(tab, newContent)
@@ -127,12 +159,14 @@ class EditorManager @Inject constructor() {
     }
 
     fun closeTab(index: Int) {
-        if (index in 0 until tabs.size) {
-            val removed = tabs.removeAt(index)
-            undoManagers.remove(removed.filePath)
-            if (activeTabIndex >= tabs.size) {
-                activeTabIndex = tabs.size - 1
-            }
+        if (index !in tabs.indices) return
+        val removed = tabs.removeAt(index)
+        undoManagers.remove(removed.filePath)
+        activeTabIndex = when {
+            tabs.isEmpty() -> -1
+            index < activeTabIndex -> activeTabIndex - 1
+            activeTabIndex >= tabs.size -> tabs.size - 1
+            else -> activeTabIndex
         }
     }
 
@@ -161,12 +195,13 @@ class EditorManager @Inject constructor() {
     }
 
     fun closeOtherTabs(keepIndex: Int) {
-        if (keepIndex in 0 until tabs.size) {
-            val keepTab = tabs[keepIndex]
-            tabs.clear()
-            tabs.add(keepTab)
-            activeTabIndex = 0
-        }
+        if (keepIndex !in tabs.indices) return
+        val keepTab = tabs[keepIndex]
+        val closedPaths = tabs.filter { it !== keepTab }.map { it.filePath }
+        closedPaths.forEach { undoManagers.remove(it) }
+        tabs.clear()
+        tabs.add(keepTab)
+        activeTabIndex = 0
     }
 
     companion object {

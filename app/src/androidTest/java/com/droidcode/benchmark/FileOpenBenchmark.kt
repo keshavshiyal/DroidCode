@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import com.droidcode.editor.EditorManager
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.system.measureTimeMillis
@@ -17,6 +18,11 @@ class FileOpenBenchmark {
     // Tab switch < 50ms
     private val fileOpenBudgetMs = 100L
     private val tabSwitchBudgetMs = 50L
+
+    @Before
+    fun setUp() {
+        EditorManager.getInstance().closeAllTabs()
+    }
 
     @Test
     fun benchmark1MbFileOpen() {
@@ -38,7 +44,7 @@ class FileOpenBenchmark {
         android.util.Log.i("FileOpenBenchmark", "1MB file open duration: ${openElapsedMs}ms")
         assertTrue(
             "1MB file open must be within budget of ${fileOpenBudgetMs}ms (took ${openElapsedMs}ms)",
-            openElapsedMs < fileOpenBudgetMs || openElapsedMs < 500L
+            openElapsedMs < fileOpenBudgetMs
         )
 
         // Measure Tab Switch
@@ -50,7 +56,7 @@ class FileOpenBenchmark {
         android.util.Log.i("FileOpenBenchmark", "Tab switch duration: ${tabSwitchElapsedMs}ms")
         assertTrue(
             "Tab switch must be within budget of ${tabSwitchBudgetMs}ms (took ${tabSwitchElapsedMs}ms)",
-            tabSwitchElapsedMs < tabSwitchBudgetMs || tabSwitchElapsedMs < 200L
+            tabSwitchElapsedMs < tabSwitchBudgetMs
         )
     }
 }
