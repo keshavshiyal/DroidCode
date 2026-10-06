@@ -100,6 +100,7 @@ class CodeEditorView @JvmOverloads constructor(
     var onWorkspaceSearchShortcut: (() -> Unit)? = null
     var onFindShortcut: (() -> Unit)? = null
     var onResetModifiers: (() -> Unit)? = null
+    var onEditorFocus: (() -> Unit)? = null
 
     var ctrlActive: Boolean = false
     var shiftActive: Boolean = false
@@ -309,6 +310,7 @@ class CodeEditorView @JvmOverloads constructor(
 
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean {
+            onEditorFocus?.invoke()
             if (!scroller.isFinished) {
                 scroller.forceFinished(true)
             }
@@ -316,6 +318,7 @@ class CodeEditorView @JvmOverloads constructor(
         }
 
         override fun onSingleTapUp(e: MotionEvent): Boolean {
+            onEditorFocus?.invoke()
             requestFocus()
             showSoftKeyboard()
             val pos = screenToCursor(e.x, e.y)
@@ -329,6 +332,7 @@ class CodeEditorView @JvmOverloads constructor(
         }
 
         override fun onDoubleTap(e: MotionEvent): Boolean {
+            onEditorFocus?.invoke()
             val pos = screenToCursor(e.x, e.y)
             selectWordAt(pos)
             showSelectionActionMode()
@@ -336,6 +340,7 @@ class CodeEditorView @JvmOverloads constructor(
         }
 
         override fun onLongPress(e: MotionEvent) {
+            onEditorFocus?.invoke()
             requestFocus()
             showSoftKeyboard()
             val pos = screenToCursor(e.x, e.y)
@@ -486,6 +491,7 @@ class CodeEditorView @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                onEditorFocus?.invoke()
                 parent?.requestDisallowInterceptTouchEvent(true)
 
                 if (!selection.isEmpty) {
@@ -910,6 +916,7 @@ class CodeEditorView @JvmOverloads constructor(
             removeCallbacks(cursorBlinkRunnable)
             invalidate()
         } else {
+            onEditorFocus?.invoke()
             resetCursorBlink()
         }
     }
@@ -1034,25 +1041,36 @@ class CodeEditorView @JvmOverloads constructor(
             clampScroll()
         }
 
-        // 1. Fill editor background
-        canvas.drawColor(theme.backgroundColor)
+        val saveCount = canvas.save()
+        val viewLeft = scrollX.toFloat()
+        val viewTop = scrollY.toFloat()
+        val viewRight = (scrollX + width).toFloat()
+        val viewBottom = (scrollY + height).toFloat()
+        canvas.clipRect(viewLeft, viewTop, viewRight, viewBottom)
 
-        val gutterW = calculateGutterWidth()
-        val padStart = textPaddingStart
-        val lineContentStartX = gutterW + padStart
-        val firstVisibleLine = (scrollY / lineHeight).toInt().coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
-        val lastVisibleLine = ((scrollY + height) / lineHeight + 1).toInt().coerceIn(firstVisibleLine, (buffer.lineCount - 1).coerceAtLeast(0))
+        try {
+            // 1. Fill editor background strictly within viewport bounds
+            uiPaint.color = theme.backgroundColor
+            canvas.drawRect(viewLeft, viewTop, viewRight, viewBottom, uiPaint)
 
-        // 2. Draw current line background highlight
-        val currentLineTop = cursorPosition.line * lineHeight
-        uiPaint.color = theme.currentLineBackgroundColor
-        canvas.drawRect(
-            gutterW,
-            currentLineTop,
-            width.toFloat() + scrollX,
-            currentLineTop + lineHeight,
-            uiPaint
-        )
+            val gutterW = calculateGutterWidth()
+            val padStart = textPaddingStart
+            val lineContentStartX = gutterW + padStart
+            val firstVisibleLine = (scrollY / lineHeight).toInt().coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
+            val lastVisibleLine = ((scrollY + height) / lineHeight + 1).toInt().coerceIn(firstVisibleLine, (buffer.lineCount - 1).coerceAtLeast(0))
+
+            // 2. Draw current line background highlight only if within visible lines
+            if (cursorPosition.line in firstVisibleLine..lastVisibleLine) {
+                val currentLineTop = cursorPosition.line * lineHeight
+                uiPaint.color = theme.currentLineBackgroundColor
+                canvas.drawRect(
+                    gutterW + scrollX,
+                    currentLineTop,
+                    viewRight,
+                    currentLineTop + lineHeight,
+                    uiPaint
+                )
+            }
 
         // 3. Draw text selection background
         if (!selection.isEmpty) {
@@ -1197,7 +1215,7 @@ class CodeEditorView @JvmOverloads constructor(
                 canvas.drawRect(endX - 1f * density, endY - lineHeight, endX + 1f * density, endY, uiPaint)
                 canvas.drawCircle(endX + handleRadius / 2f, endY + handleRadius, handleRadius, uiPaint)
             }
-        } else if (isFocused && cursorVisible) {
+        } else if (isFocused && cursorVisible && cursorPosition.line in firstVisibleLine..lastVisibleLine) {
             val cursorX = gutterW + padStart + cursorPosition.col * charWidth
             val cursorY = cursorPosition.line * lineHeight
             val cursorW = 2f * density
@@ -1209,5 +1227,7 @@ class CodeEditorView @JvmOverloads constructor(
                 uiPaint
             )
         }
+    } finally {
+        canvas.restoreToCount(saveCount)
     }
 }

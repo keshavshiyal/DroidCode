@@ -240,12 +240,10 @@ fun EditorView(
             secondaryTabId = null
             activePane = "PRIMARY"
         } else {
-            if (primaryTabId == null || tabs.none { it.id == primaryTabId }) {
-                primaryTabId = activeTab?.id ?: tabs.firstOrNull()?.id
-            }
-            if (secondaryTabId == null || secondaryTabId == primaryTabId || tabs.none { it.id == secondaryTabId }) {
-                secondaryTabId = tabs.firstOrNull { it.id != primaryTabId }?.id
-            }
+            val currentActiveId = activeTab?.id ?: tabs.firstOrNull()?.id
+            primaryTabId = currentActiveId
+            secondaryTabId = tabs.firstOrNull { it.id != currentActiveId }?.id
+            activePane = "PRIMARY"
         }
     }
 
@@ -260,20 +258,18 @@ fun EditorView(
     }
 
     // Opens the split with `targetId` in the secondary pane. The pane that was
-    // focused/active before stays in the primary pane (never the same tab if avoidable).
+    // focused/active stays in the primary pane (never the same tab in both panes).
     val startSplitWith: (String, EditorSplitMode) -> Unit = { targetId, mode ->
-        val currentPrimary = tabs.firstOrNull { it.id == primaryTabId }?.id
-            ?: activeTab?.id
-            ?: tabs.firstOrNull()?.id
-        primaryTabId = if (currentPrimary != null && currentPrimary != targetId) {
-            currentPrimary
+        val currentActiveId = activeTab?.id ?: tabs.firstOrNull()?.id
+        if (targetId == currentActiveId) {
+            primaryTabId = currentActiveId
+            secondaryTabId = tabs.firstOrNull { it.id != currentActiveId }?.id
         } else {
-            tabs.firstOrNull { it.id != targetId }?.id ?: targetId
+            primaryTabId = currentActiveId
+            secondaryTabId = targetId
         }
-        secondaryTabId = targetId
         splitMode = mode
-        activePane = "SECONDARY"
-        editorMgr.selectTab(targetId)
+        activePane = "PRIMARY"
     }
 
     val currentToggleSplit by rememberUpdatedState(toggleSplit)
@@ -861,7 +857,7 @@ fun EditorView(
         val secondTab: EditorTab? = if (effectiveSplitMode == EditorSplitMode.NONE) {
             null
         } else {
-            tabs.firstOrNull { it.id == secondaryTabId }
+            tabs.firstOrNull { it.id == secondaryTabId && it.id != primaryTab?.id }
                 ?: tabs.firstOrNull { it.id != primaryTab?.id }
         }
 
@@ -1641,7 +1637,8 @@ private fun EditorTabContent(
     onShowInfoDialog: (String, String) -> Unit,
     onSaveRequested: () -> Unit,
     onContentChange: (String) -> Unit,
-    onCursorChange: (Int) -> Unit
+    onCursorChange: (Int) -> Unit,
+    onFocusPane: () -> Unit = {}
 ) {
     val context = LocalContext.current
     when (tab.viewerType) {
@@ -1676,7 +1673,8 @@ private fun EditorTabContent(
                 onShowInfoDialog = onShowInfoDialog,
                 onSaveRequested = onSaveRequested,
                 onContentChange = onContentChange,
-                onCursorChange = onCursorChange
+                onCursorChange = onCursorChange,
+                onFocusPane = onFocusPane
             )
         }
     }
@@ -2135,7 +2133,8 @@ private fun SplitEditorViewPane(
                         EditorManager.getInstance().updateTabContent(boundPaneTab, newText)
                     }
                 },
-                onCursorChange = onCursorChange
+                onCursorChange = onCursorChange,
+                onFocusPane = onFocusPane
             )
         }
     }
@@ -2158,7 +2157,8 @@ private fun CodeCanvas(
     onShowInfoDialog: (String, String) -> Unit,
     onSaveRequested: () -> Unit,
     onContentChange: (String) -> Unit,
-    onCursorChange: (Int) -> Unit
+    onCursorChange: (Int) -> Unit,
+    onFocusPane: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val editorMgr = remember { EditorManager.getInstance() }
@@ -2448,6 +2448,7 @@ private fun CodeCanvas(
                     tab.showReplaceBar = false
                 },
                 onResetModifiers = onResetModifiers,
+                onEditorFocus = onFocusPane,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()

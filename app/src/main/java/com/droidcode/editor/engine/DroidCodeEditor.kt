@@ -4,6 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.viewinterop.AndroidView
 import com.droidcode.editor.EditorTab
 import com.droidcode.editor.LineDiffStatus
@@ -32,6 +33,7 @@ fun DroidCodeEditor(
     onOpenWorkspaceSearch: () -> Unit = {},
     onOpenFind: () -> Unit = {},
     onResetModifiers: () -> Unit = {},
+    onEditorFocus: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
@@ -40,7 +42,7 @@ fun DroidCodeEditor(
     }
 
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.clipToBounds(),
         factory = { ctx ->
             CodeEditorView(ctx).apply {
                 this.theme = theme
@@ -70,6 +72,7 @@ fun DroidCodeEditor(
                 this.onWorkspaceSearchShortcut = onOpenWorkspaceSearch
                 this.onFindShortcut = onOpenFind
                 this.onResetModifiers = onResetModifiers
+                this.onEditorFocus = onEditorFocus
 
                 if (tab.line > 0 && tab.column > 0) {
                     this.setCursorPosition(CursorPos(tab.line - 1, tab.column - 1))
@@ -108,6 +111,7 @@ fun DroidCodeEditor(
             view.onWorkspaceSearchShortcut = onOpenWorkspaceSearch
             view.onFindShortcut = onOpenFind
             view.onResetModifiers = onResetModifiers
+            view.onEditorFocus = onEditorFocus
 
             // Sync buffer if file changed or external content change
             val isDifferentFile = view.currentFilePath != tab.filePath
