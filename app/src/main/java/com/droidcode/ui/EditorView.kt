@@ -71,6 +71,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -258,6 +259,25 @@ fun EditorView(
         }
     }
 
+    // Opens the split with `targetId` in the secondary pane. The pane that was
+    // focused/active before stays in the primary pane (never the same tab if avoidable).
+    val startSplitWith: (String, EditorSplitMode) -> Unit = { targetId, mode ->
+        val currentPrimary = tabs.firstOrNull { it.id == primaryTabId }?.id
+            ?: activeTab?.id
+            ?: tabs.firstOrNull()?.id
+        primaryTabId = if (currentPrimary != null && currentPrimary != targetId) {
+            currentPrimary
+        } else {
+            tabs.firstOrNull { it.id != targetId }?.id ?: targetId
+        }
+        secondaryTabId = targetId
+        splitMode = mode
+        activePane = "SECONDARY"
+        editorMgr.selectTab(targetId)
+    }
+
+    val currentToggleSplit by rememberUpdatedState(toggleSplit)
+
     LaunchedEffect(Unit) {
         EditorCommandRegistration.registerAllCommands(
             context = context,
@@ -271,7 +291,7 @@ fun EditorView(
             onShowChangeLineEndingDialog = { showChangeLineEndingDialog = true },
             onShowSaveAsDialog = { showSaveAsDialog = true },
             onShowWorkspaceSearch = { showWorkspaceSearchDialog = true },
-            onToggleSplitEditor = toggleSplit,
+            onToggleSplitEditor = { currentToggleSplit() },
             onShowInfoDialog = { title, text ->
                 infoDialogTitle = title
                 infoDialogText = text
@@ -348,11 +368,10 @@ fun EditorView(
                                                     tabContextMenuIndex = index
                                                 } else if (pos != null && bounds != null && pos.x in bounds.left..bounds.right && pos.y in bounds.top..bounds.bottom) {
                                                     val isRight = isLandscape && pos.x > bounds.left + bounds.width * 0.4f
-                                                    val targetTab = tabs[index]
-                                                    splitMode = if (isLandscape && isRight) EditorSplitMode.HORIZONTAL else EditorSplitMode.VERTICAL
-                                                    secondaryTabId = targetTab.id
-                                                    activePane = "SECONDARY"
-                                                    editorMgr.selectTab(targetTab.id)
+                                                    startSplitWith(
+                                                        tabs[index].id,
+                                                        if (isRight) EditorSplitMode.HORIZONTAL else EditorSplitMode.VERTICAL
+                                                    )
                                                 }
                                                 draggingTabIndex = null
                                                 dragCurrentWindowPos = null
@@ -404,10 +423,10 @@ fun EditorView(
                                         modifier = Modifier
                                             .size(13.dp)
                                             .clickable {
-                                                splitMode = if (isLandscape) EditorSplitMode.HORIZONTAL else EditorSplitMode.VERTICAL
-                                                secondaryTabId = tabs[index].id
-                                                activePane = "SECONDARY"
-                                                editorMgr.selectTab(tabs[index].id)
+                                                startSplitWith(
+                                                    tabs[index].id,
+                                                    if (isLandscape) EditorSplitMode.HORIZONTAL else EditorSplitMode.VERTICAL
+                                                )
                                             }
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -437,10 +456,7 @@ fun EditorView(
                                         text = { Text("Split Down (Vertical)") },
                                         leadingIcon = { Icon(Icons.Default.Splitscreen, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                         onClick = {
-                                            splitMode = EditorSplitMode.VERTICAL
-                                            secondaryTabId = tabs[index].id
-                                            activePane = "SECONDARY"
-                                            editorMgr.selectTab(tabs[index].id)
+                                            startSplitWith(tabs[index].id, EditorSplitMode.VERTICAL)
                                             tabContextMenuIndex = null
                                         }
                                     )
@@ -448,10 +464,7 @@ fun EditorView(
                                         text = { Text("Split Right (Horizontal)") },
                                         leadingIcon = { Icon(Icons.Default.Splitscreen, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                         onClick = {
-                                            splitMode = EditorSplitMode.HORIZONTAL
-                                            secondaryTabId = tabs[index].id
-                                            activePane = "SECONDARY"
-                                            editorMgr.selectTab(tabs[index].id)
+                                            startSplitWith(tabs[index].id, EditorSplitMode.HORIZONTAL)
                                             tabContextMenuIndex = null
                                         }
                                     )
@@ -843,17 +856,13 @@ fun EditorView(
         }
 
         // Split-Pane or Single Editor Container
-        val primaryTab = remember(tabs, primaryTabId, activeTab) {
+        val primaryTab: EditorTab? =
             tabs.firstOrNull { it.id == primaryTabId } ?: activeTab ?: tabs.firstOrNull()
-        }
-        val secondTab = remember(tabs, secondaryTabId, primaryTab) {
-            if (effectiveSplitMode == EditorSplitMode.NONE) null
-            else {
-                val candidate = if (secondaryTabId != null && secondaryTabId != primaryTab?.id) {
-                    tabs.firstOrNull { it.id == secondaryTabId }
-                } else null
-                candidate ?: tabs.firstOrNull { it != primaryTab }
-            }
+        val secondTab: EditorTab? = if (effectiveSplitMode == EditorSplitMode.NONE) {
+            null
+        } else {
+            tabs.firstOrNull { it.id == secondaryTabId }
+                ?: tabs.firstOrNull { it.id != primaryTab?.id }
         }
 
         Box(
