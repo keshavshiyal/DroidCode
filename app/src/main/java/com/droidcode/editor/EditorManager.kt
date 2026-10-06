@@ -140,8 +140,7 @@ class EditorManager @Inject constructor() {
         return undoMgr.canRedo()
     }
 
-    fun undoActiveTab() {
-        val tab = activeTab ?: return
+    fun undoTab(tab: EditorTab) {
         val undoMgr = undoManagers[tab.filePath] ?: return
         if (undoMgr.canUndo()) {
             val previous = undoMgr.undo(tab.content)
@@ -149,13 +148,22 @@ class EditorManager @Inject constructor() {
         }
     }
 
-    fun redoActiveTab() {
-        val tab = activeTab ?: return
+    fun redoTab(tab: EditorTab) {
         val undoMgr = undoManagers[tab.filePath] ?: return
         if (undoMgr.canRedo()) {
             val next = undoMgr.redo(tab.content)
             tab.updateContent(next)
         }
+    }
+
+    fun undoActiveTab() {
+        val tab = activeTab ?: return
+        undoTab(tab)
+    }
+
+    fun redoActiveTab() {
+        val tab = activeTab ?: return
+        redoTab(tab)
     }
 
     fun closeTab(index: Int) {

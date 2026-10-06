@@ -108,7 +108,9 @@ class CodeEditorView @JvmOverloads constructor(
     var lastSyncedText: String? = null
 
     private val notifyContentRunnable = Runnable {
+        if (suppressExternalCallback) return@Runnable
         val text = buffer.getText()
+        if (text == lastSyncedText) return@Runnable
         lastSyncedText = text
         onContentChanged?.invoke(text)
     }
@@ -119,6 +121,7 @@ class CodeEditorView @JvmOverloads constructor(
         removeCallbacks(notifyContentRunnable)
         if (suppressExternalCallback) return
         val text = buffer.getText()
+        if (text == lastSyncedText) return
         lastSyncedText = text
         onContentChanged?.invoke(text)
     }
@@ -138,6 +141,9 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun setBufferText(text: String, filePath: String? = null) {
         val fileChanged = filePath != null && filePath != currentFilePath
+        if (filePath != null) {
+            currentFilePath = filePath
+        }
         if (!fileChanged && lastSyncedText === text && buffer.getText() == text) return
 
         suppressExternalCallback = true
@@ -367,7 +373,7 @@ class CodeEditorView @JvmOverloads constructor(
                 0, getMaxScrollY()
             )
             selectionActionMode?.invalidate()
-            invalidate()
+            postInvalidateOnAnimation()
             return true
         }
     })
@@ -430,6 +436,7 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     fun clampScroll() {
+        if (height <= 0 || width <= 0) return
         val clampedX = scrollX.coerceIn(0, getMaxScrollX())
         val clampedY = scrollY.coerceIn(0, getMaxScrollY())
         if (clampedX != scrollX || clampedY != scrollY) {
@@ -443,6 +450,16 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     fun setScrollPositions(x: Int, y: Int) {
+        if (height <= 0 || width <= 0) {
+            post {
+                if (height > 0 && width > 0) {
+                    scrollTo(x.coerceIn(0, getMaxScrollX()), y.coerceIn(0, getMaxScrollY()))
+                    clampScroll()
+                    invalidate()
+                }
+            }
+            return
+        }
         scrollTo(x.coerceIn(0, getMaxScrollX()), y.coerceIn(0, getMaxScrollY()))
         clampScroll()
         invalidate()
@@ -455,7 +472,7 @@ class CodeEditorView @JvmOverloads constructor(
             scrollTo(scroller.currX, scroller.currY)
             clampScroll()
             selectionActionMode?.invalidate()
-            invalidate()
+            postInvalidateOnAnimation()
         }
     }
 
@@ -703,6 +720,7 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     fun scrollToCursor() {
+        if (width <= 0 || height <= 0) return
         val gutterW = calculateGutterWidth()
         val padStart = textPaddingStart
         val cursorX = gutterW + padStart + cursorPosition.col * charWidth

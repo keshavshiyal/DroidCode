@@ -849,7 +849,9 @@ fun EditorView(
         val secondTab = remember(tabs, secondaryTabId, primaryTab) {
             if (effectiveSplitMode == EditorSplitMode.NONE) null
             else {
-                val candidate = if (secondaryTabId != null) tabs.firstOrNull { it.id == secondaryTabId } else null
+                val candidate = if (secondaryTabId != null && secondaryTabId != primaryTab?.id) {
+                    tabs.firstOrNull { it.id == secondaryTabId }
+                } else null
                 candidate ?: tabs.firstOrNull { it != primaryTab }
             }
         }
@@ -867,6 +869,7 @@ fun EditorView(
                 key("primary_${boundTab.filePath}") {
                     EditorTabContent(
                         tab = boundTab,
+                        paneId = "single",
                         settings = settings,
                         ctrlActive = ctrlActive,
                         shiftActive = shiftActive,
@@ -901,6 +904,7 @@ fun EditorView(
                                 allTabs = tabs,
                                 isFocused = activePane == "PRIMARY",
                                 paneTitle = "Pane 1",
+                                paneId = "horizontal_pane1",
                                 settings = settings,
                                 ctrlActive = if (activePane == "PRIMARY") ctrlActive else false,
                                 shiftActive = if (activePane == "PRIMARY") shiftActive else false,
@@ -950,6 +954,7 @@ fun EditorView(
                                     allTabs = tabs,
                                     isFocused = activePane == "SECONDARY",
                                     paneTitle = "Pane 2",
+                                    paneId = "horizontal_pane2",
                                     settings = settings,
                                     ctrlActive = if (activePane == "SECONDARY") ctrlActive else false,
                                     shiftActive = if (activePane == "SECONDARY") shiftActive else false,
@@ -1016,6 +1021,7 @@ fun EditorView(
                                 allTabs = tabs,
                                 isFocused = activePane == "PRIMARY",
                                 paneTitle = "Pane 1",
+                                paneId = "vertical_pane1",
                                 settings = settings,
                                 ctrlActive = if (activePane == "PRIMARY") ctrlActive else false,
                                 shiftActive = if (activePane == "PRIMARY") shiftActive else false,
@@ -1065,6 +1071,7 @@ fun EditorView(
                                     allTabs = tabs,
                                     isFocused = activePane == "SECONDARY",
                                     paneTitle = "Pane 2",
+                                    paneId = "vertical_pane2",
                                     settings = settings,
                                     ctrlActive = if (activePane == "SECONDARY") ctrlActive else false,
                                     shiftActive = if (activePane == "SECONDARY") shiftActive else false,
@@ -1611,6 +1618,7 @@ private fun BreadcrumbsBar(
 @Composable
 private fun EditorTabContent(
     tab: EditorTab,
+    paneId: String = "primary",
     settings: AppSettings,
     ctrlActive: Boolean,
     shiftActive: Boolean,
@@ -1645,6 +1653,7 @@ private fun EditorTabContent(
         FileViewerType.TEXT -> {
             CodeCanvas(
                 tab = tab,
+                paneId = paneId,
                 settings = settings,
                 ctrlActive = ctrlActive,
                 shiftActive = shiftActive,
@@ -1875,6 +1884,7 @@ private fun SplitEditorViewPane(
     allTabs: List<EditorTab>,
     isFocused: Boolean,
     paneTitle: String,
+    paneId: String,
     settings: AppSettings,
     ctrlActive: Boolean,
     shiftActive: Boolean,
@@ -2095,8 +2105,10 @@ private fun SplitEditorViewPane(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
+            val boundPaneTab = tab
             EditorTabContent(
-                tab = tab,
+                tab = boundPaneTab,
+                paneId = paneId,
                 settings = settings,
                 ctrlActive = ctrlActive,
                 shiftActive = shiftActive,
@@ -2109,7 +2121,11 @@ private fun SplitEditorViewPane(
                 onOpenWorkspaceSearch = onOpenWorkspaceSearch,
                 onShowInfoDialog = onShowInfoDialog,
                 onSaveRequested = onSaveRequested,
-                onContentChange = onContentChange,
+                onContentChange = { newText ->
+                    if (EditorManager.getInstance().tabs.contains(boundPaneTab)) {
+                        EditorManager.getInstance().updateTabContent(boundPaneTab, newText)
+                    }
+                },
                 onCursorChange = onCursorChange
             )
         }
@@ -2119,6 +2135,7 @@ private fun SplitEditorViewPane(
 @Composable
 private fun CodeCanvas(
     tab: EditorTab,
+    paneId: String = "primary",
     settings: AppSettings,
     ctrlActive: Boolean,
     shiftActive: Boolean,
@@ -2400,7 +2417,7 @@ private fun CodeCanvas(
         }
 
         // High-performance virtualized DroidCodeEngine
-        key(tab.filePath) {
+        key("${paneId}_${tab.filePath}") {
             DroidCodeEditor(
                 tab = tab,
                 settings = settings,
@@ -2413,8 +2430,8 @@ private fun CodeCanvas(
                     tab.updateCursor(line, col)
                 },
                 onSaveRequested = onSaveRequested,
-                onUndoRequested = { editorMgr.undoActiveTab() },
-                onRedoRequested = { editorMgr.redoActiveTab() },
+                onUndoRequested = { editorMgr.undoTab(tab) },
+                onRedoRequested = { editorMgr.redoTab(tab) },
                 onOpenCommandPalette = onOpenCommandPalette,
                 onOpenWorkspaceSearch = onOpenWorkspaceSearch,
                 onOpenFind = {

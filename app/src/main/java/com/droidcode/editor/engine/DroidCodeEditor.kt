@@ -112,12 +112,18 @@ fun DroidCodeEditor(
             // Sync buffer if file changed or external content change
             val isDifferentFile = view.currentFilePath != tab.filePath
             val isContentChanged = view.lastSyncedText !== tab.content && view.lastSyncedText != tab.content
-            if (isDifferentFile || isContentChanged) {
+            if (isDifferentFile) {
                 view.setBufferText(tab.content, tab.filePath)
                 if (tab.scrollX > 0 || tab.scrollY > 0) {
                     view.setScrollPositions(tab.scrollX, tab.scrollY)
                 }
+                if (tab.line > 0 && tab.column > 0) {
+                    view.setCursorPosition(CursorPos(tab.line - 1, tab.column - 1))
+                }
+            } else if (isContentChanged) {
+                view.setBufferText(tab.content, tab.filePath)
             }
+
 
             // Invariant: when view is focused, view is the sole authority for cursor & selection.
             // Never overwrite the active typing cursor with stale Compose values.

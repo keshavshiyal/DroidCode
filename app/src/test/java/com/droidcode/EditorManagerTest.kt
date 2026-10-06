@@ -133,5 +133,28 @@ class EditorManagerTest {
         assertEquals(4, tab.column)
         assertEquals(3, tab.cursorPosition)
     }
+
+    @Test
+    fun `undoTab and redoTab operate independently on non-active tab`() {
+        val file1 = tempFolder.newFile("file1.kt").apply { writeText("initial1") }
+        val file2 = tempFolder.newFile("file2.kt").apply { writeText("initial2") }
+        val tab1 = editorMgr.openFile(file1)
+        val tab2 = editorMgr.openFile(file2)
+        editorMgr.selectTab(tab2.id)
+
+        editorMgr.updateTabContent(tab1, "updated1")
+        editorMgr.updateTabContent(tab2, "updated2")
+
+        // Undo tab1 while tab2 is active
+        editorMgr.undoTab(tab1)
+        assertEquals("initial1", tab1.content)
+        assertEquals("updated2", tab2.content)
+
+        // Redo tab1 while tab2 is active
+        editorMgr.redoTab(tab1)
+        assertEquals("updated1", tab1.content)
+        assertEquals("updated2", tab2.content)
+    }
 }
+
 

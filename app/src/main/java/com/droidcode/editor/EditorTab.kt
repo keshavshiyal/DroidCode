@@ -63,8 +63,8 @@ class EditorTab(
     var selectionStart: Int by mutableIntStateOf(0)
     var selectionEnd: Int by mutableIntStateOf(0)
 
-    var scrollX: Int by mutableIntStateOf(0)
-    var scrollY: Int by mutableIntStateOf(0)
+    var scrollX: Int = 0
+    var scrollY: Int = 0
 
     var findQuery: String by mutableStateOf("")
     var replaceQuery: String by mutableStateOf("")
