@@ -113,4 +113,25 @@ class EditorManagerTest {
         editorMgr.closeTab(0)
         assertEquals("b.kt", editorMgr.activeTab?.fileName)
     }
+
+    @Test
+    fun `updateCursor retains explicit line and column coordinates`() {
+        val file = tempFolder.newFile("code.kt").apply { writeText("hello\nworld") }
+        val tab = editorMgr.openFile(file)
+        tab.updateCursor(2, 3)
+        assertEquals(2, tab.line)
+        assertEquals(3, tab.column)
+    }
+
+    @Test
+    fun `updateSelection single point cursor does not corrupt line and column`() {
+        val file = tempFolder.newFile("sample.kt").apply { writeText("val x = 1\nval y = 2") }
+        val tab = editorMgr.openFile(file)
+        tab.updateCursor(1, 4)
+        tab.updateSelection(3, 3)
+        assertEquals(1, tab.line)
+        assertEquals(4, tab.column)
+        assertEquals(3, tab.cursorPosition)
+    }
 }
+

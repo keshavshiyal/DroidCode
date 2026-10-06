@@ -119,15 +119,19 @@ fun DroidCodeEditor(
                 }
             }
 
-            if (tab.selectionStart != tab.selectionEnd) {
-                val (viewStart, viewEnd) = view.getSelectionOffsets()
-                if (tab.selectionStart != viewStart || tab.selectionEnd != viewEnd) {
-                    view.setSelectionOffsets(tab.selectionStart, tab.selectionEnd)
-                }
-            } else if (tab.line > 0 && tab.column > 0) {
-                val targetPos = CursorPos(tab.line - 1, tab.column - 1)
-                if (view.cursorPosition != targetPos) {
-                    view.setCursorPosition(targetPos)
+            // Invariant: when view is focused, view is the sole authority for cursor & selection.
+            // Never overwrite the active typing cursor with stale Compose values.
+            if (!view.isFocused) {
+                if (tab.selectionStart != tab.selectionEnd) {
+                    val (viewStart, viewEnd) = view.getSelectionOffsets()
+                    if (tab.selectionStart != viewStart || tab.selectionEnd != viewEnd) {
+                        view.setSelectionOffsets(tab.selectionStart, tab.selectionEnd)
+                    }
+                } else if (tab.line > 0 && tab.column > 0) {
+                    val targetPos = CursorPos(tab.line - 1, tab.column - 1)
+                    if (view.cursorPosition != targetPos) {
+                        view.setCursorPosition(targetPos)
+                    }
                 }
             }
         }

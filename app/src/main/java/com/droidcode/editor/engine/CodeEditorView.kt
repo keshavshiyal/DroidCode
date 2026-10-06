@@ -138,8 +138,7 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun setBufferText(text: String, filePath: String? = null) {
         val fileChanged = filePath != null && filePath != currentFilePath
-        if (filePath != null) currentFilePath = filePath
-        if (!fileChanged && lastSyncedText === text) return
+        if (!fileChanged && lastSyncedText === text && buffer.getText() == text) return
 
         suppressExternalCallback = true
         try {

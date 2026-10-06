@@ -19,6 +19,16 @@ class EditorInputConnection(
         return true
     }
 
+    override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
+        if (text == null) return false
+        editor.insertText(text.toString())
+        return true
+    }
+
+    override fun finishComposingText(): Boolean {
+        return true
+    }
+
     override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
         var handled = false
         if (beforeLength > 0) {

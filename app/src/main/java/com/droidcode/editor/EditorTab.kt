@@ -75,10 +75,12 @@ class EditorTab(
     val foldedLines = mutableStateListOf<Int>()
 
     fun updateSelection(start: Int, end: Int) {
-        this.selectionStart = start.coerceIn(0, content.length)
-        this.selectionEnd = end.coerceIn(0, content.length)
+        this.selectionStart = start
+        this.selectionEnd = end
         this.cursorPosition = this.selectionEnd
-        calculateLineColumn()
+        if (start != end && content.isNotEmpty() && lineStartOffsets.isNotEmpty()) {
+            calculateLineColumn()
+        }
     }
 
     fun updateContent(newContent: String) {
@@ -99,17 +101,11 @@ class EditorTab(
     }
 
     fun updateCursor(targetLine: Int, targetColumn: Int) {
+        this.line = targetLine
+        this.column = targetColumn
         val lineIdx = (targetLine - 1).coerceIn(0, (lineStartOffsets.size - 1).coerceAtLeast(0))
         val lineStart = lineStartOffsets.getOrElse(lineIdx) { 0 }
-        val lineEnd = if (lineIdx + 1 < lineStartOffsets.size) {
-            (lineStartOffsets[lineIdx + 1] - 1).coerceAtLeast(lineStart)
-        } else {
-            content.length
-        }
-        val colOffset = (targetColumn - 1).coerceIn(0, (lineEnd - lineStart).coerceAtLeast(0))
-        this.line = lineIdx + 1
-        this.column = colOffset + 1
-        this.cursorPosition = (lineStart + colOffset).coerceIn(0, content.length)
+        this.cursorPosition = (lineStart + (targetColumn - 1).coerceAtLeast(0)).coerceIn(0, content.length.coerceAtLeast(0))
     }
 
     val file: File
