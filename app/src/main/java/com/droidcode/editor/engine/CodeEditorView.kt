@@ -1231,3 +1231,5 @@ class CodeEditorView @JvmOverloads constructor(
         canvas.restoreToCount(saveCount)
     }
 }
+}
+
