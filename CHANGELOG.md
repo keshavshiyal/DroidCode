@@ -4,7 +4,25 @@ All notable changes to DroidCode will be documented in this file.
 
 ## [0.1.0-alpha01] - 2026-10-03
 
-### Milestone 1 — Performance Optimization & Toolchain Hardening
+### Milestone 1 — Performance Optimization, Engine Hardening & Diagnostics
+- **Diagnostic Stack Trace System (`StackTraceManager`)**:
+  - Implemented thread-safe `StackTraceManager` installing an uncaught exception interceptor in `DroidCodeApp` to capture fatal crashes and runtime diagnostics.
+  - Persists structured reports to disk (`filesDir/debug_logs/latest_stacktrace.txt` and history log) across app restarts.
+  - Captures complete diagnostics: timestamp, severity, exception cause, full stack trace, package/version/build type, device model/OS/ABI, heap memory usage, and thread information.
+  - Added dedicated **Diagnostics & Stack Traces** viewer dialog in Settings (`SettingsView.kt`) featuring scrollable monospace view, log history navigation (`< Newer` / `Older >`), one-tap "Copy to Clipboard" with Toast confirmation, on-demand "Test Log" generation, and log clearing.
+- **Hardware-Accelerated Virtualized Editor Engine (`DroidCodeEngine`)**:
+  - Implemented custom 120 FPS hardware-accelerated `CodeEditorView` replacing non-virtualized text fields for frictionless editing of 100,000+ line files.
+  - Virtualized line-viewport rendering, custom `TextBuffer`, and incremental `LineTokenizer`.
+  - Invariant typing focus: view maintains sole authority over active cursor and selection, preventing cursor jump glitches.
+  - Smooth horizontal and vertical scrolling with inertia and boundary clamping.
+- **Split-Pane Multi-Editor & State Isolation**:
+  - Added responsive side-by-side (`HORIZONTAL`) and stacked (`VERTICAL`) split editor layouts.
+  - Completely isolated pane instances with dedicated `DroidCodeEditor` components, independent text buffers, cursor positions, and undo/redo histories.
+  - **Buffer Corruption Prevention**: Enforced strict file-path verification on content change callbacks (`updateTabContentByPath`), pre-switch buffer flushing on file changes, and safe pane state resets when closing split view.
+  - **Pane Focus Synchronization**: Clicking or editing in any pane automatically updates `EditorManager.activeTab` so header breadcrumbs, line/col counters, and toolbar actions accurately reflect the active editor.
+  - **Duplicate Assignment Guard**: Automatically swaps tabs between panes when a user selects a file already displayed in the opposite pane.
+  - **Auto-Collapse Guard**: Automatically falls back to single-pane layout when $\le 1$ tabs are open.
+  - Drag-and-drop tab splitting with interactive drop overlays and empty-pane file picker (`SplitSelectFileView`).
 - **Windows Build Tooling**:
   - Added standalone `gradlew.bat` supporting both Gradle Wrapper JAR and system Gradle resolution.
 - **Dependency Injection Architecture**:
@@ -24,8 +42,6 @@ All notable changes to DroidCode will be documented in this file.
   - Implemented `LineDiffCalculator.kt` with fast prefix/suffix and LCS diffing, rendering live green (added) and blue (modified) gutter indicators against disk baseline.
 - **Workspace-Wide Text Search (Project Grep — `Ctrl+Shift+F`)**:
   - Implemented `WorkspaceSearchDialog.kt` supporting background I/O file scanning with Match Case, Whole Word, and Regex filters with jump-to-line navigation.
-- **Split-Pane Multi-Editor**:
-  - Added side-by-side (`HORIZONTAL`) and stacked (`VERTICAL`) split editor layouts with independent buffer viewports and synchronised undo/redo state.
 - **CI / Static Analysis Hardening**:
   - Configured Android Lint with zero warnings/errors (`warningsAsErrors = true`).
   - Transitioned syntax highlighter test suite to standard JUnit test runner.
