@@ -22,11 +22,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.Info
@@ -35,6 +42,7 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SettingsSystemDaydream
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
@@ -55,6 +63,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -71,8 +80,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.droidcode.BuildConfig
 import com.droidcode.R
+import com.droidcode.debug.StackTraceManager
 import com.droidcode.settings.AppSettings
 import com.droidcode.settings.SettingsManager
 import com.droidcode.ui.theme.CornerMedium
@@ -100,6 +112,7 @@ fun SettingsView(
     val settings = settingsMgr.settings
 
     var selectedCategory by rememberSaveable { mutableStateOf(SettingsCategory.APPEARANCE) }
+    var showStackTraceDialog by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -201,11 +214,15 @@ fun SettingsView(
                     SettingsCategory.APPEARANCE -> AppearanceSettingsSection(settings, settingsMgr, context, onSettingsChanged)
                     SettingsCategory.EDITOR -> EditorSettingsSection(settings, settingsMgr, context, onSettingsChanged)
                     SettingsCategory.QUICK_KEY_BAR -> KeyBarSettingsSection(settings, settingsMgr, context, onSettingsChanged)
-                    SettingsCategory.ABOUT -> AboutSection()
-                    else -> GeneralSettingsSection()
+                    SettingsCategory.ABOUT -> AboutSection(onShowStackTrace = { showStackTraceDialog = true })
+                    else -> GeneralSettingsSection(onShowStackTrace = { showStackTraceDialog = true })
                 }
             }
         }
+    }
+
+    if (showStackTraceDialog) {
+        StackTraceViewerDialog(onDismiss = { showStackTraceDialog = false })
     }
 }
 
@@ -796,7 +813,12 @@ private fun KeyBarSettingsSection(
 }
 
 @Composable
-private fun GeneralSettingsSection() {
+private fun GeneralSettingsSection(onShowStackTrace: () -> Unit = {}) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val hasTraces = StackTraceManager.hasStackTraces()
+    val traceCount = StackTraceManager.getAllStackTraces().size
+
     Column {
         Text(
             text = "General System Information",
@@ -831,11 +853,92 @@ private fun GeneralSettingsSection() {
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Diagnostic Stack Trace & Logs Card
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BugReport,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Diagnostics & Stack Traces",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = if (hasTraces) {
+                        "Recorded crash/error stack traces available ($traceCount logged). Inspect logs or copy them to debug app behavior."
+                    } else {
+                        "No application crashes recorded. System diagnostic snapshots and environment specs are available for debugging."
+                    },
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onShowStackTrace,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("settings_view_stacktrace_btn"),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BugReport,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("View Stack Trace", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val text = StackTraceManager.getLatestStackTrace()
+                            clipboardManager.setText(AnnotatedString(text))
+                            Toast.makeText(context, "Diagnostic stack trace copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.testTag("settings_copy_diagnostics_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy Diagnostics",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun AboutSection() {
+private fun AboutSection(onShowStackTrace: () -> Unit = {}) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val githubUrl = "https://github.com/keshavshiyal"
@@ -1031,7 +1134,254 @@ private fun AboutSection() {
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedButton(
+                    onClick = onShowStackTrace,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("about_view_stacktrace_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BugReport,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("View Stack Trace & System Diagnostics", fontSize = 12.sp)
+                }
             }
         }
     }
 }
+
+@Composable
+fun StackTraceViewerDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    var traces by remember { mutableStateOf(StackTraceManager.getAllStackTraces()) }
+    var selectedIndex by remember { mutableIntStateOf(0) }
+
+    val currentContent = when {
+        traces.isNotEmpty() && selectedIndex in traces.indices -> traces[selectedIndex]
+        traces.isNotEmpty() -> traces.first()
+        else -> StackTraceManager.getSystemDiagnostics()
+    }
+
+    val verticalScroll = rememberScrollState()
+    val horizontalScroll = rememberScrollState()
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.85f),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BugReport,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "App Stack Trace & Diagnostics",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (traces.isNotEmpty()) {
+                                    "Log ${selectedIndex + 1} of ${traces.size} recorded entries"
+                                } else {
+                                    "System Diagnostic Snapshot (Healthy)"
+                                },
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.testTag("dialog_close_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // If multiple traces exist, show navigation bar
+                if (traces.size > 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                if (selectedIndex > 0) {
+                                    selectedIndex--
+                                }
+                            },
+                            enabled = selectedIndex > 0
+                        ) {
+                            Text("< Newer", fontSize = 11.sp)
+                        }
+
+                        Text(
+                            text = "Log ${selectedIndex + 1} of ${traces.size}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                if (selectedIndex < traces.size - 1) {
+                                    selectedIndex++
+                                }
+                            },
+                            enabled = selectedIndex < traces.size - 1
+                        ) {
+                            Text("Older >", fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Scrollable Monospace Content View
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                ) {
+                    SelectionContainer {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = currentContent,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .verticalScroll(verticalScroll)
+                                    .horizontalScroll(horizontalScroll)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Action Buttons at Bottom
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Copy to Clipboard (Primary Button)
+                    Button(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(currentContent))
+                            Toast.makeText(context, "Stack trace copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .testTag("dialog_copy_stacktrace_btn"),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Copy to Clipboard", fontSize = 12.sp, maxLines = 1)
+                    }
+
+                    // Test Log / Error Generator
+                    OutlinedButton(
+                        onClick = {
+                            StackTraceManager.recordTestException()
+                            traces = StackTraceManager.getAllStackTraces()
+                            selectedIndex = 0
+                            Toast.makeText(context, "Test stack trace recorded!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier
+                            .weight(0.9f)
+                            .testTag("dialog_test_stacktrace_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Test Log", fontSize = 11.sp, maxLines = 1)
+                    }
+
+                    // Clear Traces
+                    if (traces.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = {
+                                StackTraceManager.clearStackTraces()
+                                traces = StackTraceManager.getAllStackTraces()
+                                selectedIndex = 0
+                                Toast.makeText(context, "Diagnostic logs cleared", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.testTag("dialog_clear_stacktrace_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Clear logs",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
