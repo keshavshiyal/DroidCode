@@ -196,15 +196,6 @@ fun EditorView(
         savedActiveTabIndex = editorMgr.activeTabIndex
     }
 
-    LaunchedEffect(tabs.size) {
-        if (tabs.size <= 1 && splitMode != EditorSplitMode.NONE) {
-            splitMode = EditorSplitMode.NONE
-            primaryTabId = null
-            secondaryTabId = null
-            activePane = "PRIMARY"
-        }
-    }
-
     var tabToPromptCloseIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     var showContextMenu by rememberSaveable { mutableStateOf(false) }
@@ -225,6 +216,15 @@ fun EditorView(
     var draggingTabIndex by remember { mutableStateOf<Int?>(null) }
     var dragCurrentWindowPos by remember { mutableStateOf<Offset?>(null) }
     var editorContainerBounds by remember { mutableStateOf<Rect?>(null) }
+
+    LaunchedEffect(tabs.size) {
+        if (tabs.size <= 1 && splitMode != EditorSplitMode.NONE) {
+            splitMode = EditorSplitMode.NONE
+            primaryTabId = null
+            secondaryTabId = null
+            activePane = "PRIMARY"
+        }
+    }
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
