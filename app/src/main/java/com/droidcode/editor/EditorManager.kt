@@ -103,6 +103,11 @@ class EditorManager @Inject constructor() {
         undoManagers[tab.filePath]?.pushState(newContent)
     }
 
+    fun updateTabContentByPath(filePath: String, newContent: String) {
+        val tab = tabs.firstOrNull { it.filePath == filePath } ?: return
+        updateTabContent(tab, newContent)
+    }
+
     fun saveActiveTab() {
         val tab = activeTab ?: return
         saveTab(tab)

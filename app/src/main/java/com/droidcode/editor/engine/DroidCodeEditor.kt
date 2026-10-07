@@ -56,7 +56,16 @@ fun DroidCodeEditor(
                 this.altActive = altActive
                 this.setBufferText(tab.content, tab.filePath)
 
-                this.onContentChanged = onContentChange
+                this.onFileContentChanged = { path, text ->
+                    if (path == tab.filePath) {
+                        onContentChange(text)
+                    }
+                }
+                this.onContentChanged = { text ->
+                    if (this.currentFilePath == tab.filePath) {
+                        onContentChange(text)
+                    }
+                }
                 this.onCursorChanged = onCursorChange
                 this.onScrollPositionChanged = { x, y ->
                     tab.scrollX = x
@@ -95,7 +104,32 @@ fun DroidCodeEditor(
             view.ctrlActive = ctrlActive
             view.shiftActive = shiftActive
             view.altActive = altActive
-            view.onContentChanged = onContentChange
+
+            // Sync buffer if file changed or external content change
+            val isDifferentFile = view.currentFilePath != tab.filePath
+            val isContentChanged = view.lastSyncedText !== tab.content && view.lastSyncedText != tab.content
+            if (isDifferentFile) {
+                view.setBufferText(tab.content, tab.filePath)
+                if (tab.scrollX > 0 || tab.scrollY > 0) {
+                    view.setScrollPositions(tab.scrollX, tab.scrollY)
+                }
+                if (tab.line > 0 && tab.column > 0) {
+                    view.setCursorPosition(CursorPos(tab.line - 1, tab.column - 1))
+                }
+            } else if (isContentChanged) {
+                view.setBufferText(tab.content, tab.filePath)
+            }
+
+            view.onFileContentChanged = { path, text ->
+                if (path == tab.filePath) {
+                    onContentChange(text)
+                }
+            }
+            view.onContentChanged = { text ->
+                if (view.currentFilePath == tab.filePath) {
+                    onContentChange(text)
+                }
+            }
             view.onCursorChanged = onCursorChange
             view.onScrollPositionChanged = { x, y ->
                 tab.scrollX = x
@@ -113,22 +147,6 @@ fun DroidCodeEditor(
             view.onResetModifiers = onResetModifiers
             view.onEditorFocus = onEditorFocus
 
-            // Sync buffer if file changed or external content change
-            val isDifferentFile = view.currentFilePath != tab.filePath
-            val isContentChanged = view.lastSyncedText !== tab.content && view.lastSyncedText != tab.content
-            if (isDifferentFile) {
-                view.setBufferText(tab.content, tab.filePath)
-                if (tab.scrollX > 0 || tab.scrollY > 0) {
-                    view.setScrollPositions(tab.scrollX, tab.scrollY)
-                }
-                if (tab.line > 0 && tab.column > 0) {
-                    view.setCursorPosition(CursorPos(tab.line - 1, tab.column - 1))
-                }
-            } else if (isContentChanged) {
-                view.setBufferText(tab.content, tab.filePath)
-            }
-
-
             // Invariant: when view is focused, view is the sole authority for cursor & selection.
             // Never overwrite the active typing cursor with stale Compose values.
             if (!view.isFocused) {
@@ -144,6 +162,9 @@ fun DroidCodeEditor(
                     }
                 }
             }
+        },
+        onRelease = { view ->
+            view.flushContent()
         }
     )
 }

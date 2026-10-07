@@ -196,6 +196,15 @@ fun EditorView(
         savedActiveTabIndex = editorMgr.activeTabIndex
     }
 
+    LaunchedEffect(tabs.size) {
+        if (tabs.size <= 1 && splitMode != EditorSplitMode.NONE) {
+            splitMode = EditorSplitMode.NONE
+            primaryTabId = null
+            secondaryTabId = null
+            activePane = "PRIMARY"
+        }
+    }
+
     var tabToPromptCloseIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     var showContextMenu by rememberSaveable { mutableStateOf(false) }
@@ -237,8 +246,17 @@ fun EditorView(
         }
         splitMode = nextMode
         if (nextMode == EditorSplitMode.NONE) {
+            val keepTab = if (activePane == "SECONDARY" && secondaryTabId != null) {
+                tabs.firstOrNull { it.id == secondaryTabId }
+            } else {
+                tabs.firstOrNull { it.id == primaryTabId } ?: activeTab
+            }
+            primaryTabId = null
             secondaryTabId = null
             activePane = "PRIMARY"
+            if (keepTab != null) {
+                editorMgr.selectTab(keepTab.id)
+            }
         } else {
             val currentActiveId = activeTab?.id ?: tabs.firstOrNull()?.id
             primaryTabId = currentActiveId
@@ -386,6 +404,10 @@ fun EditorView(
                                             } else {
                                                 primaryTabId = clickedTab.id
                                             }
+                                        } else {
+                                            primaryTabId = null
+                                            secondaryTabId = null
+                                            activePane = "PRIMARY"
                                         }
                                         editorMgr.activeTabIndex = index
                                     }
@@ -439,7 +461,16 @@ fun EditorView(
                                             if (tabToClose.isModified) {
                                                 tabToPromptCloseIndex = index
                                             } else {
+                                                val closingId = tabToClose.id
+                                                if (primaryTabId == closingId) primaryTabId = null
+                                                if (secondaryTabId == closingId) secondaryTabId = null
                                                 editorMgr.closeTab(index)
+                                                if (editorMgr.tabs.size <= 1) {
+                                                    splitMode = EditorSplitMode.NONE
+                                                    primaryTabId = null
+                                                    secondaryTabId = null
+                                                    activePane = "PRIMARY"
+                                                }
                                             }
                                         }
                                 )
@@ -829,7 +860,16 @@ fun EditorView(
                                 android.util.Log.e("EditorView", "Failed saving tab: ${tabToClose.fileName}", e)
                                 Toast.makeText(context, "Failed to save ${tabToClose.fileName}: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
+                            val closingId = tabToClose.id
+                            if (primaryTabId == closingId) primaryTabId = null
+                            if (secondaryTabId == closingId) secondaryTabId = null
                             editorMgr.closeTab(tabToPromptCloseIndex!!)
+                            if (editorMgr.tabs.size <= 1) {
+                                splitMode = EditorSplitMode.NONE
+                                primaryTabId = null
+                                secondaryTabId = null
+                                activePane = "PRIMARY"
+                            }
                             tabToPromptCloseIndex = null
                         }
                     ) { Text(stringResource(R.string.action_save)) }
@@ -838,7 +878,16 @@ fun EditorView(
                     Row {
                         TextButton(
                             onClick = {
+                                val closingId = tabToClose.id
+                                if (primaryTabId == closingId) primaryTabId = null
+                                if (secondaryTabId == closingId) secondaryTabId = null
                                 editorMgr.closeTab(tabToPromptCloseIndex!!)
+                                if (editorMgr.tabs.size <= 1) {
+                                    splitMode = EditorSplitMode.NONE
+                                    primaryTabId = null
+                                    secondaryTabId = null
+                                    activePane = "PRIMARY"
+                                }
                                 tabToPromptCloseIndex = null
                             }
                         ) { Text(stringResource(R.string.action_dont_save)) }
@@ -852,13 +901,32 @@ fun EditorView(
         }
 
         // Split-Pane or Single Editor Container
-        val primaryTab: EditorTab? =
+        val singleTab: EditorTab? = activeTab ?: tabs.firstOrNull()
+        val splitPrimaryTab: EditorTab? = if (effectiveSplitMode == EditorSplitMode.NONE) {
+            singleTab
+        } else {
             tabs.firstOrNull { it.id == primaryTabId } ?: activeTab ?: tabs.firstOrNull()
-        val secondTab: EditorTab? = if (effectiveSplitMode == EditorSplitMode.NONE) {
+        }
+        val splitSecondTab: EditorTab? = if (effectiveSplitMode == EditorSplitMode.NONE) {
             null
         } else {
-            tabs.firstOrNull { it.id == secondaryTabId && it.id != primaryTab?.id }
-                ?: tabs.firstOrNull { it.id != primaryTab?.id }
+            tabs.firstOrNull { it.id == secondaryTabId && it.id != splitPrimaryTab?.id }
+                ?: tabs.firstOrNull { it.id != splitPrimaryTab?.id }
+        }
+
+        val closeSplitAction: () -> Unit = {
+            val keepTab = if (activePane == "SECONDARY" && splitSecondTab != null) {
+                splitSecondTab
+            } else {
+                splitPrimaryTab ?: singleTab
+            }
+            splitMode = EditorSplitMode.NONE
+            primaryTabId = null
+            secondaryTabId = null
+            activePane = "PRIMARY"
+            if (keepTab != null) {
+                editorMgr.selectTab(keepTab.id)
+            }
         }
 
         Box(
@@ -869,9 +937,9 @@ fun EditorView(
                     editorContainerBounds = coords.boundsInWindow()
                 }
         ) {
-            if (effectiveSplitMode == EditorSplitMode.NONE && primaryTab != null) {
-                val boundTab = primaryTab
-                key("primary_${boundTab.filePath}") {
+            if (effectiveSplitMode == EditorSplitMode.NONE && singleTab != null) {
+                val boundTab = singleTab
+                key("single_${boundTab.filePath}") {
                     EditorTabContent(
                         tab = boundTab,
                         paneId = "single",
@@ -891,21 +959,19 @@ fun EditorView(
                         },
                         onSaveRequested = onSaveRequested,
                         onContentChange = { newText: String ->
-                            if (editorMgr.tabs.contains(boundTab)) {
-                                editorMgr.updateTabContent(boundTab, newText)
-                            }
+                            editorMgr.updateTabContentByPath(boundTab.filePath, newText)
                         },
                         onCursorChange = { pos: Int ->
                             boundTab.updateCursor(pos)
                         }
                     )
                 }
-            } else if (effectiveSplitMode == EditorSplitMode.HORIZONTAL && primaryTab != null) {
+            } else if (effectiveSplitMode == EditorSplitMode.HORIZONTAL && splitPrimaryTab != null) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        key("primary_${primaryTab.filePath}") {
+                        key("horizontal_p1_${splitPrimaryTab.filePath}") {
                             SplitEditorViewPane(
-                                tab = primaryTab,
+                                tab = splitPrimaryTab,
                                 allTabs = tabs,
                                 isFocused = activePane == "PRIMARY",
                                 paneTitle = "Pane 1",
@@ -926,21 +992,22 @@ fun EditorView(
                                 },
                                 onSaveRequested = onSaveRequested,
                                 onContentChange = { newText: String ->
-                                    if (editorMgr.tabs.contains(primaryTab)) {
-                                        editorMgr.updateTabContent(primaryTab, newText)
-                                    }
+                                    editorMgr.updateTabContentByPath(splitPrimaryTab.filePath, newText)
                                 },
                                 onCursorChange = { pos: Int ->
-                                    primaryTab.updateCursor(pos)
+                                    splitPrimaryTab.updateCursor(pos)
                                 },
                                 onSelectTab = { selectedTab ->
+                                    if (selectedTab.id == secondaryTabId) {
+                                        secondaryTabId = primaryTabId
+                                    }
                                     primaryTabId = selectedTab.id
                                     activePane = "PRIMARY"
                                     editorMgr.selectTab(selectedTab.id)
                                 },
                                 onFocusPane = {
                                     activePane = "PRIMARY"
-                                    editorMgr.selectTab(primaryTab.id)
+                                    editorMgr.selectTab(splitPrimaryTab.id)
                                 },
                                 onCloseSplit = null,
                                 modifier = Modifier.fillMaxSize()
@@ -952,10 +1019,10 @@ fun EditorView(
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        if (secondTab != null) {
-                            key("secondary_${secondTab.filePath}") {
+                        if (splitSecondTab != null) {
+                            key("horizontal_p2_${splitSecondTab.filePath}") {
                                 SplitEditorViewPane(
-                                    tab = secondTab,
+                                    tab = splitSecondTab,
                                     allTabs = tabs,
                                     isFocused = activePane == "SECONDARY",
                                     paneTitle = "Pane 2",
@@ -976,27 +1043,24 @@ fun EditorView(
                                     },
                                     onSaveRequested = onSaveRequested,
                                     onContentChange = { newText: String ->
-                                        if (editorMgr.tabs.contains(secondTab)) {
-                                            editorMgr.updateTabContent(secondTab, newText)
-                                        }
+                                        editorMgr.updateTabContentByPath(splitSecondTab.filePath, newText)
                                     },
                                     onCursorChange = { pos: Int ->
-                                        secondTab.updateCursor(pos)
+                                        splitSecondTab.updateCursor(pos)
                                     },
                                     onSelectTab = { selectedTab ->
+                                        if (selectedTab.id == primaryTabId) {
+                                            primaryTabId = secondaryTabId
+                                        }
                                         secondaryTabId = selectedTab.id
                                         activePane = "SECONDARY"
                                         editorMgr.selectTab(selectedTab.id)
                                     },
                                     onFocusPane = {
                                         activePane = "SECONDARY"
-                                        editorMgr.selectTab(secondTab.id)
+                                        editorMgr.selectTab(splitSecondTab.id)
                                     },
-                                    onCloseSplit = {
-                                        splitMode = EditorSplitMode.NONE
-                                        secondaryTabId = null
-                                        activePane = "PRIMARY"
-                                    },
+                                    onCloseSplit = closeSplitAction,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -1008,21 +1072,17 @@ fun EditorView(
                                     secondaryTabId = openedTab.id
                                     activePane = "SECONDARY"
                                 },
-                                onCloseSplit = {
-                                    splitMode = EditorSplitMode.NONE
-                                    secondaryTabId = null
-                                    activePane = "PRIMARY"
-                                }
+                                onCloseSplit = closeSplitAction
                             )
                         }
                     }
                 }
-            } else if (primaryTab != null) {
+            } else if (splitPrimaryTab != null) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        key("primary_${primaryTab.filePath}") {
+                        key("vertical_p1_${splitPrimaryTab.filePath}") {
                             SplitEditorViewPane(
-                                tab = primaryTab,
+                                tab = splitPrimaryTab,
                                 allTabs = tabs,
                                 isFocused = activePane == "PRIMARY",
                                 paneTitle = "Pane 1",
@@ -1043,21 +1103,22 @@ fun EditorView(
                                 },
                                 onSaveRequested = onSaveRequested,
                                 onContentChange = { newText: String ->
-                                    if (editorMgr.tabs.contains(primaryTab)) {
-                                        editorMgr.updateTabContent(primaryTab, newText)
-                                    }
+                                    editorMgr.updateTabContentByPath(splitPrimaryTab.filePath, newText)
                                 },
                                 onCursorChange = { pos: Int ->
-                                    primaryTab.updateCursor(pos)
+                                    splitPrimaryTab.updateCursor(pos)
                                 },
                                 onSelectTab = { selectedTab ->
+                                    if (selectedTab.id == secondaryTabId) {
+                                        secondaryTabId = primaryTabId
+                                    }
                                     primaryTabId = selectedTab.id
                                     activePane = "PRIMARY"
                                     editorMgr.selectTab(selectedTab.id)
                                 },
                                 onFocusPane = {
                                     activePane = "PRIMARY"
-                                    editorMgr.selectTab(primaryTab.id)
+                                    editorMgr.selectTab(splitPrimaryTab.id)
                                 },
                                 onCloseSplit = null,
                                 modifier = Modifier.fillMaxSize()
@@ -1069,10 +1130,10 @@ fun EditorView(
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        if (secondTab != null) {
-                            key("secondary_${secondTab.filePath}") {
+                        if (splitSecondTab != null) {
+                            key("vertical_p2_${splitSecondTab.filePath}") {
                                 SplitEditorViewPane(
-                                    tab = secondTab,
+                                    tab = splitSecondTab,
                                     allTabs = tabs,
                                     isFocused = activePane == "SECONDARY",
                                     paneTitle = "Pane 2",
@@ -1093,27 +1154,24 @@ fun EditorView(
                                     },
                                     onSaveRequested = onSaveRequested,
                                     onContentChange = { newText: String ->
-                                        if (editorMgr.tabs.contains(secondTab)) {
-                                            editorMgr.updateTabContent(secondTab, newText)
-                                        }
+                                        editorMgr.updateTabContentByPath(splitSecondTab.filePath, newText)
                                     },
                                     onCursorChange = { pos: Int ->
-                                        secondTab.updateCursor(pos)
+                                        splitSecondTab.updateCursor(pos)
                                     },
                                     onSelectTab = { selectedTab ->
+                                        if (selectedTab.id == primaryTabId) {
+                                            primaryTabId = secondaryTabId
+                                        }
                                         secondaryTabId = selectedTab.id
                                         activePane = "SECONDARY"
                                         editorMgr.selectTab(selectedTab.id)
                                     },
                                     onFocusPane = {
                                         activePane = "SECONDARY"
-                                        editorMgr.selectTab(secondTab.id)
+                                        editorMgr.selectTab(splitSecondTab.id)
                                     },
-                                    onCloseSplit = {
-                                        splitMode = EditorSplitMode.NONE
-                                        secondaryTabId = null
-                                        activePane = "PRIMARY"
-                                    },
+                                    onCloseSplit = closeSplitAction,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -1125,11 +1183,7 @@ fun EditorView(
                                     secondaryTabId = openedTab.id
                                     activePane = "SECONDARY"
                                 },
-                                onCloseSplit = {
-                                    splitMode = EditorSplitMode.NONE
-                                    secondaryTabId = null
-                                    activePane = "PRIMARY"
-                                }
+                                onCloseSplit = closeSplitAction
                             )
                         }
                     }
@@ -2129,9 +2183,7 @@ private fun SplitEditorViewPane(
                 onShowInfoDialog = onShowInfoDialog,
                 onSaveRequested = onSaveRequested,
                 onContentChange = { newText ->
-                    if (EditorManager.getInstance().tabs.contains(boundPaneTab)) {
-                        EditorManager.getInstance().updateTabContent(boundPaneTab, newText)
-                    }
+                    EditorManager.getInstance().updateTabContentByPath(boundPaneTab.filePath, newText)
                 },
                 onCursorChange = onCursorChange,
                 onFocusPane = onFocusPane

@@ -91,6 +91,7 @@ class CodeEditorView @JvmOverloads constructor(
         }
 
     var onContentChanged: ((String) -> Unit)? = null
+    var onFileContentChanged: ((filePath: String, content: String) -> Unit)? = null
     var onCursorChanged: ((line: Int, col: Int) -> Unit)? = null
     var onSelectionChanged: ((start: Int, end: Int) -> Unit)? = null
     var onSaveShortcut: (() -> Unit)? = null
@@ -113,6 +114,10 @@ class CodeEditorView @JvmOverloads constructor(
         val text = buffer.getText()
         if (text == lastSyncedText) return@Runnable
         lastSyncedText = text
+        val path = currentFilePath
+        if (path != null) {
+            onFileContentChanged?.invoke(path, text)
+        }
         onContentChanged?.invoke(text)
     }
 
@@ -124,6 +129,10 @@ class CodeEditorView @JvmOverloads constructor(
         val text = buffer.getText()
         if (text == lastSyncedText) return
         lastSyncedText = text
+        val path = currentFilePath
+        if (path != null) {
+            onFileContentChanged?.invoke(path, text)
+        }
         onContentChanged?.invoke(text)
     }
 
@@ -142,7 +151,10 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun setBufferText(text: String, filePath: String? = null) {
         val fileChanged = filePath != null && filePath != currentFilePath
-        if (filePath != null) {
+        if (fileChanged) {
+            flushContent()
+            currentFilePath = filePath
+        } else if (filePath != null) {
             currentFilePath = filePath
         }
         if (!fileChanged && lastSyncedText === text && buffer.getText() == text) return
