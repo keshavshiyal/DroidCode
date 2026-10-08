@@ -28,6 +28,29 @@ public class DatabaseManager {
         return activeProvider != null && activeProvider.isConnected();
     }
 
+    public synchronized void registerProvider(DatabaseProvider provider) {
+        if (provider != null && !providers.contains(provider)) {
+            providers.add(provider);
+            if (activeProvider == null) {
+                activeProvider = provider;
+            }
+        }
+    }
+
+    public synchronized void setActiveProvider(DatabaseProvider provider) {
+        this.activeProvider = provider;
+        if (provider != null && !providers.contains(provider)) {
+            providers.add(provider);
+        }
+    }
+
+    public synchronized void unregisterProvider(DatabaseProvider provider) {
+        providers.remove(provider);
+        if (activeProvider == provider) {
+            activeProvider = providers.isEmpty() ? null : providers.get(0);
+        }
+    }
+
     public String getStatusMessage() {
         if (!hasActiveConnection()) {
             return "No active database connection.";

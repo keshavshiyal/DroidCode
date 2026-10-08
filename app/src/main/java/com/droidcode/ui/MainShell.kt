@@ -530,10 +530,48 @@ fun MainShell(
                     }
                 } else {
                     val pos = tab.cursorPosition.coerceIn(0, current.length)
-                    val updated = current.substring(0, pos) + text + current.substring(pos)
-                    editorMgr.updateActiveTabContent(updated)
-                    val newCursor = pos + text.length
-                    tab.requestSelection(newCursor, newCursor)
+                    val closer = when (text) {
+                        "{" -> "}"
+                        "[" -> "]"
+                        "(" -> ")"
+                        "\"" -> "\""
+                        "'" -> "'"
+                        "`" -> "`"
+                        else -> null
+                    }
+                    if (closer != null) {
+                        // Auto-insert pair and place cursor inside
+                        val pair = text + closer
+                        val updated = current.substring(0, pos) + pair + current.substring(pos)
+                        editorMgr.updateActiveTabContent(updated)
+                        val newCursor = pos + text.length
+                        tab.requestSelection(newCursor, newCursor)
+                    } else if (text == "{}" || text == "[]" || text == "()" || text == "\"\"" || text == "''" || text == "``") {
+                        // Pair variation from long-press popup: position cursor inside
+                        val updated = current.substring(0, pos) + text + current.substring(pos)
+                        editorMgr.updateActiveTabContent(updated)
+                        val newCursor = pos + 1
+                        tab.requestSelection(newCursor, newCursor)
+                    } else if (text == "</>") {
+                        // Tag snippet: position cursor inside the tag
+                        val updated = current.substring(0, pos) + text + current.substring(pos)
+                        editorMgr.updateActiveTabContent(updated)
+                        val newCursor = pos + 1
+                        tab.requestSelection(newCursor, newCursor)
+                    } else {
+                        // Check typeover if sitting before matching closing char
+                        val isClosingChar = (text == ")" || text == "]" || text == "}" || text == "\"" || text == "'" || text == "`")
+                        val nextChar = if (pos < current.length) current[pos].toString() else null
+                        if (isClosingChar && nextChar == text) {
+                            val newCursor = pos + 1
+                            tab.requestSelection(newCursor, newCursor)
+                        } else {
+                            val updated = current.substring(0, pos) + text + current.substring(pos)
+                            editorMgr.updateActiveTabContent(updated)
+                            val newCursor = pos + text.length
+                            tab.requestSelection(newCursor, newCursor)
+                        }
+                    }
                 }
             }
         }

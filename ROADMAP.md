@@ -7,7 +7,7 @@ DroidCode follows an incremental, architectural roadmap to build a native Androi
 ## Phase Progression
 
 ```
-[Phase 1: Architecture Foundation]  -->  [Phase 1.5: Stabilization]  -->  [Phase 1.5.1: Foundation Hardening]  -->  [Milestone 1: Core Engine & Shell Hardening] (COMPLETE)  -->  [Milestone 2: Web IDE] (CURRENT TARGET)
+[Phase 1: Architecture Foundation]  -->  [Phase 1.5: Stabilization]  -->  [Phase 1.5.1: Foundation Hardening]  -->  [Milestone 1: Core Engine & Shell Hardening] (COMPLETE)  -->  [Milestone 2: Web IDE & Tooling Ecosystem] (COMPLETE)  -->  [Milestone 3: Developer Infrastructure] (CURRENT TARGET)
 ```
 
 ---
@@ -54,14 +54,15 @@ DroidCode follows an incremental, architectural roadmap to build a native Androi
 - **Breadcrumbs Navigation Bar**: Interactive breadcrumb path display (`Project > dir > ... > file`) in editor header.
 - **Editor Gutter Git Diff Indicators**: LCS diffing in `LineDiffCalculator`, rendering real-time green (added) and blue (modified) diff bars against disk baseline.
 
-### Milestone 2 — Web IDE (Stage 1 Language Ecosystem) (Current Target)
-- HTML live preview renderer (sandboxed local WebView)
-- CSS style auto-completion and color picker
-- JavaScript lightweight syntax checking and linting
-- JSON formatter, validator, and tree viewer
-- SQLite query execution console for local databases
+### Milestone 2 — Web IDE & Tooling Ecosystem (Complete)
+- **HTML Live Preview Renderer**: Sandboxed local `WebView` preview dialog with relative file URI asset resolution and console logging drawer (intercepting `LOG`, `DEBUG`, `WARN`, `ERROR` with source lines).
+- **CSS Color Detection & HSV Color Picker**: Regex parser for `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb()`, `rgba()`, `hsl()`, `hsla()`, with Material 3 HSV slider dialog and cursor-position hex insertion.
+- **JavaScript Lightweight Syntax Checker & Linter**: In-app lexical scanner detecting unclosed brackets, unclosed strings, and unclosed template literals with interactive problems dialog and tap-to-jump line navigation.
+- **JSON Tools & Hierarchical Tree Viewer**: Pure `org.json` formatting, whitespace minification, syntax validation with line/column diagnosis, and expandable tree viewer with search and type badges.
+- **SQLite Database Explorer & Query Console**: Schema extraction from `sqlite_master` and `PRAGMA table_info`, query runner with execution timing, 2D scrollable data grid, and clipboard CSV export.
+- **Developer Quick Key Bar Bracket Auto-Closing**: Fixed bracket auto-closing for `(`, `[`, `{`, `"`, `'`, `` ` `` with cursor placement in the middle, and typeover navigation without duplicate characters.
 
-### Milestone 3 — Developer Infrastructure
+### Milestone 3 — Developer Infrastructure (Current Target)
 - Full JGit integration for local Git commits, branches, staging, and diffs
 - Terminal process engine using local Android PTY/shell execution
 - Extension loading mechanism and plugin API

@@ -26,6 +26,14 @@ object EditorCommandRegistration {
         onShowSaveAsDialog: () -> Unit,
         onShowWorkspaceSearch: () -> Unit = {},
         onToggleSplitEditor: () -> Unit = {},
+        onShowHtmlPreview: () -> Unit = {},
+        onShowJsonTree: () -> Unit = {},
+        onFormatJson: () -> Unit = {},
+        onMinifyJson: () -> Unit = {},
+        onValidateJson: () -> Unit = {},
+        onShowColorPicker: () -> Unit = {},
+        onCheckJsSyntax: () -> Unit = {},
+        onShowDatabaseConsole: () -> Unit = {},
         onShowInfoDialog: (title: String, text: String) -> Unit,
         onOpenTerminalPanel: () -> Unit,
         onExecuteAction: (actionType: String) -> Unit
@@ -240,6 +248,65 @@ object EditorCommandRegistration {
             "view.toggle_split_editor", "Toggle Split Editor (Side-by-Side)", "View", "Alt+\\",
             { editorMgr.tabs.isNotEmpty() }
         ) { onToggleSplitEditor() })
+
+        // --- Web IDE (Milestone 2) ---
+        registry.registerCommand(Command(
+            "web.live_preview", "Web: Live HTML Preview", "Web", "Alt+P",
+            {
+                val ext = editorMgr.activeTab?.file?.extension?.lowercase()
+                ext == "html" || ext == "htm" || ext == "xhtml"
+            }
+        ) { onShowHtmlPreview() })
+
+        registry.registerCommand(Command(
+            "json.format", "JSON: Format Document", "Web", "Alt+Shift+F",
+            {
+                val ext = editorMgr.activeTab?.file?.extension?.lowercase()
+                ext == "json" || editorMgr.activeTab?.languageId == "json"
+            }
+        ) { onFormatJson() })
+
+        registry.registerCommand(Command(
+            "json.minify", "JSON: Minify Document", "Web", "",
+            {
+                val ext = editorMgr.activeTab?.file?.extension?.lowercase()
+                ext == "json" || editorMgr.activeTab?.languageId == "json"
+            }
+        ) { onMinifyJson() })
+
+        registry.registerCommand(Command(
+            "json.validate", "JSON: Validate Syntax", "Web", "",
+            {
+                val ext = editorMgr.activeTab?.file?.extension?.lowercase()
+                ext == "json" || editorMgr.activeTab?.languageId == "json"
+            }
+        ) { onValidateJson() })
+
+        registry.registerCommand(Command(
+            "json.tree_viewer", "JSON: Open Tree Viewer", "Web", "",
+            {
+                val ext = editorMgr.activeTab?.file?.extension?.lowercase()
+                ext == "json" || editorMgr.activeTab?.languageId == "json"
+            }
+        ) { onShowJsonTree() })
+
+        registry.registerCommand(Command(
+            "css.color_picker", "CSS: Pick / Insert Color...", "Web", "",
+            { true }
+        ) { onShowColorPicker() })
+
+        registry.registerCommand(Command(
+            "js.check_syntax", "JavaScript: Check Syntax & Problems", "Web", "",
+            {
+                val ext = editorMgr.activeTab?.file?.extension?.lowercase()
+                ext in listOf("js", "jsx", "ts", "tsx", "mjs") || editorMgr.activeTab?.languageId in listOf("javascript", "typescript")
+            }
+        ) { onCheckJsSyntax() })
+
+        registry.registerCommand(Command(
+            "db.sqlite_console", "Database: Open SQLite Console...", "Database", "",
+            { true }
+        ) { onShowDatabaseConsole() })
 
         // --- File ---
         registry.registerCommand(Command(

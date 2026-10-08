@@ -57,7 +57,20 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.ScrollState
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material3.MaterialTheme
+import com.droidcode.database.sqlite.DatabaseConsoleDialog
+import com.droidcode.language.css.ColorPickerDialog
+import com.droidcode.language.js.JsDiagnostic
+import com.droidcode.language.js.JsProblemsDialog
+import com.droidcode.language.js.JsSyntaxChecker
+import com.droidcode.language.json.JsonToolHelper
+import com.droidcode.language.json.JsonTreeViewerDialog
+import com.droidcode.web.HtmlPreviewDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.LocalTextStyle
@@ -206,6 +219,13 @@ fun EditorView(
     var showChangeLineEndingDialog by rememberSaveable { mutableStateOf(false) }
     var showSaveAsDialog by rememberSaveable { mutableStateOf(false) }
     var showWorkspaceSearchDialog by rememberSaveable { mutableStateOf(false) }
+    var showHtmlPreviewDialog by rememberSaveable { mutableStateOf(false) }
+    var showJsonTreeDialog by rememberSaveable { mutableStateOf(false) }
+    var showColorPickerDialog by rememberSaveable { mutableStateOf(false) }
+    var showJsProblemsDialog by rememberSaveable { mutableStateOf(false) }
+    var showDatabaseConsoleDialog by rememberSaveable { mutableStateOf(false) }
+    var activeDbFile by remember { mutableStateOf<File?>(null) }
+    var jsDiagnosticsList by remember { mutableStateOf<List<JsDiagnostic>>(emptyList()) }
     var splitMode by rememberSaveable { mutableStateOf(EditorSplitMode.NONE) }
     var activePane by rememberSaveable { mutableStateOf("PRIMARY") }
     var primaryTabId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -307,6 +327,54 @@ fun EditorView(
             onShowSaveAsDialog = { showSaveAsDialog = true },
             onShowWorkspaceSearch = { showWorkspaceSearchDialog = true },
             onToggleSplitEditor = { currentToggleSplit() },
+            onShowHtmlPreview = { showHtmlPreviewDialog = true },
+            onShowJsonTree = { showJsonTreeDialog = true },
+            onFormatJson = {
+                activeTab?.let { tab ->
+                    val res = JsonToolHelper.formatJson(tab.content)
+                    if (res.isSuccess) {
+                        tab.updateContent(res.getOrThrow())
+                        Toast.makeText(context, "JSON formatted", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Cannot format: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
+            onMinifyJson = {
+                activeTab?.let { tab ->
+                    val res = JsonToolHelper.minifyJson(tab.content)
+                    if (res.isSuccess) {
+                        tab.updateContent(res.getOrThrow())
+                        Toast.makeText(context, "JSON minified", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Cannot minify: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
+            onValidateJson = {
+                activeTab?.let { tab ->
+                    val res = JsonToolHelper.validateJson(tab.content)
+                    if (res.isValid) {
+                        Toast.makeText(context, "Valid JSON syntax", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Invalid JSON: ${res.errorMessage} (Line ${res.line})", Toast.LENGTH_LONG).show()
+                        pendingActionType = "GO_TO_LINE:${res.line}"
+                    }
+                }
+            },
+            onShowColorPicker = { showColorPickerDialog = true },
+            onCheckJsSyntax = {
+                activeTab?.let { tab ->
+                    jsDiagnosticsList = JsSyntaxChecker.checkSyntax(tab.content)
+                    showJsProblemsDialog = true
+                }
+            },
+            onShowDatabaseConsole = {
+                activeTab?.let { tab ->
+                    activeDbFile = File(tab.filePath)
+                    showDatabaseConsoleDialog = true
+                }
+            },
             onShowInfoDialog = { title, text ->
                 infoDialogTitle = title
                 infoDialogText = text
@@ -724,6 +792,107 @@ fun EditorView(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        // Contextual Action Buttons for active file type
+                        val activeExt = activeTab.fileName.substringAfterLast('.', "").lowercase()
+                        when (activeExt) {
+                            "html", "htm" -> {
+                                Surface(
+                                    onClick = { showHtmlPreviewDialog = true },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.OpenInBrowser,
+                                            contentDescription = "Live HTML Preview",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            "json" -> {
+                                Surface(
+                                    onClick = { showJsonTreeDialog = true },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.AccountTree,
+                                            contentDescription = "JSON Tree Viewer",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            "css", "scss", "less" -> {
+                                Surface(
+                                    onClick = { showColorPickerDialog = true },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.Palette,
+                                            contentDescription = "Color Picker",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            "js", "jsx", "ts", "tsx" -> {
+                                Surface(
+                                    onClick = {
+                                        jsDiagnosticsList = JsSyntaxChecker.checkSyntax(activeTab.content)
+                                        showJsProblemsDialog = true
+                                    },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.BugReport,
+                                            contentDescription = "Check Syntax & Lint",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            "db", "sqlite", "sqlite3" -> {
+                                Surface(
+                                    onClick = {
+                                        activeDbFile = File(activeTab.filePath)
+                                        showDatabaseConsoleDialog = true
+                                    },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = Icons.Default.Storage,
+                                            contentDescription = "SQLite Console",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // Find in Files
                         Surface(
                             onClick = { showWorkspaceSearchDialog = true },
@@ -966,6 +1135,10 @@ fun EditorView(
                         },
                         onCursorChange = { pos: Int ->
                             boundTab.updateCursor(pos)
+                        },
+                        onOpenDatabaseConsole = { file ->
+                            activeDbFile = file
+                            showDatabaseConsoleDialog = true
                         }
                     )
                 }
@@ -1013,6 +1186,10 @@ fun EditorView(
                                     editorMgr.selectTab(splitPrimaryTab.id)
                                 },
                                 onCloseSplit = null,
+                                onOpenDatabaseConsole = { file ->
+                                    activeDbFile = file
+                                    showDatabaseConsoleDialog = true
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -1064,6 +1241,10 @@ fun EditorView(
                                         editorMgr.selectTab(splitSecondTab.id)
                                     },
                                     onCloseSplit = closeSplitAction,
+                                    onOpenDatabaseConsole = { file ->
+                                        activeDbFile = file
+                                        showDatabaseConsoleDialog = true
+                                    },
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -1124,6 +1305,10 @@ fun EditorView(
                                     editorMgr.selectTab(splitPrimaryTab.id)
                                 },
                                 onCloseSplit = null,
+                                onOpenDatabaseConsole = { file ->
+                                    activeDbFile = file
+                                    showDatabaseConsoleDialog = true
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -1175,6 +1360,10 @@ fun EditorView(
                                         editorMgr.selectTab(splitSecondTab.id)
                                     },
                                     onCloseSplit = closeSplitAction,
+                                    onOpenDatabaseConsole = { file ->
+                                        activeDbFile = file
+                                        showDatabaseConsoleDialog = true
+                                    },
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -1423,6 +1612,49 @@ fun EditorView(
                 infoDialogTitle = null
                 infoDialogText = null
             }
+        )
+    }
+
+    if (showHtmlPreviewDialog && activeTab != null) {
+        HtmlPreviewDialog(
+            htmlContent = activeTab.content,
+            file = File(activeTab.filePath),
+            onDismiss = { showHtmlPreviewDialog = false }
+        )
+    }
+
+    if (showJsonTreeDialog && activeTab != null) {
+        JsonTreeViewerDialog(
+            jsonContent = activeTab.content,
+            fileName = activeTab.fileName,
+            onDismiss = { showJsonTreeDialog = false }
+        )
+    }
+
+    if (showColorPickerDialog && activeTab != null) {
+        ColorPickerDialog(
+            onDismiss = { showColorPickerDialog = false },
+            onColorSelected = { hexString ->
+                pendingActionType = "INSERT_TEXT:$hexString"
+            }
+        )
+    }
+
+    if (showJsProblemsDialog) {
+        JsProblemsDialog(
+            diagnostics = jsDiagnosticsList,
+            onDismiss = { showJsProblemsDialog = false },
+            onSelectDiagnostic = { diag ->
+                showJsProblemsDialog = false
+                pendingActionType = "GO_TO_LINE:${diag.line}"
+            }
+        )
+    }
+
+    if (showDatabaseConsoleDialog && activeDbFile != null) {
+        DatabaseConsoleDialog(
+            dbFile = activeDbFile!!,
+            onDismiss = { showDatabaseConsoleDialog = false }
         )
     }
 }
@@ -1695,7 +1927,8 @@ private fun EditorTabContent(
     onSaveRequested: () -> Unit,
     onContentChange: (String) -> Unit,
     onCursorChange: (Int) -> Unit,
-    onFocusPane: () -> Unit = {}
+    onFocusPane: () -> Unit = {},
+    onOpenDatabaseConsole: ((File) -> Unit)? = null
 ) {
     val context = LocalContext.current
     when (tab.viewerType) {
@@ -1711,7 +1944,8 @@ private fun EditorTabContent(
                 } catch (e: Exception) {
                     Toast.makeText(context, "Cannot read file as text: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
-            }
+            },
+            onOpenDatabaseConsole = onOpenDatabaseConsole
         )
         FileViewerType.TEXT -> {
             CodeCanvas(
@@ -1966,6 +2200,7 @@ private fun SplitEditorViewPane(
     onSelectTab: (EditorTab) -> Unit,
     onFocusPane: () -> Unit,
     onCloseSplit: (() -> Unit)? = null,
+    onOpenDatabaseConsole: ((File) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showTabDropdown by remember { mutableStateOf(false) }
@@ -2189,7 +2424,8 @@ private fun SplitEditorViewPane(
                     EditorManager.getInstance().updateTabContentByPath(boundPaneTab.filePath, newText)
                 },
                 onCursorChange = onCursorChange,
-                onFocusPane = onFocusPane
+                onFocusPane = onFocusPane,
+                onOpenDatabaseConsole = onOpenDatabaseConsole
             )
         }
     }
@@ -2280,6 +2516,15 @@ private fun CodeCanvas(
                         tab.requestSelection(it.selection.start, it.selection.end)
                         onCursorChange(it.selection.start)
                     }
+                }
+                act.startsWith("INSERT_TEXT:") -> {
+                    val insertStr = act.removePrefix("INSERT_TEXT:")
+                    val curPos = tab.cursorPosition.coerceIn(0, tab.content.length)
+                    val newText = StringBuilder(tab.content).insert(curPos, insertStr).toString()
+                    onContentChange(newText)
+                    val newPos = curPos + insertStr.length
+                    tab.requestSelection(newPos, newPos)
+                    onCursorChange(newPos)
                 }
                 act == "GO_DEFINITION" || act == "GO_DECLARATION" -> {
                     EditorActionsHandler.goToDefinition(context, tab, textValue) {
@@ -2901,7 +3146,8 @@ private fun PdfViewer(file: File) {
 @Composable
 private fun UnsupportedFileViewer(
     tab: EditorTab,
-    onForceOpenAsText: () -> Unit
+    onForceOpenAsText: () -> Unit,
+    onOpenDatabaseConsole: ((File) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val file = tab.file
@@ -2953,6 +3199,22 @@ private fun UnsupportedFileViewer(
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
                 Spacer(modifier = Modifier.height(24.dp))
+
+                val isDatabase = file.extension.lowercase() in listOf("db", "sqlite", "sqlite3")
+                if (isDatabase && onOpenDatabaseConsole != null) {
+                    Button(
+                        onClick = { onOpenDatabaseConsole(file) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open in SQLite Console", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 Button(
                     onClick = { openFileWithSystemApp(context, file) },

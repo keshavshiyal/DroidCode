@@ -2,6 +2,36 @@
 
 All notable changes to DroidCode will be documented in this file.
 
+## [0.2.0-alpha02] - Milestone 2: Web IDE & Tooling Ecosystem
+
+### Web IDE & Tooling Ecosystem (Milestone 2 Complete)
+- **HTML Live Preview & Console Logger**:
+  - Sandboxed local `WebView` preview dialog (`HtmlPreviewDialog.kt`) using `loadDataWithBaseURL("file://${parentDir}/", ...)` for relative asset resolution (local CSS, images, JS scripts).
+  - Integrated `WebChromeClient` console log interceptor capturing `LOG`, `DEBUG`, `WARNING`, and `ERROR` events with exact line numbers and source URLs.
+  - Collapsible interactive console drawer with severity filtering, timestamps, one-tap log clearing, and live refresh controls.
+- **CSS Color Detection & Material 3 Color Picker**:
+  - Regex color parsing engine (`CssColorHelper.kt`) detecting `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb(...)`, `rgba(...)`, `hsl(...)`, and `hsla(...)`.
+  - Interactive Material 3 HSV Color Picker (`ColorPickerDialog.kt`) featuring smooth Hue, Saturation, Brightness, and Alpha sliders with live hex/RGB format toggling.
+  - Preset palette swatch selection and direct code insertion at current editor cursor position.
+- **JavaScript Lightweight Syntax Checker & Linter**:
+  - Pure Kotlin AST-free lexical scanner (`JsSyntaxChecker.kt`) detecting unmatched brackets `()`, `[]`, `{}`, unclosed strings (`"..."`, `'...'`), and unterminated template literals (``` `...` ```).
+  - Problems list dialog (`JsProblemsDialog.kt`) with severity badges (`ERROR`, `WARNING`), line/column reporting, and instant tap-to-jump line navigation.
+- **JSON Formatter, Validator & Tree Viewer**:
+  - Pure `org.json` formatting (beautify) with 2-space indentation and whitespace minification (`JsonToolHelper.kt`).
+  - Fast syntax validation with precise line and column diagnosis.
+  - Interactive hierarchical JSON tree viewer dialog (`JsonTreeViewerDialog.kt`) with collapsible object/array nodes, item count badges, type badges, clipboard copy, and real-time search filter.
+- **SQLite Database Explorer & Query Console**:
+  - Local database provider (`SqliteDatabaseProvider.kt`) detecting SQLite files (`.db`, `.sqlite`, `.sqlite3`).
+  - Schema inspection extracting tables and views from `sqlite_master` and column metadata via `PRAGMA table_info`.
+  - Dedicated interactive query runner (`DatabaseConsoleDialog.kt`) with SQL quick-action chips (`SELECT *`, `COUNT(*)`, `SCHEMA`), execution timing benchmarks, 2D scrollable data grid with alternating row colors, and CSV export to clipboard.
+  - Integrated SQLite console launch directly from `UnsupportedFileViewer` and editor toolbar.
+- **Developer Quick Key Bar Bracket Auto-Closing**:
+  - Fixed bracket auto-closing for `(`, `[`, `{`, `"`, `'`, and `` ` ``: automatically inserts matching closing character and positions cursor between the pair.
+  - Supports variation inserts and typeover navigation when typing directly before closing brackets without duplicating characters.
+- **Capability Registry & Command Palette**:
+  - Promoted `language.html`, `language.css`, `language.json`, and `database.sqlite` capabilities to `AVAILABLE`.
+  - Registered commands in Command Palette: `web.live_preview`, `json.format`, `json.minify`, `json.validate`, `json.tree_viewer`, `css.color_picker`, `js.check_syntax`, and `db.sqlite_console`.
+
 ## [0.1.0-alpha01] - 2026-10-03
 
 ### Editor Engine Hardening (Phases 1–5)

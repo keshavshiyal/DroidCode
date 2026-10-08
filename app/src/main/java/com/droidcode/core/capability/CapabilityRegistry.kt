@@ -200,24 +200,24 @@ object CapabilityRegistry {
         ),
         Capability(
             id = "language.html",
-            name = "HTML Support",
+            name = "HTML Support & Live Preview",
             group = CapabilityGroup.LANGUAGE,
-            status = CapabilityStatus.PARTIAL,
-            description = "HTML file recognition, classification, and text editing; full DOM parsing planned."
+            status = CapabilityStatus.AVAILABLE,
+            description = "HTML syntax highlighting, local asset resolution, and sandboxed live preview WebView with console logging."
         ),
         Capability(
             id = "language.css",
-            name = "CSS Support",
+            name = "CSS Support & Color Picker",
             group = CapabilityGroup.LANGUAGE,
-            status = CapabilityStatus.PARTIAL,
-            description = "CSS/SCSS recognition and basic editing; CSS property auto-completion planned."
+            status = CapabilityStatus.AVAILABLE,
+            description = "CSS/SCSS highlighting, hex/rgb/hsl color code detection, and interactive Material 3 HSV color picker."
         ),
         Capability(
             id = "language.json",
-            name = "JSON Support",
+            name = "JSON Tools & Tree Viewer",
             group = CapabilityGroup.LANGUAGE,
-            status = CapabilityStatus.PARTIAL,
-            description = "JSON file classification and basic editing; schema validation planned."
+            status = CapabilityStatus.AVAILABLE,
+            description = "JSON beautification, minification, fast syntax validation, and interactive hierarchical tree viewer."
         ),
         Capability(
             id = "language.markdown",
@@ -304,10 +304,10 @@ object CapabilityRegistry {
         ),
         Capability(
             id = "database.sqlite",
-            name = "SQLite Database Provider",
+            name = "SQLite Database Provider & Console",
             group = CapabilityGroup.DATABASE,
-            status = CapabilityStatus.PARTIAL,
-            description = "Internal Room SQLite database active; direct developer SQLite query runner planned."
+            status = CapabilityStatus.AVAILABLE,
+            description = "SQLite database file explorer, table schema inspector, interactive query runner, and CSV export."
         ),
         Capability(
             id = "database.mysql",
