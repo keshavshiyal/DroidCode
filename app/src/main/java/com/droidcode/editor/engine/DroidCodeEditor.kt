@@ -50,6 +50,7 @@ fun DroidCodeEditor(
                 this.fontOption = settings.editorFontFamily
                 this.fontSizeSp = settings.fontSizeSp.toFloat()
                 this.isLineNumbersEnabled = settings.isLineNumbersEnabled
+                this.isWordWrap = settings.isWordWrap
                 this.lineDiffMap = lineDiffMap
                 this.ctrlActive = ctrlActive
                 this.shiftActive = shiftActive
@@ -101,6 +102,7 @@ fun DroidCodeEditor(
             view.fontOption = settings.editorFontFamily
             view.fontSizeSp = settings.fontSizeSp.toFloat()
             view.isLineNumbersEnabled = settings.isLineNumbersEnabled
+            view.isWordWrap = settings.isWordWrap
             view.lineDiffMap = lineDiffMap
             view.ctrlActive = ctrlActive
             view.shiftActive = shiftActive

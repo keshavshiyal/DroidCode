@@ -25,7 +25,11 @@ All notable changes to DroidCode will be documented in this file.
   - Added auto-closing pair insertion for `()`, `[]`, `{}`, `""`, `''`, `` ` ``, smart indent on Enter after opening brackets/colons, and selection wrapping.
   - Added rich physical keyboard shortcuts: Home/End, PageUp/PageDown, Word Jump/Delete (Ctrl+Left/Right/Backspace/Delete), Indent/Outdent (Tab/Shift+Tab), Duplicate Lines (Ctrl+D), Delete Lines (Ctrl+Shift+K), Move Lines Up/Down (Alt+Up/Down), and Comment Toggle (Ctrl+/).
 - **Phase 4: Selection, Scrolling & Gestures**:
-  - Fixed horizontal scroll range with `cachedMaxLineLength` to avoid content cutoff.
+  - Implemented dynamic soft line-wrapping engine (`LineWrapHelper`, `WrapLayout`, `VisualRow`) with word-break detection on whitespace, punctuation, operators, and brackets.
+  - Linked `settings.isWordWrap` from `AppSettings` and `SettingsView` through `DroidCodeEditor` to `CodeEditorView`, ensuring instant reactive updates on toggle.
+  - Virtualized visual-row rendering in `CodeEditorView.onDraw`: multi-row syntax highlighting, row-sliced text selection, search query matches, visual-row cursor positioning, and clean line-number gutter display (continuation rows omit duplicate line numbers).
+  - Enhanced cursor navigation: Up and Down arrow keys navigate seamlessly across wrapped visual rows within long lines.
+  - Fixed horizontal scrolling when Word Wrap is disabled: accurately tracks maximum visual columns (accounting for tab expansions) with generous overscroll padding, allowing smooth scrolling across the entire width of long lines without cutoff.
   - Added fractional scroll accumulation (`residualScrollX`, `residualScrollY`) in `onScroll`, making slow gestures smooth and non-sticky.
   - Implemented edge auto-scroll when dragging selection handles near viewport boundaries.
   - Added keyboard `adjustResize` auto-scroll keeping the active cursor visible when soft input appears.

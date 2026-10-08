@@ -179,6 +179,7 @@ class CodeEditorView @JvmOverloads constructor(
             removeCallbacks(notifyContentRunnable)
             buffer.setText(text)
             tokenizer.clearCache()
+            recalculateLayout()
             if (fileChanged) {
                 cursorPosition = CursorPos(0, 0)
                 selection = SelectionRange(cursorPosition, cursorPosition)
@@ -195,6 +196,44 @@ class CodeEditorView @JvmOverloads constructor(
             suppressExternalCallback = false
         }
         invalidate()
+    }
+
+    var isWordWrap: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                if (field) {
+                    scrollTo(0, scrollY)
+                }
+                recalculateLayout()
+                clampScroll()
+                scrollToCursor()
+                invalidate()
+            }
+        }
+
+    private var wrapLayout: WrapLayout? = null
+
+    private fun getTotalVisualRowCount(): Int {
+        val layout = wrapLayout
+        return if (isWordWrap && layout != null) layout.totalRows else buffer.lineCount
+    }
+
+    private fun getVisualRow(rowIdx: Int): VisualRow {
+        val layout = wrapLayout
+        if (isWordWrap && layout != null) {
+            return layout.getRow(rowIdx)
+        }
+        val line = rowIdx.coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
+        return VisualRow(line, 0, buffer.getLineLength(line), true)
+    }
+
+    private fun findVisualRowIndexForCursor(pos: CursorPos): Int {
+        val layout = wrapLayout
+        if (isWordWrap && layout != null) {
+            return layout.findRowIndexForCursor(pos)
+        }
+        return pos.line.coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
     }
 
     var cursorPosition = CursorPos(0, 0)
@@ -298,17 +337,33 @@ class CodeEditorView @JvmOverloads constructor(
         override fun onGetContentRect(mode: ActionMode, view: View, outRect: Rect) {
             val gutterW = calculateGutterWidth()
             val padStart = textPaddingStart
+            val effScrollX = if (!isWordWrap) scrollX else 0
             if (!selection.isEmpty) {
                 val normStart = selection.normalizedStart
                 val normEnd = selection.normalizedEnd
-                val left = (gutterW + padStart + normStart.col * charWidth - scrollX).toInt().coerceIn(0, width)
-                val right = (gutterW + padStart + normEnd.col * charWidth - scrollX).toInt().coerceIn(left, width)
-                val top = (normStart.line * lineHeight - scrollY).toInt().coerceIn(0, height)
-                val bottom = ((normEnd.line + 1) * lineHeight - scrollY).toInt().coerceIn(top, height)
+                val vRowStart = findVisualRowIndexForCursor(normStart)
+                val vRowEnd = findVisualRowIndexForCursor(normEnd)
+                val startRow = getVisualRow(vRowStart)
+                val endRow = getVisualRow(vRowEnd)
+                val startLineStr = buffer.getLine(startRow.lineIndex)
+                val endLineStr = buffer.getLine(endRow.lineIndex)
+                val startRowVis = VisualColumnHelper.charIndexToVisualColumn(startLineStr, startRow.startCol)
+                val endRowVis = VisualColumnHelper.charIndexToVisualColumn(endLineStr, endRow.startCol)
+
+                val left = (gutterW + padStart + (VisualColumnHelper.charIndexToVisualColumn(startLineStr, normStart.col) - startRowVis) * charWidth - effScrollX).toInt().coerceIn(0, width)
+                val right = (gutterW + padStart + (VisualColumnHelper.charIndexToVisualColumn(endLineStr, normEnd.col) - endRowVis) * charWidth - effScrollX).toInt().coerceIn(left, width)
+                val top = (vRowStart * lineHeight - scrollY).toInt().coerceIn(0, height)
+                val bottom = ((vRowEnd + 1) * lineHeight - scrollY).toInt().coerceIn(top, height)
                 outRect.set(left, top, max(left + 1, right), max(top + 1, bottom))
             } else {
-                val x = (gutterW + padStart + cursorPosition.col * charWidth - scrollX).toInt().coerceIn(0, width)
-                val y = (cursorPosition.line * lineHeight - scrollY).toInt().coerceIn(0, height)
+                val vRowCursor = findVisualRowIndexForCursor(cursorPosition)
+                val cursorRow = getVisualRow(vRowCursor)
+                val lineStr = buffer.getLine(cursorRow.lineIndex)
+                val rowStartVis = VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorRow.startCol)
+                val colOnRow = maxOf(0, VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorPosition.col) - rowStartVis)
+
+                val x = (gutterW + padStart + colOnRow * charWidth - effScrollX).toInt().coerceIn(0, width)
+                val y = (vRowCursor * lineHeight - scrollY).toInt().coerceIn(0, height)
                 outRect.set(x, y, x + 1, (y + lineHeight).toInt())
             }
         }
@@ -410,12 +465,16 @@ class CodeEditorView @JvmOverloads constructor(
 
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
             parent?.requestDisallowInterceptTouchEvent(true)
-            residualScrollX += distanceX
+            if (!isWordWrap) {
+                residualScrollX += distanceX
+            } else {
+                residualScrollX = 0f
+            }
             residualScrollY += distanceY
-            val dx = residualScrollX.toInt()
+            val dx = if (!isWordWrap) residualScrollX.toInt() else 0
             val dy = residualScrollY.toInt()
             if (dx != 0 || dy != 0) {
-                residualScrollX -= dx
+                if (!isWordWrap) residualScrollX -= dx
                 residualScrollY -= dy
                 scrollBy(dx, dy)
                 clampScroll()
@@ -428,7 +487,8 @@ class CodeEditorView @JvmOverloads constructor(
         override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
             scroller.fling(
                 scrollX, scrollY,
-                -velocityX.toInt(), -velocityY.toInt(),
+                if (!isWordWrap) -velocityX.toInt() else 0,
+                -velocityY.toInt(),
                 0, getMaxScrollX(),
                 0, getMaxScrollY()
             )
@@ -444,6 +504,7 @@ class CodeEditorView @JvmOverloads constructor(
         applyFontFamily()
 
         buffer.onContentChanged = {
+            recalculateLayout()
             invalidate()
             scheduleContentNotification()
         }
@@ -474,14 +535,30 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun recalculateMaxLineLength() {
         val count = buffer.lineCount
-        var maxLen = 0
+        var maxVisCol = 0
         for (i in 0 until count) {
-            val len = buffer.getLineLength(i)
-            if (len > maxLen) {
-                maxLen = len
+            val rawLen = buffer.getLineLength(i)
+            if (rawLen * VisualColumnHelper.DEFAULT_TAB_WIDTH < maxVisCol) continue
+            val lineStr = buffer.getLine(i)
+            val visCol = VisualColumnHelper.charIndexToVisualColumn(lineStr, lineStr.length)
+            if (visCol > maxVisCol) {
+                maxVisCol = visCol
             }
         }
-        cachedMaxLineLength = maxOf(maxLen, 40)
+        cachedMaxLineLength = maxOf(maxVisCol, 40)
+    }
+
+    fun recalculateLayout() {
+        recalculateMaxLineLength()
+        if (!isWordWrap || width <= 0) {
+            wrapLayout = null
+            return
+        }
+        val gutterW = calculateGutterWidth()
+        val availableWidth = (width - gutterW - textPaddingStart - 16f * resources.displayMetrics.density)
+            .coerceAtLeast(charWidth * 10)
+        val maxCols = maxOf(10, (availableWidth / charWidth).toInt())
+        wrapLayout = LineWrapHelper.computeWrapLayout(buffer, maxCols)
     }
 
     private fun updateMetrics() {
@@ -499,6 +576,7 @@ class CodeEditorView @JvmOverloads constructor(
         val textHeight = fm.descent - fm.ascent
         lineHeight = textHeight * 1.35f
         baselineOffset = -fm.ascent + (lineHeight - textHeight) / 2f
+        recalculateLayout()
     }
 
     private fun calculateGutterWidth(): Float {
@@ -508,14 +586,17 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     fun getMaxScrollX(): Int {
+        if (isWordWrap) return 0
         val gutterW = calculateGutterWidth()
         val available = (width - gutterW - textPaddingStart).coerceAtLeast(0f)
-        val contentWidth = cachedMaxLineLength * charWidth + textPaddingStart + 100f
+        val extraEndMargin = 220f * resources.displayMetrics.density
+        val contentWidth = cachedMaxLineLength * charWidth + textPaddingStart + extraEndMargin
         return max(0, (contentWidth - available).toInt())
     }
 
     fun getMaxScrollY(): Int {
-        val contentHeight = (buffer.lineCount * lineHeight).toInt()
+        val totalRows = getTotalVisualRowCount()
+        val contentHeight = (totalRows * lineHeight).toInt()
         val visibleHeight = height
         return if (visibleHeight <= 0 || contentHeight <= visibleHeight) {
             0
@@ -567,6 +648,7 @@ class CodeEditorView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        recalculateLayout()
         clampScroll()
         selectionActionMode?.invalidate()
         if (h < oldh && isFocused) {
@@ -591,17 +673,23 @@ class CodeEditorView @JvmOverloads constructor(
 
                     val normStart = selection.normalizedStart
                     val normEnd = selection.normalizedEnd
+                    val vRowStart = findVisualRowIndexForCursor(normStart)
+                    val vRowEnd = findVisualRowIndexForCursor(normEnd)
 
-                    val startLineStr = buffer.getLine(normStart.line)
-                    val endLineStr = buffer.getLine(normEnd.line)
-                    val startVisualCol = VisualColumnHelper.charIndexToVisualColumn(startLineStr, normStart.col)
-                    val endVisualCol = VisualColumnHelper.charIndexToVisualColumn(endLineStr, normEnd.col)
+                    val startRow = getVisualRow(vRowStart)
+                    val endRow = getVisualRow(vRowEnd)
+                    val startLineStr = buffer.getLine(startRow.lineIndex)
+                    val endLineStr = buffer.getLine(endRow.lineIndex)
 
-                    val startCenterX = gutterW + padStart + startVisualCol * charWidth - scrollX - handleRadius / 2f
-                    val startCenterY = (normStart.line + 1) * lineHeight - scrollY + handleRadius
+                    val startRowVis = VisualColumnHelper.charIndexToVisualColumn(startLineStr, startRow.startCol)
+                    val endRowVis = VisualColumnHelper.charIndexToVisualColumn(endLineStr, endRow.startCol)
 
-                    val endCenterX = gutterW + padStart + endVisualCol * charWidth - scrollX + handleRadius / 2f
-                    val endCenterY = (normEnd.line + 1) * lineHeight - scrollY + handleRadius
+                    val effScrollX = if (!isWordWrap) scrollX else 0
+                    val startCenterX = gutterW + padStart + (VisualColumnHelper.charIndexToVisualColumn(startLineStr, normStart.col) - startRowVis) * charWidth - effScrollX - handleRadius / 2f
+                    val startCenterY = (vRowStart + 1) * lineHeight - scrollY + handleRadius
+
+                    val endCenterX = gutterW + padStart + (VisualColumnHelper.charIndexToVisualColumn(endLineStr, normEnd.col) - endRowVis) * charWidth - effScrollX + handleRadius / 2f
+                    val endCenterY = (vRowEnd + 1) * lineHeight - scrollY + handleRadius
 
                     val distStartSq = (event.x - startCenterX) * (event.x - startCenterX) +
                             (event.y - startCenterY) * (event.y - startCenterY)
@@ -631,12 +719,14 @@ class CodeEditorView @JvmOverloads constructor(
                         clampScroll()
                     }
                     val gutterW = calculateGutterWidth()
-                    if (event.x < gutterW + edgeMargin) {
-                        scrollBy(-((gutterW + edgeMargin - event.x) * 0.5f).toInt().coerceAtLeast(1), 0)
-                        clampScroll()
-                    } else if (event.x > width - edgeMargin) {
-                        scrollBy(((event.x - (width - edgeMargin)) * 0.5f).toInt().coerceAtLeast(1), 0)
-                        clampScroll()
+                    if (!isWordWrap) {
+                        if (event.x < gutterW + edgeMargin) {
+                            scrollBy(-((gutterW + edgeMargin - event.x) * 0.5f).toInt().coerceAtLeast(1), 0)
+                            clampScroll()
+                        } else if (event.x > width - edgeMargin) {
+                            scrollBy(((event.x - (width - edgeMargin)) * 0.5f).toInt().coerceAtLeast(1), 0)
+                            clampScroll()
+                        }
                     }
                 }
 
@@ -703,20 +793,26 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     private fun screenToCursor(screenX: Float, screenY: Float): CursorPos {
+        if (buffer.lineCount == 0) return CursorPos(0, 0)
         val gutterW = calculateGutterWidth()
         val padStart = textPaddingStart
-        val contentX = screenX + scrollX - gutterW - padStart
         val contentY = screenY + scrollY
+        val totalRows = getTotalVisualRowCount()
+        val vRowIdx = (contentY / lineHeight).toInt().coerceIn(0, totalRows - 1)
+        val row = getVisualRow(vRowIdx)
+        val lineStr = buffer.getLine(row.lineIndex)
 
-        val line = (contentY / lineHeight).toInt().coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
-        val lineStr = buffer.getLine(line)
-        val col = if (contentX > 0 && charWidth > 0f) {
-            val visualCol = (contentX / charWidth).roundToInt()
-            VisualColumnHelper.visualColumnToCharIndex(lineStr, visualCol).coerceIn(0, lineStr.length)
-        } else {
-            0
+        val effScrollX = if (!isWordWrap) scrollX else 0
+        val contentX = screenX + effScrollX - gutterW - padStart
+        if (contentX <= 0 || charWidth <= 0f) {
+            return CursorPos(row.lineIndex, row.startCol)
         }
-        return buffer.clampPosition(CursorPos(line, col))
+
+        val rowStartVisualCol = VisualColumnHelper.charIndexToVisualColumn(lineStr, row.startCol)
+        val visualColOnRow = (contentX / charWidth).roundToInt()
+        val targetVisualCol = rowStartVisualCol + visualColOnRow
+        val col = VisualColumnHelper.visualColumnToCharIndex(lineStr, targetVisualCol).coerceIn(row.startCol, row.endCol)
+        return buffer.clampPosition(CursorPos(row.lineIndex, col))
     }
 
     private fun selectWordAt(pos: CursorPos): Boolean {
@@ -844,19 +940,26 @@ class CodeEditorView @JvmOverloads constructor(
         if (width <= 0 || height <= 0) return
         val gutterW = calculateGutterWidth()
         val padStart = textPaddingStart
+        val vRowIdx = findVisualRowIndexForCursor(cursorPosition)
+        val row = getVisualRow(vRowIdx)
         val lineStr = buffer.getLine(cursorPosition.line)
-        val visualCol = VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorPosition.col)
-        val cursorX = gutterW + padStart + visualCol * charWidth
-        val cursorY = cursorPosition.line * lineHeight
+        val rowStartVis = VisualColumnHelper.charIndexToVisualColumn(lineStr, row.startCol)
+        val colOnRow = maxOf(0, VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorPosition.col) - rowStartVis)
+        val cursorX = gutterW + padStart + colOnRow * charWidth
+        val cursorY = vRowIdx * lineHeight
 
         var targetScrollX = scrollX
         var targetScrollY = scrollY
 
         val padding = 40f
-        if (cursorX < scrollX + gutterW + padStart + padding) {
-            targetScrollX = max(0, (cursorX - gutterW - padStart - padding).toInt())
-        } else if (cursorX > scrollX + width - padding) {
-            targetScrollX = (cursorX - width + padding).toInt()
+        if (isWordWrap) {
+            targetScrollX = 0
+        } else {
+            if (cursorX < scrollX + gutterW + padStart + padding) {
+                targetScrollX = max(0, (cursorX - gutterW - padStart - padding).toInt())
+            } else if (cursorX > scrollX + width - padding) {
+                targetScrollX = (cursorX - width + padding).toInt()
+            }
         }
 
         if (cursorY < scrollY + padding) {
@@ -866,6 +969,9 @@ class CodeEditorView @JvmOverloads constructor(
         }
 
         targetScrollY = targetScrollY.coerceIn(0, getMaxScrollY())
+        if (!isWordWrap) {
+            targetScrollX = targetScrollX.coerceIn(0, getMaxScrollX())
+        }
 
         if (targetScrollX != scrollX || targetScrollY != scrollY) {
             scrollTo(targetScrollX, targetScrollY)
@@ -1089,18 +1195,55 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     fun moveCursorUp(isShift: Boolean) {
-        if (cursorPosition.line > 0) {
-            val targetLine = cursorPosition.line - 1
-            val targetCol = cursorPosition.col.coerceIn(0, buffer.getLineLength(targetLine))
-            updateCursorMove(CursorPos(targetLine, targetCol), isShift)
+        if (!isWordWrap) {
+            if (cursorPosition.line > 0) {
+                val targetLine = cursorPosition.line - 1
+                val targetCol = cursorPosition.col.coerceIn(0, buffer.getLineLength(targetLine))
+                updateCursorMove(CursorPos(targetLine, targetCol), isShift)
+            }
+            return
+        }
+        val currentVRow = findVisualRowIndexForCursor(cursorPosition)
+        if (currentVRow > 0) {
+            val targetVRow = currentVRow - 1
+            val targetRow = getVisualRow(targetVRow)
+            val currentRow = getVisualRow(currentVRow)
+            val currentLineStr = buffer.getLine(currentRow.lineIndex)
+            val currentVisCol = VisualColumnHelper.charIndexToVisualColumn(currentLineStr, cursorPosition.col) -
+                    VisualColumnHelper.charIndexToVisualColumn(currentLineStr, currentRow.startCol)
+
+            val targetLineStr = buffer.getLine(targetRow.lineIndex)
+            val targetRowStartVis = VisualColumnHelper.charIndexToVisualColumn(targetLineStr, targetRow.startCol)
+            val targetVis = targetRowStartVis + currentVisCol
+            val targetCol = VisualColumnHelper.visualColumnToCharIndex(targetLineStr, targetVis).coerceIn(targetRow.startCol, targetRow.endCol)
+            updateCursorMove(CursorPos(targetRow.lineIndex, targetCol), isShift)
         }
     }
 
     fun moveCursorDown(isShift: Boolean) {
-        if (cursorPosition.line < buffer.lineCount - 1) {
-            val targetLine = cursorPosition.line + 1
-            val targetCol = cursorPosition.col.coerceIn(0, buffer.getLineLength(targetLine))
-            updateCursorMove(CursorPos(targetLine, targetCol), isShift)
+        if (!isWordWrap) {
+            if (cursorPosition.line < buffer.lineCount - 1) {
+                val targetLine = cursorPosition.line + 1
+                val targetCol = cursorPosition.col.coerceIn(0, buffer.getLineLength(targetLine))
+                updateCursorMove(CursorPos(targetLine, targetCol), isShift)
+            }
+            return
+        }
+        val totalVRows = getTotalVisualRowCount()
+        val currentVRow = findVisualRowIndexForCursor(cursorPosition)
+        if (currentVRow < totalVRows - 1) {
+            val targetVRow = currentVRow + 1
+            val targetRow = getVisualRow(targetVRow)
+            val currentRow = getVisualRow(currentVRow)
+            val currentLineStr = buffer.getLine(currentRow.lineIndex)
+            val currentVisCol = VisualColumnHelper.charIndexToVisualColumn(currentLineStr, cursorPosition.col) -
+                    VisualColumnHelper.charIndexToVisualColumn(currentLineStr, currentRow.startCol)
+
+            val targetLineStr = buffer.getLine(targetRow.lineIndex)
+            val targetRowStartVis = VisualColumnHelper.charIndexToVisualColumn(targetLineStr, targetRow.startCol)
+            val targetVis = targetRowStartVis + currentVisCol
+            val targetCol = VisualColumnHelper.visualColumnToCharIndex(targetLineStr, targetVis).coerceIn(targetRow.startCol, targetRow.endCol)
+            updateCursorMove(CursorPos(targetRow.lineIndex, targetCol), isShift)
         }
     }
 
@@ -1610,6 +1753,38 @@ class CodeEditorView @JvmOverloads constructor(
         imm?.updateSelection(this, selStart, selEnd, candStart, candEnd)
     }
 
+    private fun drawTextRun(
+        canvas: Canvas,
+        lineText: String,
+        start: Int,
+        end: Int,
+        textStartX: Float,
+        rowStartVis: Int,
+        baseline: Float,
+        paint: Paint
+    ) {
+        if (start >= end) return
+        if (!lineText.contains('\t')) {
+            val startX = textStartX + (VisualColumnHelper.charIndexToVisualColumn(lineText, start) - rowStartVis) * charWidth
+            canvas.drawText(lineText, start, end, startX, baseline, paint)
+            return
+        }
+
+        var i = start
+        while (i < end) {
+            if (lineText[i] == '\t') {
+                i++
+                continue
+            }
+            val runStart = i
+            while (i < end && lineText[i] != '\t') {
+                i++
+            }
+            val startX = textStartX + (VisualColumnHelper.charIndexToVisualColumn(lineText, runStart) - rowStartVis) * charWidth
+            canvas.drawText(lineText, runStart, i, startX, baseline, paint)
+        }
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
@@ -1628,20 +1803,24 @@ class CodeEditorView @JvmOverloads constructor(
             val gutterW = calculateGutterWidth()
             val padStart = textPaddingStart
             val lineContentStartX = gutterW + padStart
-            val firstVisibleLine = (scrollY / lineHeight).toInt().coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
-            val lastVisibleLine = ((scrollY + height) / lineHeight + 1).toInt().coerceIn(firstVisibleLine, (buffer.lineCount - 1).coerceAtLeast(0))
+            val totalVisualRows = getTotalVisualRowCount()
+            val firstVisibleRow = (scrollY / lineHeight).toInt().coerceIn(0, (totalVisualRows - 1).coerceAtLeast(0))
+            val lastVisibleRow = ((scrollY + height) / lineHeight + 1).toInt().coerceIn(firstVisibleRow, (totalVisualRows - 1).coerceAtLeast(0))
 
-            // 2. Draw current line background highlight only if within visible lines
-            if (cursorPosition.line in firstVisibleLine..lastVisibleLine) {
-                val currentLineTop = cursorPosition.line * lineHeight
-                uiPaint.color = theme.currentLineBackgroundColor
-                canvas.drawRect(
-                    gutterW + scrollX,
-                    currentLineTop,
-                    viewRight,
-                    currentLineTop + lineHeight,
-                    uiPaint
-                )
+            // 2. Draw current line background highlight only if within visible visual rows
+            for (r in firstVisibleRow..lastVisibleRow) {
+                val row = getVisualRow(r)
+                if (row.lineIndex == cursorPosition.line) {
+                    val rowTop = r * lineHeight
+                    uiPaint.color = theme.currentLineBackgroundColor
+                    canvas.drawRect(
+                        gutterW + (if (!isWordWrap) scrollX else 0),
+                        rowTop,
+                        viewRight,
+                        rowTop + lineHeight,
+                        uiPaint
+                    )
+                }
             }
 
             // 3. Draw text selection background
@@ -1650,24 +1829,33 @@ class CodeEditorView @JvmOverloads constructor(
                 val normStart = selection.normalizedStart
                 val normEnd = selection.normalizedEnd
 
-                for (l in normStart.line..normEnd.line) {
-                    if (l in firstVisibleLine..lastVisibleLine) {
-                        val lineTop = l * lineHeight
-                        val lineBottom = lineTop + lineHeight
+                for (r in firstVisibleRow..lastVisibleRow) {
+                    val row = getVisualRow(r)
+                    val l = row.lineIndex
+                    if (l in normStart.line..normEnd.line) {
+                        val rowTop = r * lineHeight
+                        val rowBottom = rowTop + lineHeight
                         val lineStr = buffer.getLine(l)
+                        val rowStartVis = VisualColumnHelper.charIndexToVisualColumn(lineStr, row.startCol)
 
-                        val startX = if (l == normStart.line) {
-                            lineContentStartX + VisualColumnHelper.charIndexToVisualColumn(lineStr, normStart.col) * charWidth
-                        } else {
-                            lineContentStartX
-                        }
-                        val endX = if (l == normEnd.line) {
-                            lineContentStartX + VisualColumnHelper.charIndexToVisualColumn(lineStr, normEnd.col) * charWidth
-                        } else {
-                            lineContentStartX + (VisualColumnHelper.charIndexToVisualColumn(lineStr, lineStr.length) + 1) * charWidth
-                        }
+                        val selStartColOnLine = if (l == normStart.line) normStart.col else 0
+                        val selEndColOnLine = if (l == normEnd.line) normEnd.col else lineStr.length
 
-                        canvas.drawRect(startX, lineTop, endX, lineBottom, uiPaint)
+                        val clampedStart = selStartColOnLine.coerceIn(row.startCol, row.endCol)
+                        val clampedEnd = selEndColOnLine.coerceIn(row.startCol, row.endCol)
+
+                        if (clampedStart < clampedEnd) {
+                            val startX = lineContentStartX + (VisualColumnHelper.charIndexToVisualColumn(lineStr, clampedStart) - rowStartVis) * charWidth
+                            var endX = lineContentStartX + (VisualColumnHelper.charIndexToVisualColumn(lineStr, clampedEnd) - rowStartVis) * charWidth
+                            if (row.endCol == lineStr.length && l < normEnd.line) {
+                                endX += charWidth
+                            }
+                            canvas.drawRect(startX, rowTop, endX, rowBottom, uiPaint)
+                        } else if (clampedStart == clampedEnd && row.endCol == lineStr.length && l in normStart.line until normEnd.line && (l > normStart.line || normStart.col == lineStr.length)) {
+                            val startX = lineContentStartX + (VisualColumnHelper.charIndexToVisualColumn(lineStr, clampedStart) - rowStartVis) * charWidth
+                            val endX = startX + charWidth
+                            canvas.drawRect(startX, rowTop, endX, rowBottom, uiPaint)
+                        }
                     }
                 }
             }
@@ -1681,24 +1869,30 @@ class CodeEditorView @JvmOverloads constructor(
                 val normStart = selection.normalizedStart
                 val normEnd = selection.normalizedEnd
 
-                for (l in firstVisibleLine..lastVisibleLine) {
+                for (r in firstVisibleRow..lastVisibleRow) {
+                    val row = getVisualRow(r)
+                    val l = row.lineIndex
                     val lineStr = buffer.getLine(l)
                     if (lineStr.isEmpty()) continue
-                    val lineTop = l * lineHeight
-                    val lineBottom = lineTop + lineHeight
+                    val rowTop = r * lineHeight
+                    val rowBottom = rowTop + lineHeight
+                    val rowStartVis = VisualColumnHelper.charIndexToVisualColumn(lineStr, row.startCol)
 
                     var matchIdx = lineStr.indexOf(query, 0, ignoreCase = true)
                     while (matchIdx >= 0) {
                         val matchEnd = matchIdx + qLen
-                        val startX = lineContentStartX + VisualColumnHelper.charIndexToVisualColumn(lineStr, matchIdx) * charWidth
-                        val endX = lineContentStartX + VisualColumnHelper.charIndexToVisualColumn(lineStr, matchEnd) * charWidth
+                        val mStart = maxOf(matchIdx, row.startCol)
+                        val mEnd = minOf(matchEnd, row.endCol)
+                        if (mStart < mEnd) {
+                            val startX = lineContentStartX + (VisualColumnHelper.charIndexToVisualColumn(lineStr, mStart) - rowStartVis) * charWidth
+                            val endX = lineContentStartX + (VisualColumnHelper.charIndexToVisualColumn(lineStr, mEnd) - rowStartVis) * charWidth
 
-                        val isActive = (!selection.isEmpty && normStart.line == l && normStart.col == matchIdx &&
-                                normEnd.line == l && normEnd.col == matchEnd)
+                            val isActive = (!selection.isEmpty && normStart.line == l && normStart.col == matchIdx &&
+                                    normEnd.line == l && normEnd.col == matchEnd)
 
-                        uiPaint.color = if (isActive) activeMatchColor else matchColor
-                        canvas.drawRect(startX, lineTop, endX, lineBottom, uiPaint)
-
+                            uiPaint.color = if (isActive) activeMatchColor else matchColor
+                            canvas.drawRect(startX, rowTop, endX, rowBottom, uiPaint)
+                        }
                         matchIdx = lineStr.indexOf(query, matchIdx + 1, ignoreCase = true)
                     }
                 }
@@ -1709,45 +1903,60 @@ class CodeEditorView @JvmOverloads constructor(
             val gutterPaddingRight = 8f * density
             val diffBarWidth = 3f * density
 
-            for (lineIndex in firstVisibleLine..lastVisibleLine) {
-                val lineTop = lineIndex * lineHeight
-                val baseline = lineTop + baselineOffset
-                val lineText = buffer.getLine(lineIndex)
+            var lastTokenizedLine = -1
+            var cachedTokens: List<SyntaxToken> = emptyList()
 
-                // Draw line text with syntax highlighting and multi-line state
-                val startState = getLineStartState(lineIndex)
-                val tokenizeResult = tokenizer.tokenizeLine(lineText, startState)
-                setLineEndState(lineIndex, tokenizeResult.endState)
-                val tokens = tokenizeResult.tokens
-                var currentCol = 0
+            for (r in firstVisibleRow..lastVisibleRow) {
+                val row = getVisualRow(r)
+                val lineIndex = row.lineIndex
+                val lineText = buffer.getLine(lineIndex)
+                val rowTop = r * lineHeight
+                val baseline = rowTop + baselineOffset
                 val textStartX = gutterW + padStart
 
-                for (token in tokens) {
+                if (lineIndex != lastTokenizedLine) {
+                    val startState = getLineStartState(lineIndex)
+                    val tokenizeResult = tokenizer.tokenizeLine(lineText, startState)
+                    setLineEndState(lineIndex, tokenizeResult.endState)
+                    cachedTokens = tokenizeResult.tokens
+                    lastTokenizedLine = lineIndex
+                }
+
+                val rowStart = row.startCol
+                val rowEnd = row.endCol
+                val rowStartVis = VisualColumnHelper.charIndexToVisualColumn(lineText, rowStart)
+                var currentCol = rowStart
+
+                for (token in cachedTokens) {
                     val tokenStartCol = token.startCol.coerceIn(0, lineText.length)
                     val tokenEndCol = token.endCol.coerceIn(tokenStartCol, lineText.length)
 
+                    if (tokenEndCol <= rowStart) continue
+                    if (tokenStartCol >= rowEnd) continue
+
+                    val segStart = maxOf(tokenStartCol, rowStart)
+                    val segEnd = minOf(tokenEndCol, rowEnd)
+
                     // Unstyled prefix before token
-                    if (tokenStartCol > currentCol) {
-                        val startX = textStartX + VisualColumnHelper.charIndexToVisualColumn(lineText, currentCol) * charWidth
+                    if (segStart > currentCol) {
                         textPaint.color = theme.textColor
-                        canvas.drawText(lineText, currentCol, tokenStartCol, startX, baseline, textPaint)
+                        drawTextRun(canvas, lineText, currentCol, segStart, textStartX, rowStartVis, baseline, textPaint)
+                        currentCol = segStart
                     }
 
-                    // Styled token
-                    if (tokenEndCol > tokenStartCol) {
-                        val startX = textStartX + VisualColumnHelper.charIndexToVisualColumn(lineText, tokenStartCol) * charWidth
+                    // Styled token segment
+                    if (segEnd > segStart) {
                         val paintToUse = if (token.isBold) boldTextPaint else textPaint
                         paintToUse.color = token.color
-                        canvas.drawText(lineText, tokenStartCol, tokenEndCol, startX, baseline, paintToUse)
+                        drawTextRun(canvas, lineText, segStart, segEnd, textStartX, rowStartVis, baseline, paintToUse)
+                        currentCol = maxOf(currentCol, segEnd)
                     }
-                    currentCol = maxOf(currentCol, tokenEndCol)
                 }
 
-                // Remainder of line after last token
-                if (currentCol < lineText.length) {
-                    val startX = textStartX + VisualColumnHelper.charIndexToVisualColumn(lineText, currentCol) * charWidth
+                // Remainder of visual row after last token
+                if (currentCol < rowEnd) {
                     textPaint.color = theme.textColor
-                    canvas.drawText(lineText, currentCol, lineText.length, startX, baseline, textPaint)
+                    drawTextRun(canvas, lineText, currentCol, rowEnd, textStartX, rowStartVis, baseline, textPaint)
                 }
             }
 
@@ -1764,30 +1973,35 @@ class CodeEditorView @JvmOverloads constructor(
                 uiPaint.color = theme.gutterDividerColor
                 canvas.drawRect(gutterScreenRight - 1f * density, scrollY.toFloat(), gutterScreenRight, (scrollY + height).toFloat(), uiPaint)
 
-                for (lineIndex in firstVisibleLine..lastVisibleLine) {
-                    val lineTop = lineIndex * lineHeight
-                    val baseline = lineTop + baselineOffset
-                    val lineNumber = lineIndex + 1
-                    val isActiveLine = (lineIndex == cursorPosition.line)
+                for (r in firstVisibleRow..lastVisibleRow) {
+                    val row = getVisualRow(r)
+                    val lineIndex = row.lineIndex
+                    val rowTop = r * lineHeight
+                    val baseline = rowTop + baselineOffset
 
-                    // Line number text
-                    gutterPaint.color = if (isActiveLine) theme.activeLineNumberColor else theme.lineNumberColor
-                    canvas.drawText(
-                        lineNumber.toString(),
-                        gutterScreenRight - gutterPaddingRight,
-                        baseline,
-                        gutterPaint
-                    )
+                    if (row.isFirstRowOfLine) {
+                        val lineNumber = lineIndex + 1
+                        val isActiveLine = (lineIndex == cursorPosition.line)
 
-                    // Git diff status indicator on gutter edge
+                        // Line number text
+                        gutterPaint.color = if (isActiveLine) theme.activeLineNumberColor else theme.lineNumberColor
+                        canvas.drawText(
+                            lineNumber.toString(),
+                            gutterScreenRight - gutterPaddingRight,
+                            baseline,
+                            gutterPaint
+                        )
+                    }
+
+                    // Git diff status indicator on gutter edge (spans all visual rows of the line)
                     when (lineDiffMap[lineIndex]) {
                         LineDiffStatus.ADDED -> {
                             uiPaint.color = theme.addedGutterColor
                             canvas.drawRect(
                                 gutterScreenRight - diffBarWidth,
-                                lineTop,
+                                rowTop,
                                 gutterScreenRight,
-                                lineTop + lineHeight,
+                                rowTop + lineHeight,
                                 uiPaint
                             )
                         }
@@ -1795,9 +2009,9 @@ class CodeEditorView @JvmOverloads constructor(
                             uiPaint.color = theme.modifiedGutterColor
                             canvas.drawRect(
                                 gutterScreenRight - diffBarWidth,
-                                lineTop,
+                                rowTop,
                                 gutterScreenRight,
-                                lineTop + lineHeight,
+                                rowTop + lineHeight,
                                 uiPaint
                             )
                         }
@@ -1813,35 +2027,48 @@ class CodeEditorView @JvmOverloads constructor(
                 val handleRadius = 9f * density
                 uiPaint.color = theme.cursorColor
 
+                val vRowStart = findVisualRowIndexForCursor(normStart)
+                val vRowEnd = findVisualRowIndexForCursor(normEnd)
+
                 // Start handle
-                if (normStart.line in firstVisibleLine..lastVisibleLine) {
-                    val lineStr = buffer.getLine(normStart.line)
-                    val startX = gutterW + padStart + VisualColumnHelper.charIndexToVisualColumn(lineStr, normStart.col) * charWidth
-                    val startY = (normStart.line + 1) * lineHeight
+                if (vRowStart in firstVisibleRow..lastVisibleRow) {
+                    val startRow = getVisualRow(vRowStart)
+                    val lineStr = buffer.getLine(startRow.lineIndex)
+                    val rowStartVis = VisualColumnHelper.charIndexToVisualColumn(lineStr, startRow.startCol)
+                    val startX = gutterW + padStart + (VisualColumnHelper.charIndexToVisualColumn(lineStr, normStart.col) - rowStartVis) * charWidth
+                    val startY = (vRowStart + 1) * lineHeight
                     canvas.drawRect(startX - 1f * density, startY - lineHeight, startX + 1f * density, startY, uiPaint)
                     canvas.drawCircle(startX - handleRadius / 2f, startY + handleRadius, handleRadius, uiPaint)
                 }
 
                 // End handle
-                if (normEnd.line in firstVisibleLine..lastVisibleLine) {
-                    val lineStr = buffer.getLine(normEnd.line)
-                    val endX = gutterW + padStart + VisualColumnHelper.charIndexToVisualColumn(lineStr, normEnd.col) * charWidth
-                    val endY = (normEnd.line + 1) * lineHeight
+                if (vRowEnd in firstVisibleRow..lastVisibleRow) {
+                    val endRow = getVisualRow(vRowEnd)
+                    val lineStr = buffer.getLine(endRow.lineIndex)
+                    val rowStartVis = VisualColumnHelper.charIndexToVisualColumn(lineStr, endRow.startCol)
+                    val endX = gutterW + padStart + (VisualColumnHelper.charIndexToVisualColumn(lineStr, normEnd.col) - rowStartVis) * charWidth
+                    val endY = (vRowEnd + 1) * lineHeight
                     canvas.drawRect(endX - 1f * density, endY - lineHeight, endX + 1f * density, endY, uiPaint)
                     canvas.drawCircle(endX + handleRadius / 2f, endY + handleRadius, handleRadius, uiPaint)
                 }
-            } else if (isFocused && cursorVisible && cursorPosition.line in firstVisibleLine..lastVisibleLine) {
-                val lineStr = buffer.getLine(cursorPosition.line)
-                val cursorX = gutterW + padStart + VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorPosition.col) * charWidth
-                val cursorY = cursorPosition.line * lineHeight
-                val cursorW = 2f * density
+            } else if (isFocused && cursorVisible) {
+                val vRowCursor = findVisualRowIndexForCursor(cursorPosition)
+                if (vRowCursor in firstVisibleRow..lastVisibleRow) {
+                    val cursorRow = getVisualRow(vRowCursor)
+                    val lineStr = buffer.getLine(cursorRow.lineIndex)
+                    val rowStartVis = VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorRow.startCol)
+                    val colOnRow = maxOf(0, VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorPosition.col) - rowStartVis)
+                    val cursorX = gutterW + padStart + colOnRow * charWidth
+                    val cursorY = vRowCursor * lineHeight
+                    val cursorW = 2f * density
 
-                uiPaint.color = theme.cursorColor
-                canvas.drawRoundRect(
-                    RectF(cursorX, cursorY + 2f * density, cursorX + cursorW, cursorY + lineHeight - 2f * density),
-                    1f, 1f,
-                    uiPaint
-                )
+                    uiPaint.color = theme.cursorColor
+                    canvas.drawRoundRect(
+                        RectF(cursorX, cursorY + 2f * density, cursorX + cursorW, cursorY + lineHeight - 2f * density),
+                        1f, 1f,
+                        uiPaint
+                    )
+                }
             }
         } finally {
             canvas.restoreToCount(saveCount)

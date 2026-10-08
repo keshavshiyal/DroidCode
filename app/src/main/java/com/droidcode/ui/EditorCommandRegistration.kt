@@ -207,12 +207,18 @@ object EditorCommandRegistration {
         registry.registerCommand(Command(
             "editor.toggle_word_wrap", "Toggle Word Wrap", "Editor", "Alt+Z",
             { true }
-        ) { settings.isWordWrap = !settings.isWordWrap })
+        ) {
+            settings.isWordWrap = !settings.isWordWrap
+            SettingsManager.getInstance(context).saveSettings(context)
+        })
 
         registry.registerCommand(Command(
             "editor.toggle_line_numbers", "Toggle Line Numbers", "Editor", "Ctrl+Alt+L",
             { true }
-        ) { settings.isLineNumbersEnabled = !settings.isLineNumbersEnabled })
+        ) {
+            settings.isLineNumbersEnabled = !settings.isLineNumbersEnabled
+            SettingsManager.getInstance(context).saveSettings(context)
+        })
 
         registry.registerCommand(Command(
             "editor.change_language", "Change Language Mode...", "Editor", "Ctrl+K M",
