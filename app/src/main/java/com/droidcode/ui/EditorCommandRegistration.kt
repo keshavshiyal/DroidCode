@@ -9,6 +9,7 @@ import com.droidcode.editor.FileViewerType
 import com.droidcode.git.GitService
 import com.droidcode.project.WorkspaceManager
 import com.droidcode.settings.AppSettings
+import com.droidcode.settings.SettingsManager
 
 object EditorCommandRegistration {
 
