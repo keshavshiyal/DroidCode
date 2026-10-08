@@ -374,6 +374,7 @@ private fun EditorSettingsSection(
     var fontSize by remember { mutableStateOf(settings.fontSizeSp.toFloat()) }
     var wordWrap by remember { mutableStateOf(settings.isWordWrap) }
     var lineNumbers by remember { mutableStateOf(settings.isLineNumbersEnabled) }
+    var breadcrumbs by remember { mutableStateOf(settings.isBreadcrumbsEnabled) }
     var selectedFont by remember { mutableStateOf(settings.editorFontFamily) }
 
     Column {
@@ -620,6 +621,46 @@ private fun EditorSettingsSection(
                     onCheckedChange = {
                         wordWrap = it
                         settings.isWordWrap = it
+                        settingsMgr.saveSettings(context)
+                        onSettingsChanged()
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Breadcrumbs Path Bar Switch
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Breadcrumbs Path Bar",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Show workspace directory and file hierarchy path bar above editor (e.g. MyProject > index.html)",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = breadcrumbs,
+                    onCheckedChange = {
+                        breadcrumbs = it
+                        settings.isBreadcrumbsEnabled = it
                         settingsMgr.saveSettings(context)
                         onSettingsChanged()
                     }

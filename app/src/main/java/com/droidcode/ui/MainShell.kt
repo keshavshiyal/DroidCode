@@ -1,6 +1,8 @@
 package com.droidcode.ui
 
+import android.text.format.DateUtils
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,16 +16,21 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -264,6 +271,14 @@ fun MainShell(
                 panelActiveTab = PanelTab.TERMINAL
             }
         })
+        commandRegistry.registerCommand(Command("view.toggle_breadcrumbs", "Toggle Breadcrumbs Path Bar", "View", null) {
+            val newState = !settingsState.isBreadcrumbsEnabled
+            settingsState.setBreadcrumbsEnabled(newState)
+            settingsMgr.saveSettings(context)
+            settingsTrigger++
+            val status = if (newState) "shown" else "hidden"
+            Toast.makeText(context, "Breadcrumbs path bar $status", Toast.LENGTH_SHORT).show()
+        })
         commandRegistry.registerCommand(Command("workspace.open", "Open Workspace / Project", "Workspace", "Ctrl+O") {
             navigateTo(Screen.Home.route)
         })
@@ -325,9 +340,36 @@ fun MainShell(
                         ctrlActive = false
                         shiftActive = false
                         altActive = false
+                        tab.requestSelection(pos, pos)
                     }
-                    "LEFT" -> if (pos > 0) tab.updateCursor(pos - 1)
-                    "RIGHT" -> if (pos < current.length) tab.updateCursor(pos + 1)
+                    "LEFT" -> {
+                        if (pos > 0) {
+                            val newPos = if (pos >= 2 && Character.isSurrogatePair(current[pos - 2], current[pos - 1])) {
+                                pos - 2
+                            } else {
+                                pos - 1
+                            }
+                            if (shiftActive) {
+                                tab.requestSelection(tab.selectionStart, newPos)
+                            } else {
+                                tab.requestSelection(newPos, newPos)
+                            }
+                        }
+                    }
+                    "RIGHT" -> {
+                        if (pos < current.length) {
+                            val newPos = if (pos + 1 < current.length && Character.isSurrogatePair(current[pos], current[pos + 1])) {
+                                pos + 2
+                            } else {
+                                pos + 1
+                            }
+                            if (shiftActive) {
+                                tab.requestSelection(tab.selectionStart, newPos)
+                            } else {
+                                tab.requestSelection(newPos, newPos)
+                            }
+                        }
+                    }
                     "UP" -> {
                         val lastNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
                         if (lastNewline >= 0) {
@@ -336,7 +378,17 @@ fun MainShell(
                             val targetLineStart = if (prevNewline >= 0) prevNewline + 1 else 0
                             val targetLineLength = lastNewline - targetLineStart
                             val newPos = targetLineStart + col.coerceAtMost(targetLineLength)
-                            tab.updateCursor(newPos)
+                            if (shiftActive) {
+                                tab.requestSelection(tab.selectionStart, newPos)
+                            } else {
+                                tab.requestSelection(newPos, newPos)
+                            }
+                        } else {
+                            if (shiftActive) {
+                                tab.requestSelection(tab.selectionStart, 0)
+                            } else {
+                                tab.requestSelection(0, 0)
+                            }
                         }
                     }
                     "DOWN" -> {
@@ -348,23 +400,49 @@ fun MainShell(
                             val targetLineEnd = if (afterNext >= 0) afterNext else current.length
                             val targetLineLength = targetLineEnd - (nextNewline + 1)
                             val newPos = (nextNewline + 1) + col.coerceAtMost(targetLineLength)
-                            tab.updateCursor(newPos)
+                            if (shiftActive) {
+                                tab.requestSelection(tab.selectionStart, newPos)
+                            } else {
+                                tab.requestSelection(newPos, newPos)
+                            }
+                        } else {
+                            if (shiftActive) {
+                                tab.requestSelection(tab.selectionStart, current.length)
+                            } else {
+                                tab.requestSelection(current.length, current.length)
+                            }
                         }
                     }
                     "HOME" -> {
                         val prevNewline = current.lastIndexOf('\n', (pos - 1).coerceAtLeast(0))
                         val lineStart = if (prevNewline >= 0) prevNewline + 1 else 0
-                        tab.updateCursor(lineStart)
+                        if (shiftActive) {
+                            tab.requestSelection(tab.selectionStart, lineStart)
+                        } else {
+                            tab.requestSelection(lineStart, lineStart)
+                        }
                     }
                     "END" -> {
                         val nextNewline = current.indexOf('\n', pos)
                         val lineEnd = if (nextNewline >= 0) nextNewline else current.length
-                        tab.updateCursor(lineEnd)
+                        if (shiftActive) {
+                            tab.requestSelection(tab.selectionStart, lineEnd)
+                        } else {
+                            tab.requestSelection(lineEnd, lineEnd)
+                        }
                     }
                     "DELETE" -> {
-                        if (pos < current.length) {
-                            val updated = current.substring(0, pos) + current.substring(pos + 1)
+                        val s = minOf(tab.selectionStart, tab.selectionEnd).coerceIn(0, current.length)
+                        val e = maxOf(tab.selectionStart, tab.selectionEnd).coerceIn(0, current.length)
+                        if (s != e) {
+                            val updated = current.substring(0, s) + current.substring(e)
                             editorMgr.updateActiveTabContent(updated)
+                            tab.requestSelection(s, s)
+                        } else if (pos < current.length) {
+                            val charCount = if (pos + 1 < current.length && Character.isSurrogatePair(current[pos], current[pos + 1])) 2 else 1
+                            val updated = current.substring(0, pos) + current.substring(pos + charCount)
+                            editorMgr.updateActiveTabContent(updated)
+                            tab.requestSelection(pos, pos)
                         }
                     }
                 }
@@ -399,16 +477,64 @@ fun MainShell(
                         editorMgr.redoActiveTab()
                         ctrlActive = false
                     }
+                    "f" -> {
+                        tab.showFindBar = true
+                        tab.showReplaceBar = false
+                        ctrlActive = false
+                    }
+                    "a" -> {
+                        tab.requestSelection(0, tab.content.length)
+                        ctrlActive = false
+                    }
                     else -> {
                         ctrlActive = false
                     }
                 }
             } else {
                 val current = tab.content
-                val pos = tab.cursorPosition
-                val updated = current.substring(0, pos) + text + current.substring(pos)
-                editorMgr.updateActiveTabContent(updated)
-                tab.updateCursor(pos + text.length)
+                val s = minOf(tab.selectionStart, tab.selectionEnd).coerceIn(0, current.length)
+                val e = maxOf(tab.selectionStart, tab.selectionEnd).coerceIn(0, current.length)
+
+                if (s != e) {
+                    if (text == "    " && current.substring(s, e).contains('\n')) {
+                        // Multi-line block indent with standard 4 spaces
+                        val lineStart = current.lastIndexOf('\n', (s - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
+                        val lineEnd = current.indexOf('\n', e).let { if (it < 0) current.length else it }
+                        val block = current.substring(lineStart, lineEnd)
+                        val indented = block.lines().joinToString("\n") { "    $it" }
+                        val updated = current.substring(0, lineStart) + indented + current.substring(lineEnd)
+                        editorMgr.updateActiveTabContent(updated)
+                        tab.requestSelection(lineStart, lineStart + indented.length)
+                    } else {
+                        // Check auto-wrap for bracket/quote pairs
+                        val closer = when (text) {
+                            "{" -> "}"
+                            "[" -> "]"
+                            "(" -> ")"
+                            "\"" -> "\""
+                            "'" -> "'"
+                            "`" -> "`"
+                            "<" -> ">"
+                            else -> null
+                        }
+                        if (closer != null) {
+                            val wrapped = current.substring(0, s) + text + current.substring(s, e) + closer + current.substring(e)
+                            editorMgr.updateActiveTabContent(wrapped)
+                            tab.requestSelection(s + text.length, e + text.length)
+                        } else {
+                            val updated = current.substring(0, s) + text + current.substring(e)
+                            editorMgr.updateActiveTabContent(updated)
+                            val newCursor = s + text.length
+                            tab.requestSelection(newCursor, newCursor)
+                        }
+                    }
+                } else {
+                    val pos = tab.cursorPosition.coerceIn(0, current.length)
+                    val updated = current.substring(0, pos) + text + current.substring(pos)
+                    editorMgr.updateActiveTabContent(updated)
+                    val newCursor = pos + text.length
+                    tab.requestSelection(newCursor, newCursor)
+                }
             }
         }
     }
@@ -1346,7 +1472,38 @@ fun MainShell(
                     if (showRecentWorkspacesDialog) {
                         AlertDialog(
                             onDismissRequest = { showRecentWorkspacesDialog = false },
-                            title = { Text("Recent Workspaces") },
+                            title = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.History,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Recent Workspaces")
+                                    }
+                                    if (recentWorkspaces.isNotEmpty()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                        ) {
+                                            Text(
+                                                text = "${recentWorkspaces.size}",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            },
                             text = {
                                 if (recentWorkspaces.isEmpty()) {
                                     Text(
@@ -1355,14 +1512,43 @@ fun MainShell(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 } else {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        recentWorkspaces.take(5).forEach { entity ->
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 380.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        items(recentWorkspaces) { entity ->
+                                            val exists = File(entity.path).exists()
+                                            val projectIcon = when {
+                                                entity.isGitRepo -> Icons.Default.AccountTree
+                                                entity.type?.contains("python", ignoreCase = true) == true -> Icons.Default.Terminal
+                                                entity.type?.contains("android", ignoreCase = true) == true ||
+                                                entity.type?.contains("kotlin", ignoreCase = true) == true ||
+                                                entity.type?.contains("java", ignoreCase = true) == true -> Icons.Default.Code
+                                                else -> Icons.Default.Folder
+                                            }
+
                                             Surface(
                                                 shape = RoundedCornerShape(6.dp),
-                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                color = if (exists) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                        else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (exists) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                    else MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
+                                                ),
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable {
+                                                        if (!exists) {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Workspace directory '${entity.path}' is unavailable or moved.",
+                                                                Toast.LENGTH_SHORT
+                                                            ).show()
+                                                            return@clickable
+                                                        }
                                                         if (workspaceMgr.hasOpenWorkspace() && workspaceMgr.currentProject?.path == entity.path) {
                                                             showRecentWorkspacesDialog = false
                                                             sameWorkspaceName = entity.name
@@ -1386,19 +1572,77 @@ fun MainShell(
                                                         }
                                                     }
                                             ) {
-                                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                                                    Text(
-                                                        text = entity.name,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        fontSize = 13.sp
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = projectIcon,
+                                                        contentDescription = null,
+                                                        tint = if (exists) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.size(20.dp)
                                                     )
-                                                    Text(
-                                                        text = entity.path,
-                                                        fontSize = 11.sp,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Text(
+                                                                text = entity.name,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                fontSize = 13.sp,
+                                                                color = if (exists) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                modifier = Modifier.weight(1f, fill = false)
+                                                            )
+                                                            if (!exists) {
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text(
+                                                                    text = "(Missing)",
+                                                                    fontSize = 10.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = MaterialTheme.colorScheme.error
+                                                                )
+                                                            }
+                                                        }
+                                                        Text(
+                                                            text = entity.path,
+                                                            fontSize = 11.sp,
+                                                            fontFamily = FontFamily.Monospace,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        if (entity.lastOpenedTimestamp > 0L) {
+                                                            val relativeTime = DateUtils.getRelativeTimeSpanString(
+                                                                entity.lastOpenedTimestamp,
+                                                                System.currentTimeMillis(),
+                                                                DateUtils.MINUTE_IN_MILLIS,
+                                                                DateUtils.FORMAT_ABBREV_RELATIVE
+                                                            ).toString()
+                                                            Text(
+                                                                text = "Opened $relativeTime",
+                                                                fontSize = 10.sp,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                                            )
+                                                        }
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
+                                                            coroutineScope.launch {
+                                                                workspaceMgr.removeWorkspace(context, entity.path)
+                                                            }
+                                                        },
+                                                        modifier = Modifier.size(28.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Close,
+                                                            contentDescription = "Remove from recents",
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -1407,7 +1651,7 @@ fun MainShell(
                             },
                             confirmButton = {
                                 TextButton(onClick = { showRecentWorkspacesDialog = false }) {
-                                    Text("Cancel")
+                                    Text("Close")
                                 }
                             }
                         )

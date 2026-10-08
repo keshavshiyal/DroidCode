@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -48,6 +49,9 @@ class WorkspaceManager @Inject constructor() {
         if (directory == null || !directory.exists() || !directory.isDirectory) {
             throw IllegalArgumentException("Target directory does not exist or is invalid")
         }
+        if (directory.name in IGNORED_INTERNAL_DIRS) {
+            throw IllegalArgumentException("Cannot open internal system directory '${directory.name}' as workspace")
+        }
 
         val project = Project.fromDirectory(directory, projectType)
         if (project != null) {
@@ -85,12 +89,30 @@ class WorkspaceManager @Inject constructor() {
 
     fun getRecentWorkspacesFlow(context: Context): Flow<List<WorkspaceEntity>> {
         val db = AppDatabase.getInstance(context)
-        return db.workspaceDao().getAllWorkspacesFlow()
+        val filesDir = context.filesDir
+        val debugDirPath = if (filesDir != null) File(filesDir, "debug_logs").absolutePath else null
+        return db.workspaceDao().getAllWorkspacesFlow().map { list ->
+            list.filter { entity ->
+                entity.name != "debug_logs" &&
+                (debugDirPath == null || entity.path != debugDirPath) &&
+                !entity.path.endsWith("/debug_logs") &&
+                !entity.path.endsWith("\\debug_logs") &&
+                !IGNORED_INTERNAL_DIRS.contains(File(entity.path).name)
+            }
+        }
     }
 
     suspend fun getRecentWorkspaces(context: Context): List<WorkspaceEntity> = withContext(Dispatchers.IO) {
         val db = AppDatabase.getInstance(context)
-        db.workspaceDao().getAllWorkspaces()
+        val filesDir = context.filesDir
+        val debugDirPath = if (filesDir != null) File(filesDir, "debug_logs").absolutePath else null
+        db.workspaceDao().getAllWorkspaces().filter { entity ->
+            entity.name != "debug_logs" &&
+            (debugDirPath == null || entity.path != debugDirPath) &&
+            !entity.path.endsWith("/debug_logs") &&
+            !entity.path.endsWith("\\debug_logs") &&
+            !IGNORED_INTERNAL_DIRS.contains(File(entity.path).name)
+        }
     }
 
     suspend fun removeWorkspace(context: Context, path: String?) = withContext(Dispatchers.IO) {
@@ -104,13 +126,18 @@ class WorkspaceManager @Inject constructor() {
         try {
             val filesDir = context.filesDir ?: return@withContext
             val db = AppDatabase.getInstance(context)
+
+            // Purge any stale internal logs directories that were historically tracked
+            val debugDirPath = File(filesDir, "debug_logs").absolutePath
+            db.workspaceDao().deleteWorkspaceByPath(debugDirPath)
+
             val existingPaths = db.workspaceDao().getAllWorkspaces().map { it.path }.toSet()
 
             val candidates = mutableListOf<File>()
             filesDir.listFiles()?.forEach { file ->
-                if (file.isDirectory && !file.name.startsWith(".") && file.name != "code_cache") {
+                if (file.isDirectory && !file.name.startsWith(".") && file.name !in IGNORED_INTERNAL_DIRS) {
                     if (file.name == "saf_projects") {
-                        file.listFiles()?.filter { it.isDirectory }?.let { candidates.addAll(it) }
+                        file.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") && it.name !in IGNORED_INTERNAL_DIRS }?.let { candidates.addAll(it) }
                     } else {
                         candidates.add(file)
                     }
@@ -159,6 +186,16 @@ class WorkspaceManager @Inject constructor() {
     }
 
     companion object {
+        val IGNORED_INTERNAL_DIRS = setOf(
+            "code_cache",
+            "debug_logs",
+            "databases",
+            "shared_prefs",
+            "app_webview",
+            "cache",
+            "no_backup"
+        )
+
         @Volatile
         private var INSTANCE: WorkspaceManager? = null
 

@@ -17,6 +17,7 @@ public class SettingsManager {
     private static final String KEY_KEYBAR_DENSITY = "keybar_density";
     private static final String KEY_LINE_NUMBERS = "line_numbers";
     private static final String KEY_FONT_FAMILY = "font_family";
+    private static final String KEY_BREADCRUMBS = "breadcrumbs_enable";
 
     private static volatile SettingsManager INSTANCE;
 
@@ -56,7 +57,9 @@ public class SettingsManager {
             fontFamily = AppSettings.EditorFontFamily.JETBRAINS_MONO;
         }
 
-        this.currentSettings = new AppSettings(themeMode, fontSize, wordWrap, keyBarEnable, density, lineNumbers, fontFamily);
+        boolean breadcrumbs = prefs.getBoolean(KEY_BREADCRUMBS, true);
+
+        this.currentSettings = new AppSettings(themeMode, fontSize, wordWrap, keyBarEnable, density, lineNumbers, fontFamily, breadcrumbs);
     }
 
     public static SettingsManager getInstance(Context context) {
@@ -82,7 +85,8 @@ public class SettingsManager {
                 currentSettings.isQuickKeyBarEnabled(),
                 currentSettings.getQuickKeyBarDensity(),
                 currentSettings.isLineNumbersEnabled(),
-                currentSettings.getEditorFontFamily()
+                currentSettings.getEditorFontFamily(),
+                currentSettings.isBreadcrumbsEnabled()
         );
     }
 
@@ -96,6 +100,7 @@ public class SettingsManager {
                 .putString(KEY_KEYBAR_DENSITY, currentSettings.getQuickKeyBarDensity().name())
                 .putBoolean(KEY_LINE_NUMBERS, currentSettings.isLineNumbersEnabled())
                 .putString(KEY_FONT_FAMILY, currentSettings.getEditorFontFamily().name())
+                .putBoolean(KEY_BREADCRUMBS, currentSettings.isBreadcrumbsEnabled())
                 .apply();
     }
 }

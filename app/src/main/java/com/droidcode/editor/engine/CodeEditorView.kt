@@ -777,7 +777,9 @@ class CodeEditorView @JvmOverloads constructor(
     fun setSelection(start: CursorPos, end: CursorPos) {
         selection = SelectionRange(buffer.clampPosition(start), buffer.clampPosition(end))
         cursorPosition = selection.end
+        resetCursorBlink()
         notifySelectionAndCursor()
+        notifyImeSelection()
         if (!selection.isEmpty) {
             showSelectionActionMode()
         } else {

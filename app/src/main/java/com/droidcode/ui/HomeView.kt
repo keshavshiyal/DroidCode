@@ -1,5 +1,6 @@
 package com.droidcode.ui
 
+import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -8,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +27,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
@@ -33,8 +37,10 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.SdCard
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
@@ -120,10 +126,21 @@ fun HomeView(
         }
     }
 
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val filteredWorkspaces = remember(recentWorkspaces, searchQuery) {
+        if (searchQuery.isBlank()) recentWorkspaces
+        else recentWorkspaces.filter {
+            it.name.contains(searchQuery, ignoreCase = true) ||
+            it.path.contains(searchQuery, ignoreCase = true) ||
+            (it.type?.contains(searchQuery, ignoreCase = true) == true)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
             .padding(SpacingXL),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -143,131 +160,237 @@ fun HomeView(
             modifier = Modifier.padding(top = SpacingXS, bottom = SpacingXL)
         )
 
-        Row(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 600.dp),
-            horizontalArrangement = Arrangement.spacedBy(SpacingM)
+                .widthIn(max = 760.dp)
         ) {
-            // Quick Actions Column
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(CornerMedium))
-                    .padding(SpacingM)
-            ) {
-                Text(
-                    text = "Start",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = SpacingS)
-                )
+            val isNarrow = maxWidth < 580.dp
 
-                ActionTile(
-                    title = stringResource(R.string.home_new_project),
-                    subtitle = stringResource(R.string.home_new_project_desc),
-                    icon = Icons.Default.Add,
-                    onClick = { showNewProjectDialog = true },
-                    testTag = "home_new_project_btn"
-                )
-
-                Spacer(modifier = Modifier.height(SpacingS))
-
-                ActionTile(
-                    title = stringResource(R.string.home_open_folder),
-                    subtitle = stringResource(R.string.home_open_folder_desc),
-                    icon = Icons.Default.FolderOpen,
-                    onClick = { showOpenDirDialog = true },
-                    testTag = "home_open_directory_btn"
-                )
-
-                Spacer(modifier = Modifier.height(SpacingS))
-
-                ActionTile(
-                    title = stringResource(R.string.menu_settings),
-                    subtitle = stringResource(R.string.cmd_settings_editor),
-                    icon = Icons.Default.Settings,
-                    onClick = onOpenSettings,
-                    testTag = "home_settings_btn"
-                )
-            }
-
-            // Recent Workspaces Column
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(CornerMedium))
-                    .padding(SpacingM)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = SpacingS)
+            val startSection = @Composable { modifier: Modifier ->
+                Column(
+                    modifier = modifier
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(CornerMedium))
+                        .padding(SpacingM)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.History,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(SpacingS))
                     Text(
-                        text = stringResource(R.string.recent_workspaces_title),
+                        text = "Start",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = SpacingS)
+                    )
+
+                    ActionTile(
+                        title = stringResource(R.string.home_new_project),
+                        subtitle = stringResource(R.string.home_new_project_desc),
+                        icon = Icons.Default.Add,
+                        onClick = { showNewProjectDialog = true },
+                        testTag = "home_new_project_btn"
+                    )
+
+                    Spacer(modifier = Modifier.height(SpacingS))
+
+                    ActionTile(
+                        title = stringResource(R.string.home_open_folder),
+                        subtitle = stringResource(R.string.home_open_folder_desc),
+                        icon = Icons.Default.FolderOpen,
+                        onClick = { showOpenDirDialog = true },
+                        testTag = "home_open_directory_btn"
+                    )
+
+                    Spacer(modifier = Modifier.height(SpacingS))
+
+                    ActionTile(
+                        title = stringResource(R.string.menu_settings),
+                        subtitle = stringResource(R.string.cmd_settings_editor),
+                        icon = Icons.Default.Settings,
+                        onClick = onOpenSettings,
+                        testTag = "home_settings_btn"
                     )
                 }
+            }
 
-                if (recentWorkspaces.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(140.dp),
-                        contentAlignment = Alignment.Center
+            val recentsSection = @Composable { modifier: Modifier ->
+                Column(
+                    modifier = modifier
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CornerMedium))
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(CornerMedium))
+                        .padding(SpacingM)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = SpacingS),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = stringResource(R.string.home_no_recents),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.height(180.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(recentWorkspaces) { workspace ->
-                            RecentWorkspaceTile(
-                                workspace = workspace,
-                                onClick = {
-                                    if (File(workspace.path).exists()) {
-                                        onOpenWorkspace(workspace.path, workspace.type)
-                                    } else {
-                                        Toast.makeText(
-                                            context,
-                                            "Workspace directory '${workspace.path}' is unavailable or moved.",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    }
-                                },
-                                onRemove = {
-                                    coroutineScope.launch {
-                                        workspaceMgr.removeWorkspace(context, workspace.path)
-                                    }
-                                },
-                                onDeletePermanently = {
-                                    coroutineScope.launch {
-                                        val deleted = workspaceMgr.deleteWorkspacePermanently(context, workspace.path)
-                                        val msg = if (deleted) "Project '${workspace.name}' permanently deleted"
-                                                  else "Project '${workspace.name}' removed"
-                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                    }
-                                }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.History,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
                             )
+                            Spacer(modifier = Modifier.width(SpacingS))
+                            Text(
+                                text = stringResource(R.string.recent_workspaces_title),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (recentWorkspaces.isNotEmpty()) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                ) {
+                                    Text(
+                                        text = "${recentWorkspaces.size}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        val missingCount = remember(recentWorkspaces) {
+                            recentWorkspaces.count { !File(it.path).exists() }
+                        }
+                        if (missingCount > 0) {
+                            TextButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        val missing = recentWorkspaces.filter { !File(it.path).exists() }
+                                        missing.forEach { workspaceMgr.removeWorkspace(context, it.path) }
+                                        Toast.makeText(context, "Cleaned $missingCount missing workspace(s)", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Clean Missing",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
+
+                    if (recentWorkspaces.size >= 4) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Filter recents...", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(16.dp))
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(24.dp)) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = SpacingS),
+                            shape = RoundedCornerShape(CornerMedium)
+                        )
+                    }
+
+                    if (recentWorkspaces.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(140.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.home_no_recents),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp
+                            )
+                        }
+                    } else if (filteredWorkspaces.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No workspaces match \"$searchQuery\"",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 160.dp, max = 340.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(filteredWorkspaces, key = { it.path }) { workspace ->
+                                RecentWorkspaceTile(
+                                    workspace = workspace,
+                                    onClick = {
+                                        if (File(workspace.path).exists()) {
+                                            onOpenWorkspace(workspace.path, workspace.type)
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "Workspace directory '${workspace.path}' is unavailable or moved.",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    },
+                                    onRemove = {
+                                        coroutineScope.launch {
+                                            workspaceMgr.removeWorkspace(context, workspace.path)
+                                        }
+                                    },
+                                    onDeletePermanently = {
+                                        coroutineScope.launch {
+                                            val deleted = workspaceMgr.deleteWorkspacePermanently(context, workspace.path)
+                                            val msg = if (deleted) "Project '${workspace.name}' permanently deleted"
+                                                      else "Project '${workspace.name}' removed"
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (isNarrow) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(SpacingM)
+                ) {
+                    startSection(Modifier.fillMaxWidth())
+                    recentsSection(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(SpacingM)
+                ) {
+                    startSection(Modifier.weight(1f))
+                    recentsSection(Modifier.weight(1.15f))
                 }
             }
         }
@@ -340,6 +463,17 @@ private fun ActionTile(
     }
 }
 
+private fun getWorkspaceIcon(type: String?, isGit: Boolean): ImageVector {
+    if (isGit) return Icons.Default.AccountTree
+    val t = type?.lowercase() ?: ""
+    return when {
+        t.contains("python") -> Icons.Default.Terminal
+        t.contains("android") || t.contains("kotlin") || t.contains("java") -> Icons.Default.Code
+        t.contains("web") || t.contains("html") || t.contains("javascript") || t.contains("js") -> Icons.Default.Language
+        else -> Icons.Default.Folder
+    }
+}
+
 @Composable
 private fun RecentWorkspaceTile(
     workspace: WorkspaceEntity,
@@ -396,30 +530,63 @@ private fun RecentWorkspaceTile(
             .background(
                 if (exists) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                 else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                RoundedCornerShape(6.dp)
+                RoundedCornerShape(CornerMedium)
+            )
+            .border(
+                1.dp,
+                if (exists) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.error.copy(alpha = 0.35f),
+                RoundedCornerShape(CornerMedium)
             )
             .clickable { onClick() }
             .padding(10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Project Type Avatar Icon
+        val projectIcon = getWorkspaceIcon(workspace.type, workspace.isGitRepo)
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .background(
+                    if (exists) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                    else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                    RoundedCornerShape(CornerSmall)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = projectIcon,
+                contentDescription = null,
+                tint = if (exists) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(10.dp))
+
         Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Text(
                     text = workspace.name,
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (exists) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (exists) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+
                 if (isInternal) {
-                    Spacer(modifier = Modifier.width(6.dp))
                     Surface(
                         shape = RoundedCornerShape(3.dp),
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Storage,
@@ -427,7 +594,7 @@ private fun RecentWorkspaceTile(
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(10.dp)
                             )
-                            Spacer(modifier = Modifier.width(3.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 text = "App Storage",
                                 fontSize = 9.sp,
@@ -437,15 +604,40 @@ private fun RecentWorkspaceTile(
                         }
                     }
                 }
+
+                if (workspace.isGitRepo) {
+                    Surface(
+                        shape = RoundedCornerShape(3.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                    ) {
+                        Text(
+                            text = "Git",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+
                 if (!exists) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "(Moved/Unavailable)",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(3.dp),
+                        color = MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Text(
+                            text = "Missing",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(2.dp))
+
             Text(
                 text = workspace.path,
                 fontSize = 11.sp,
@@ -454,7 +646,25 @@ private fun RecentWorkspaceTile(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
+            if (workspace.lastOpenedTimestamp > 0L) {
+                Spacer(modifier = Modifier.height(2.dp))
+                val relativeTime = DateUtils.getRelativeTimeSpanString(
+                    workspace.lastOpenedTimestamp,
+                    System.currentTimeMillis(),
+                    DateUtils.MINUTE_IN_MILLIS,
+                    DateUtils.FORMAT_ABBREV_RELATIVE
+                ).toString()
+                Text(
+                    text = "Opened $relativeTime",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                )
+            }
         }
+
+        Spacer(modifier = Modifier.width(6.dp))
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isInternal) {
                 IconButton(

@@ -556,28 +556,30 @@ fun EditorView(
                     }
                 }
 
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+                if (settings.isBreadcrumbsEnabled) {
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
 
-                // Breadcrumbs Navigation Bar
-                BreadcrumbsBar(
-                    tab = activeTab,
-                    workspaceDir = currentProject?.directory,
-                    onOpenFile = { file ->
-                        try {
-                            editorMgr.openFile(file)
-                        } catch (e: Exception) {
-                            android.util.Log.e("EditorView", "Failed to open file: ${file.name}", e)
+                    // Breadcrumbs Navigation Bar
+                    BreadcrumbsBar(
+                        tab = activeTab,
+                        workspaceDir = currentProject?.directory,
+                        onOpenFile = { file ->
+                            try {
+                                editorMgr.openFile(file)
+                            } catch (e: Exception) {
+                                android.util.Log.e("EditorView", "Failed to open file: ${file.name}", e)
+                            }
+                        },
+                        onShowGoToLine = { showGoToLineDialog = true },
+                        onShowFind = {
+                            activeTab.showFindBar = true
+                            activeTab.showReplaceBar = false
                         }
-                    },
-                    onShowGoToLine = { showGoToLineDialog = true },
-                    onShowFind = {
-                        activeTab.showFindBar = true
-                        activeTab.showReplaceBar = false
-                    }
-                )
+                    )
+                }
 
                 HorizontalDivider(
                     thickness = 1.dp,

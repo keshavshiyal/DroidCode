@@ -72,8 +72,9 @@ public class AppSettings {
     private KeyBarDensity quickKeyBarDensity;
     private boolean lineNumbersEnabled;
     private EditorFontFamily editorFontFamily;
+    private boolean breadcrumbsEnabled = true;
 
-    public AppSettings(ThemeMode themeMode, int fontSizeSp, boolean wordWrap, boolean quickKeyBarEnabled, KeyBarDensity quickKeyBarDensity, boolean lineNumbersEnabled, EditorFontFamily editorFontFamily) {
+    public AppSettings(ThemeMode themeMode, int fontSizeSp, boolean wordWrap, boolean quickKeyBarEnabled, KeyBarDensity quickKeyBarDensity, boolean lineNumbersEnabled, EditorFontFamily editorFontFamily, boolean breadcrumbsEnabled) {
         this.themeMode = themeMode != null ? themeMode : ThemeMode.DARK;
         this.fontSizeSp = fontSizeSp > 0 ? fontSizeSp : 14;
         this.wordWrap = wordWrap;
@@ -81,14 +82,19 @@ public class AppSettings {
         this.quickKeyBarDensity = quickKeyBarDensity != null ? quickKeyBarDensity : KeyBarDensity.NORMAL;
         this.lineNumbersEnabled = lineNumbersEnabled;
         this.editorFontFamily = editorFontFamily != null ? editorFontFamily : EditorFontFamily.JETBRAINS_MONO;
+        this.breadcrumbsEnabled = breadcrumbsEnabled;
+    }
+
+    public AppSettings(ThemeMode themeMode, int fontSizeSp, boolean wordWrap, boolean quickKeyBarEnabled, KeyBarDensity quickKeyBarDensity, boolean lineNumbersEnabled, EditorFontFamily editorFontFamily) {
+        this(themeMode, fontSizeSp, wordWrap, quickKeyBarEnabled, quickKeyBarDensity, lineNumbersEnabled, editorFontFamily, true);
     }
 
     public AppSettings(ThemeMode themeMode, int fontSizeSp, boolean wordWrap, boolean quickKeyBarEnabled, KeyBarDensity quickKeyBarDensity, boolean lineNumbersEnabled) {
-        this(themeMode, fontSizeSp, wordWrap, quickKeyBarEnabled, quickKeyBarDensity, lineNumbersEnabled, EditorFontFamily.JETBRAINS_MONO);
+        this(themeMode, fontSizeSp, wordWrap, quickKeyBarEnabled, quickKeyBarDensity, lineNumbersEnabled, EditorFontFamily.JETBRAINS_MONO, true);
     }
 
     public static AppSettings createDefault() {
-        return new AppSettings(ThemeMode.DARK, 14, true, true, KeyBarDensity.NORMAL, true, EditorFontFamily.JETBRAINS_MONO);
+        return new AppSettings(ThemeMode.DARK, 14, true, true, KeyBarDensity.NORMAL, true, EditorFontFamily.JETBRAINS_MONO, true);
     }
 
     public ThemeMode getThemeMode() {
@@ -145,5 +151,13 @@ public class AppSettings {
 
     public void setEditorFontFamily(EditorFontFamily editorFontFamily) {
         this.editorFontFamily = editorFontFamily;
+    }
+
+    public boolean isBreadcrumbsEnabled() {
+        return breadcrumbsEnabled;
+    }
+
+    public void setBreadcrumbsEnabled(boolean breadcrumbsEnabled) {
+        this.breadcrumbsEnabled = breadcrumbsEnabled;
     }
 }
