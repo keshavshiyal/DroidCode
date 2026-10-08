@@ -11,6 +11,7 @@ import android.graphics.Typeface
 import android.os.SystemClock
 import android.text.InputType
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.ActionMode
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
@@ -146,10 +147,21 @@ class CodeEditorView @JvmOverloads constructor(
         onSaveShortcut?.invoke()
     }
 
+    var lastSyncedContentVersion: Long = -1L
+    var lastAppliedSelectionVersion: Long = 0L
+
+    var searchQuery: String? = null
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     var currentFilePath: String? = null
     var onScrollPositionChanged: ((x: Int, y: Int) -> Unit)? = null
 
-    fun setBufferText(text: String, filePath: String? = null) {
+    fun setBufferText(text: String, filePath: String? = null, contentVersion: Long = -1L) {
         val fileChanged = filePath != null && filePath != currentFilePath
         if (fileChanged) {
             flushContent()
@@ -157,11 +169,13 @@ class CodeEditorView @JvmOverloads constructor(
         } else if (filePath != null) {
             currentFilePath = filePath
         }
+        if (!fileChanged && contentVersion != -1L && lastSyncedContentVersion == contentVersion) return
         if (!fileChanged && lastSyncedText === text && buffer.getText() == text) return
 
         suppressExternalCallback = true
         try {
             lastSyncedText = text
+            lastSyncedContentVersion = contentVersion
             removeCallbacks(notifyContentRunnable)
             buffer.setText(text)
             tokenizer.clearCache()
@@ -320,9 +334,15 @@ class CodeEditorView @JvmOverloads constructor(
         onSelectionChanged?.invoke(startOffset, endOffset)
     }
 
+    private var lastDoubleTapTime: Long = 0L
+    private var residualScrollX: Float = 0f
+    private var residualScrollY: Float = 0f
+
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean {
             onEditorFocus?.invoke()
+            residualScrollX = 0f
+            residualScrollY = 0f
             if (!scroller.isFinished) {
                 scroller.forceFinished(true)
             }
@@ -334,6 +354,20 @@ class CodeEditorView @JvmOverloads constructor(
             requestFocus()
             showSoftKeyboard()
             val pos = screenToCursor(e.x, e.y)
+            val now = SystemClock.uptimeMillis()
+            val doubleTapTimeout = android.view.ViewConfiguration.getDoubleTapTimeout().toLong()
+            if (now - lastDoubleTapTime < doubleTapTimeout) {
+                // Triple tap: Select entire line!
+                lastDoubleTapTime = 0L
+                val lineLen = buffer.getLineLength(pos.line)
+                selection = SelectionRange(CursorPos(pos.line, 0), CursorPos(pos.line, lineLen))
+                cursorPosition = selection.end
+                showSelectionActionMode()
+                notifySelectionAndCursor()
+                invalidate()
+                return true
+            }
+
             setCursorPositionInternal(pos)
             selection = SelectionRange(pos, pos)
             dismissSelectionActionMode()
@@ -345,6 +379,7 @@ class CodeEditorView @JvmOverloads constructor(
 
         override fun onDoubleTap(e: MotionEvent): Boolean {
             onEditorFocus?.invoke()
+            lastDoubleTapTime = SystemClock.uptimeMillis()
             val pos = screenToCursor(e.x, e.y)
             selectWordAt(pos)
             showSelectionActionMode()
@@ -375,10 +410,18 @@ class CodeEditorView @JvmOverloads constructor(
 
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
             parent?.requestDisallowInterceptTouchEvent(true)
-            scrollBy(distanceX.toInt(), distanceY.toInt())
-            clampScroll()
-            selectionActionMode?.invalidate()
-            invalidate()
+            residualScrollX += distanceX
+            residualScrollY += distanceY
+            val dx = residualScrollX.toInt()
+            val dy = residualScrollY.toInt()
+            if (dx != 0 || dy != 0) {
+                residualScrollX -= dx
+                residualScrollY -= dy
+                scrollBy(dx, dy)
+                clampScroll()
+                selectionActionMode?.invalidate()
+                invalidate()
+            }
             return true
         }
 
@@ -417,9 +460,36 @@ class CodeEditorView @JvmOverloads constructor(
         invalidate()
     }
 
+    private var cachedMaxLineLength: Int = 80
+    private val lineEndStates = HashMap<Int, LineState>()
+
+    fun getLineStartState(lineIndex: Int): LineState {
+        if (lineIndex <= 0) return LineState.NORMAL
+        return lineEndStates[lineIndex - 1] ?: LineState.NORMAL
+    }
+
+    fun setLineEndState(lineIndex: Int, state: LineState) {
+        lineEndStates[lineIndex] = state
+    }
+
+    fun recalculateMaxLineLength() {
+        val count = buffer.lineCount
+        var maxLen = 0
+        for (i in 0 until count) {
+            val len = buffer.getLineLength(i)
+            if (len > maxLen) {
+                maxLen = len
+            }
+        }
+        cachedMaxLineLength = maxOf(maxLen, 40)
+    }
+
     private fun updateMetrics() {
-        val density = resources.displayMetrics.scaledDensity
-        val pxSize = fontSizeSp * density
+        val pxSize = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP,
+            fontSizeSp,
+            resources.displayMetrics
+        )
         textPaint.textSize = pxSize
         boldTextPaint.textSize = pxSize
         gutterPaint.textSize = pxSize * 0.9f
@@ -438,8 +508,10 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     fun getMaxScrollX(): Int {
-        val maxLen = (0 until min(buffer.lineCount, 500)).maxOfOrNull { buffer.getLineLength(it) } ?: 80
-        return max(0, (maxLen * charWidth + textPaddingStart + width * 0.5f).toInt())
+        val gutterW = calculateGutterWidth()
+        val available = (width - gutterW - textPaddingStart).coerceAtLeast(0f)
+        val contentWidth = cachedMaxLineLength * charWidth + textPaddingStart + 100f
+        return max(0, (contentWidth - available).toInt())
     }
 
     fun getMaxScrollY(): Int {
@@ -497,6 +569,9 @@ class CodeEditorView @JvmOverloads constructor(
         super.onSizeChanged(w, h, oldw, oldh)
         clampScroll()
         selectionActionMode?.invalidate()
+        if (h < oldh && isFocused) {
+            post { scrollToCursor() }
+        }
         invalidate()
     }
 
@@ -517,10 +592,15 @@ class CodeEditorView @JvmOverloads constructor(
                     val normStart = selection.normalizedStart
                     val normEnd = selection.normalizedEnd
 
-                    val startCenterX = gutterW + padStart + normStart.col * charWidth - scrollX - handleRadius / 2f
+                    val startLineStr = buffer.getLine(normStart.line)
+                    val endLineStr = buffer.getLine(normEnd.line)
+                    val startVisualCol = VisualColumnHelper.charIndexToVisualColumn(startLineStr, normStart.col)
+                    val endVisualCol = VisualColumnHelper.charIndexToVisualColumn(endLineStr, normEnd.col)
+
+                    val startCenterX = gutterW + padStart + startVisualCol * charWidth - scrollX - handleRadius / 2f
                     val startCenterY = (normStart.line + 1) * lineHeight - scrollY + handleRadius
 
-                    val endCenterX = gutterW + padStart + normEnd.col * charWidth - scrollX + handleRadius / 2f
+                    val endCenterX = gutterW + padStart + endVisualCol * charWidth - scrollX + handleRadius / 2f
                     val endCenterY = (normEnd.line + 1) * lineHeight - scrollY + handleRadius
 
                     val distStartSq = (event.x - startCenterX) * (event.x - startCenterX) +
@@ -539,6 +619,26 @@ class CodeEditorView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_MOVE -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
+
+                if (activeHandleDrag != null || isLongPressDragging) {
+                    val density = resources.displayMetrics.density
+                    val edgeMargin = 40f * density
+                    if (event.y < edgeMargin) {
+                        scrollBy(0, -((edgeMargin - event.y) * 0.5f).toInt().coerceAtLeast(1))
+                        clampScroll()
+                    } else if (event.y > height - edgeMargin) {
+                        scrollBy(0, ((event.y - (height - edgeMargin)) * 0.5f).toInt().coerceAtLeast(1))
+                        clampScroll()
+                    }
+                    val gutterW = calculateGutterWidth()
+                    if (event.x < gutterW + edgeMargin) {
+                        scrollBy(-((gutterW + edgeMargin - event.x) * 0.5f).toInt().coerceAtLeast(1), 0)
+                        clampScroll()
+                    } else if (event.x > width - edgeMargin) {
+                        scrollBy(((event.x - (width - edgeMargin)) * 0.5f).toInt().coerceAtLeast(1), 0)
+                        clampScroll()
+                    }
+                }
 
                 if (activeHandleDrag != null) {
                     val touchCursor = screenToCursor(event.x, event.y - lineHeight / 2f)
@@ -611,11 +711,12 @@ class CodeEditorView @JvmOverloads constructor(
         val line = (contentY / lineHeight).toInt().coerceIn(0, (buffer.lineCount - 1).coerceAtLeast(0))
         val lineStr = buffer.getLine(line)
         val col = if (contentX > 0 && charWidth > 0f) {
-            (contentX / charWidth).roundToInt().coerceIn(0, lineStr.length)
+            val visualCol = (contentX / charWidth).roundToInt()
+            VisualColumnHelper.visualColumnToCharIndex(lineStr, visualCol).coerceIn(0, lineStr.length)
         } else {
             0
         }
-        return CursorPos(line, col)
+        return buffer.clampPosition(CursorPos(line, col))
     }
 
     private fun selectWordAt(pos: CursorPos): Boolean {
@@ -741,7 +842,9 @@ class CodeEditorView @JvmOverloads constructor(
         if (width <= 0 || height <= 0) return
         val gutterW = calculateGutterWidth()
         val padStart = textPaddingStart
-        val cursorX = gutterW + padStart + cursorPosition.col * charWidth
+        val lineStr = buffer.getLine(cursorPosition.line)
+        val visualCol = VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorPosition.col)
+        val cursorX = gutterW + padStart + visualCol * charWidth
         val cursorY = cursorPosition.line * lineHeight
 
         var targetScrollX = scrollX
@@ -768,12 +871,22 @@ class CodeEditorView @JvmOverloads constructor(
         }
     }
 
+    private fun getMatchingClosingPair(c: Char): Char? = when (c) {
+        '(' -> ')'
+        '[' -> ']'
+        '{' -> '}'
+        '"' -> '"'
+        '\'' -> '\''
+        '`' -> '`'
+        else -> null
+    }
+
     fun insertText(text: String) {
         if (ctrlActive) {
             when (text.lowercase()) {
                 "a" -> { selectAll(); onResetModifiers?.invoke(); return }
                 "c" -> { copySelectedText(); onResetModifiers?.invoke(); return }
-                "x" -> { copySelectedText(); deleteSelectedText(); onResetModifiers?.invoke(); return }
+                "x" -> { cutSelection(); onResetModifiers?.invoke(); return }
                 "v" -> { pasteFromClipboard(); onResetModifiers?.invoke(); return }
                 "s" -> { save(); onResetModifiers?.invoke(); return }
                 "z" -> { onUndoShortcut?.invoke(); onResetModifiers?.invoke(); return }
@@ -788,7 +901,59 @@ class CodeEditorView @JvmOverloads constructor(
                     onResetModifiers?.invoke()
                     return
                 }
+                "d" -> { duplicateLines(); onResetModifiers?.invoke(); return }
+                "l" -> { selectCurrentLine(); onResetModifiers?.invoke(); return }
+                "/" -> { toggleComment(); onResetModifiers?.invoke(); return }
                 else -> { onResetModifiers?.invoke(); return }
+            }
+        }
+
+        // Bracket & quote wrapping when selection is not empty
+        if (!selection.isEmpty && text.length == 1) {
+            val char = text[0]
+            val closing = getMatchingClosingPair(char)
+            if (closing != null) {
+                val selected = buffer.getSelectedText(selection)
+                val wrapped = "$char$selected$closing"
+                val startPos = buffer.deleteRange(selection)
+                val endPos = buffer.insert(startPos.line, startPos.col, wrapped)
+                selection = SelectionRange(startPos, endPos)
+                cursorPosition = endPos
+                scheduleContentNotification()
+                notifySelectionAndCursor()
+                resetCursorBlink()
+                scrollToCursor()
+                invalidate()
+                return
+            }
+        }
+
+        // Auto-close pairs & typeover when typing single char
+        if (selection.isEmpty && text.length == 1) {
+            val char = text[0]
+            val lineStr = buffer.getLine(cursorPosition.line)
+            val nextChar = if (cursorPosition.col < lineStr.length) lineStr[cursorPosition.col] else null
+
+            // Typeover closing char: if next char matches, just step over it
+            if (nextChar != null && char == nextChar && (char == ')' || char == ']' || char == '}' || char == '"' || char == '\'' || char == '`')) {
+                moveCursorRight(false)
+                return
+            }
+
+            // Auto-closing open pairs
+            val closing = getMatchingClosingPair(char)
+            if (closing != null) {
+                val pair = "$char$closing"
+                cursorPosition = buffer.insert(cursorPosition.line, cursorPosition.col, pair)
+                // Position cursor inside the pair
+                cursorPosition = CursorPos(cursorPosition.line, cursorPosition.col - 1)
+                selection = SelectionRange(cursorPosition, cursorPosition)
+                scheduleContentNotification()
+                notifySelectionAndCursor()
+                resetCursorBlink()
+                scrollToCursor()
+                invalidate()
+                return
             }
         }
 
@@ -812,6 +977,28 @@ class CodeEditorView @JvmOverloads constructor(
             selection = SelectionRange(cursorPosition, cursorPosition)
             dismissSelectionActionMode()
         } else {
+            // Pair deletion: if deleting between (), [], {}, "", '', delete both!
+            val lineStr = buffer.getLine(cursorPosition.line)
+            if (count == 1 && cursorPosition.col > 0 && cursorPosition.col < lineStr.length) {
+                val prevChar = lineStr[cursorPosition.col - 1]
+                val nextChar = lineStr[cursorPosition.col]
+                if ((prevChar == '(' && nextChar == ')') ||
+                    (prevChar == '[' && nextChar == ']') ||
+                    (prevChar == '{' && nextChar == '}') ||
+                    (prevChar == '"' && nextChar == '"') ||
+                    (prevChar == '\'' && nextChar == '\'') ||
+                    (prevChar == '`' && nextChar == '`')) {
+                    buffer.deleteAfter(cursorPosition, 1)
+                    cursorPosition = buffer.deleteBefore(cursorPosition, 1)
+                    selection = SelectionRange(cursorPosition, cursorPosition)
+                    scheduleContentNotification()
+                    notifySelectionAndCursor()
+                    resetCursorBlink()
+                    scrollToCursor()
+                    invalidate()
+                    return
+                }
+            }
             cursorPosition = buffer.deleteBefore(cursorPosition, count)
             selection = SelectionRange(cursorPosition, cursorPosition)
         }
@@ -828,9 +1015,8 @@ class CodeEditorView @JvmOverloads constructor(
             selection = SelectionRange(cursorPosition, cursorPosition)
             dismissSelectionActionMode()
         } else {
-            val offset = buffer.positionToOffset(cursorPosition)
-            val nextPos = buffer.offsetToPosition(offset + count)
-            buffer.deleteRange(SelectionRange(cursorPosition, nextPos))
+            cursorPosition = buffer.deleteAfter(cursorPosition, count)
+            selection = SelectionRange(cursorPosition, cursorPosition)
         }
         scheduleContentNotification()
         notifySelectionAndCursor()
@@ -841,13 +1027,32 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun insertNewlineWithAutoIndent() {
         val currentLine = buffer.getLine(cursorPosition.line)
-        val prefixIndent = currentLine.takeWhile { it == ' ' || it == '\t' }
-        insertText("\n$prefixIndent")
+        val prefixIndent = currentLine.substring(0, cursorPosition.col.coerceIn(0, currentLine.length)).takeWhile { it == ' ' || it == '\t' }
+        val trimmedBefore = currentLine.substring(0, cursorPosition.col.coerceIn(0, currentLine.length)).trimEnd()
+        val extraIndent = if (trimmedBefore.endsWith("{") || trimmedBefore.endsWith("(") || trimmedBefore.endsWith("[") ||
+            (languageId.equals("python", ignoreCase = true) && trimmedBefore.endsWith(":"))) {
+            "    "
+        } else {
+            ""
+        }
+        insertText("\n$prefixIndent$extraIndent")
     }
 
     fun moveCursorLeft(isShift: Boolean) {
+        if (!isShift && !selection.isEmpty) {
+            val normStart = selection.normalizedStart
+            dismissSelectionActionMode()
+            cursorPosition = normStart
+            selection = SelectionRange(normStart, normStart)
+            notifySelectionAndCursor()
+            resetCursorBlink()
+            scrollToCursor()
+            invalidate()
+            return
+        }
         val newPos = if (cursorPosition.col > 0) {
-            CursorPos(cursorPosition.line, cursorPosition.col - 1)
+            val step = buffer.getStepLeftOffset(cursorPosition.line, cursorPosition.col)
+            CursorPos(cursorPosition.line, cursorPosition.col - step)
         } else if (cursorPosition.line > 0) {
             val prevLine = cursorPosition.line - 1
             CursorPos(prevLine, buffer.getLineLength(prevLine))
@@ -858,9 +1063,21 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     fun moveCursorRight(isShift: Boolean) {
+        if (!isShift && !selection.isEmpty) {
+            val normEnd = selection.normalizedEnd
+            dismissSelectionActionMode()
+            cursorPosition = normEnd
+            selection = SelectionRange(normEnd, normEnd)
+            notifySelectionAndCursor()
+            resetCursorBlink()
+            scrollToCursor()
+            invalidate()
+            return
+        }
         val lineLen = buffer.getLineLength(cursorPosition.line)
         val newPos = if (cursorPosition.col < lineLen) {
-            CursorPos(cursorPosition.line, cursorPosition.col + 1)
+            val step = buffer.getStepRightOffset(cursorPosition.line, cursorPosition.col)
+            CursorPos(cursorPosition.line, cursorPosition.col + step)
         } else if (cursorPosition.line < buffer.lineCount - 1) {
             CursorPos(cursorPosition.line + 1, 0)
         } else {
@@ -882,6 +1099,279 @@ class CodeEditorView @JvmOverloads constructor(
             val targetLine = cursorPosition.line + 1
             val targetCol = cursorPosition.col.coerceIn(0, buffer.getLineLength(targetLine))
             updateCursorMove(CursorPos(targetLine, targetCol), isShift)
+        }
+    }
+
+    fun moveCursorWordLeft(isShift: Boolean) {
+        val line = cursorPosition.line
+        val lineStr = buffer.getLine(line)
+        var col = cursorPosition.col
+        if (col > 0) {
+            while (col > 0 && !lineStr[col - 1].isLetterOrDigit() && lineStr[col - 1] != '_') {
+                col--
+            }
+            while (col > 0 && (lineStr[col - 1].isLetterOrDigit() || lineStr[col - 1] == '_')) {
+                col--
+            }
+            updateCursorMove(CursorPos(line, col), isShift)
+        } else if (line > 0) {
+            val prevLine = line - 1
+            updateCursorMove(CursorPos(prevLine, buffer.getLineLength(prevLine)), isShift)
+        }
+    }
+
+    fun moveCursorWordRight(isShift: Boolean) {
+        val line = cursorPosition.line
+        val lineStr = buffer.getLine(line)
+        var col = cursorPosition.col
+        if (col < lineStr.length) {
+            while (col < lineStr.length && (lineStr[col].isLetterOrDigit() || lineStr[col] == '_')) {
+                col++
+            }
+            while (col < lineStr.length && !lineStr[col].isLetterOrDigit() && lineStr[col] != '_') {
+                col++
+            }
+            updateCursorMove(CursorPos(line, col), isShift)
+        } else if (line < buffer.lineCount - 1) {
+            updateCursorMove(CursorPos(line + 1, 0), isShift)
+        }
+    }
+
+    fun deleteWordBefore() {
+        val line = cursorPosition.line
+        val lineStr = buffer.getLine(line)
+        var col = cursorPosition.col
+        if (col > 0) {
+            val origCol = col
+            while (col > 0 && !lineStr[col - 1].isLetterOrDigit() && lineStr[col - 1] != '_') {
+                col--
+            }
+            while (col > 0 && (lineStr[col - 1].isLetterOrDigit() || lineStr[col - 1] == '_')) {
+                col--
+            }
+            deleteBeforeCursor(origCol - col)
+        } else if (line > 0) {
+            deleteBeforeCursor(1)
+        }
+    }
+
+    fun deleteWordAfter() {
+        val line = cursorPosition.line
+        val lineStr = buffer.getLine(line)
+        var col = cursorPosition.col
+        if (col < lineStr.length) {
+            val origCol = col
+            while (col < lineStr.length && (lineStr[col].isLetterOrDigit() || lineStr[col] == '_')) {
+                col++
+            }
+            while (col < lineStr.length && !lineStr[col].isLetterOrDigit() && lineStr[col] != '_') {
+                col++
+            }
+            deleteAfterCursor(col - origCol)
+        } else if (line < buffer.lineCount - 1) {
+            deleteAfterCursor(1)
+        }
+    }
+
+    fun cutSelection() {
+        if (!selection.isEmpty) {
+            copySelectedText()
+            deleteSelectedText()
+        } else {
+            val line = cursorPosition.line
+            val lineText = buffer.getLine(line)
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            clipboard?.setPrimaryClip(ClipData.newPlainText("DroidCode", lineText + "\n"))
+            deleteLines()
+        }
+    }
+
+    fun selectCurrentLine() {
+        val line = cursorPosition.line
+        val lineLen = buffer.getLineLength(line)
+        selection = SelectionRange(CursorPos(line, 0), CursorPos(line, lineLen))
+        cursorPosition = selection.end
+        notifySelectionAndCursor()
+        showSelectionActionMode()
+        invalidate()
+    }
+
+    fun duplicateLines() {
+        if (!selection.isEmpty) {
+            val normStart = selection.normalizedStart
+            val normEnd = selection.normalizedEnd
+            val selectedText = buffer.getSelectedText(selection)
+            val newCursor = buffer.insert(normEnd.line, normEnd.col, selectedText)
+            selection = SelectionRange(normEnd, newCursor)
+            cursorPosition = newCursor
+        } else {
+            val line = cursorPosition.line
+            val lineText = buffer.getLine(line)
+            buffer.insert(line, buffer.getLineLength(line), "\n$lineText")
+            cursorPosition = CursorPos(line + 1, cursorPosition.col.coerceIn(0, lineText.length))
+            selection = SelectionRange(cursorPosition, cursorPosition)
+        }
+        scheduleContentNotification()
+        notifySelectionAndCursor()
+        scrollToCursor()
+        invalidate()
+    }
+
+    fun deleteLines() {
+        if (!selection.isEmpty) {
+            val normStart = selection.normalizedStart
+            val normEnd = selection.normalizedEnd
+            val startPos = CursorPos(normStart.line, 0)
+            val endPos = if (normEnd.line < buffer.lineCount - 1) {
+                CursorPos(normEnd.line + 1, 0)
+            } else {
+                CursorPos(normEnd.line, buffer.getLineLength(normEnd.line))
+            }
+            cursorPosition = buffer.deleteRange(SelectionRange(startPos, endPos))
+            selection = SelectionRange(cursorPosition, cursorPosition)
+        } else {
+            val line = cursorPosition.line
+            val startPos = CursorPos(line, 0)
+            val endPos = if (line < buffer.lineCount - 1) {
+                CursorPos(line + 1, 0)
+            } else {
+                CursorPos(line, buffer.getLineLength(line))
+            }
+            cursorPosition = buffer.deleteRange(SelectionRange(startPos, endPos))
+            selection = SelectionRange(cursorPosition, cursorPosition)
+        }
+        scheduleContentNotification()
+        notifySelectionAndCursor()
+        scrollToCursor()
+        invalidate()
+    }
+
+    fun joinLines() {
+        val line = cursorPosition.line
+        if (line < buffer.lineCount - 1) {
+            val nextLine = buffer.getLine(line + 1).trimStart()
+            val currentLine = buffer.getLine(line)
+            val col = currentLine.length
+            buffer.deleteRange(SelectionRange(CursorPos(line, currentLine.length), CursorPos(line + 1, buffer.getLine(line + 1).length)))
+            buffer.insert(line, col, " $nextLine")
+            cursorPosition = CursorPos(line, col)
+            selection = SelectionRange(cursorPosition, cursorPosition)
+            scheduleContentNotification()
+            notifySelectionAndCursor()
+            scrollToCursor()
+            invalidate()
+        }
+    }
+
+    fun indentSelection() {
+        val startLine = if (!selection.isEmpty) selection.normalizedStart.line else cursorPosition.line
+        val endLine = if (!selection.isEmpty) selection.normalizedEnd.line else cursorPosition.line
+        for (l in startLine..endLine) {
+            buffer.insert(l, 0, "    ")
+        }
+        if (!selection.isEmpty) {
+            selection = SelectionRange(
+                CursorPos(startLine, selection.normalizedStart.col + 4),
+                CursorPos(endLine, selection.normalizedEnd.col + 4)
+            )
+            cursorPosition = selection.end
+        } else {
+            cursorPosition = CursorPos(cursorPosition.line, cursorPosition.col + 4)
+            selection = SelectionRange(cursorPosition, cursorPosition)
+        }
+        scheduleContentNotification()
+        notifySelectionAndCursor()
+        invalidate()
+    }
+
+    fun outdentSelection() {
+        val startLine = if (!selection.isEmpty) selection.normalizedStart.line else cursorPosition.line
+        val endLine = if (!selection.isEmpty) selection.normalizedEnd.line else cursorPosition.line
+        for (l in startLine..endLine) {
+            val lineStr = buffer.getLine(l)
+            val spacesToRemove = minOf(4, lineStr.takeWhile { it == ' ' }.length)
+            if (spacesToRemove > 0) {
+                buffer.deleteRange(SelectionRange(CursorPos(l, 0), CursorPos(l, spacesToRemove)))
+            } else if (lineStr.startsWith("\t")) {
+                buffer.deleteRange(SelectionRange(CursorPos(l, 0), CursorPos(l, 1)))
+            }
+        }
+        cursorPosition = buffer.clampPosition(cursorPosition)
+        selection = SelectionRange(buffer.clampPosition(selection.start), buffer.clampPosition(selection.end))
+        scheduleContentNotification()
+        notifySelectionAndCursor()
+        invalidate()
+    }
+
+    fun toggleComment() {
+        val startLine = if (!selection.isEmpty) selection.normalizedStart.line else cursorPosition.line
+        val endLine = if (!selection.isEmpty) selection.normalizedEnd.line else cursorPosition.line
+        val prefix = when (languageId.lowercase()) {
+            "python", "py", "shell", "bash", "sh" -> "# "
+            "sql" -> "-- "
+            else -> "// "
+        }
+
+        var allCommented = true
+        for (l in startLine..endLine) {
+            val trimmed = buffer.getLine(l).trimStart()
+            if (trimmed.isNotEmpty() && !trimmed.startsWith(prefix.trimEnd())) {
+                allCommented = false
+                break
+            }
+        }
+
+        for (l in startLine..endLine) {
+            val lineStr = buffer.getLine(l)
+            if (allCommented) {
+                val idx = lineStr.indexOf(prefix.trimEnd())
+                if (idx >= 0) {
+                    val removeLen = if (lineStr.startsWith(prefix, idx)) prefix.length else prefix.trimEnd().length
+                    buffer.deleteRange(SelectionRange(CursorPos(l, idx), CursorPos(l, idx + removeLen)))
+                }
+            } else {
+                val indent = lineStr.takeWhile { it == ' ' || it == '\t' }.length
+                buffer.insert(l, indent, prefix)
+            }
+        }
+        cursorPosition = buffer.clampPosition(cursorPosition)
+        selection = SelectionRange(buffer.clampPosition(selection.start), buffer.clampPosition(selection.end))
+        scheduleContentNotification()
+        notifySelectionAndCursor()
+        invalidate()
+    }
+
+    fun moveLinesUp() {
+        val startLine = if (!selection.isEmpty) selection.normalizedStart.line else cursorPosition.line
+        val endLine = if (!selection.isEmpty) selection.normalizedEnd.line else cursorPosition.line
+        if (startLine > 0) {
+            val prevLineText = buffer.getLine(startLine - 1)
+            buffer.deleteRange(SelectionRange(CursorPos(startLine - 1, 0), CursorPos(startLine, 0)))
+            val insertLine = endLine
+            buffer.insert(insertLine, buffer.getLineLength(insertLine), "\n$prevLineText")
+            cursorPosition = CursorPos(cursorPosition.line - 1, cursorPosition.col)
+            selection = SelectionRange(CursorPos(startLine - 1, selection.start.col), CursorPos(endLine - 1, selection.end.col))
+            scheduleContentNotification()
+            notifySelectionAndCursor()
+            scrollToCursor()
+            invalidate()
+        }
+    }
+
+    fun moveLinesDown() {
+        val startLine = if (!selection.isEmpty) selection.normalizedStart.line else cursorPosition.line
+        val endLine = if (!selection.isEmpty) selection.normalizedEnd.line else cursorPosition.line
+        if (endLine < buffer.lineCount - 1) {
+            val nextLineText = buffer.getLine(endLine + 1)
+            val deleteEnd = if (endLine + 1 < buffer.lineCount - 1) CursorPos(endLine + 2, 0) else CursorPos(endLine + 1, buffer.getLineLength(endLine + 1))
+            buffer.deleteRange(SelectionRange(CursorPos(endLine + 1, 0), deleteEnd))
+            buffer.insert(startLine, 0, "$nextLineText\n")
+            cursorPosition = CursorPos(cursorPosition.line + 1, cursorPosition.col)
+            selection = SelectionRange(CursorPos(startLine + 1, selection.start.col), CursorPos(endLine + 1, selection.end.col))
+            scheduleContentNotification()
+            notifySelectionAndCursor()
+            scrollToCursor()
+            invalidate()
         }
     }
 
@@ -933,6 +1423,15 @@ class CodeEditorView @JvmOverloads constructor(
         }
     }
 
+    override fun onCheckIsTextEditor(): Boolean = true
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (!hasWindowFocus) {
+            flushContent()
+        }
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         dismissSelectionActionMode()
@@ -941,66 +1440,92 @@ class CodeEditorView @JvmOverloads constructor(
         removeCallbacks(notifyContentRunnable)
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (event != null) {
-            val isCtrl = event.isCtrlPressed || ctrlActive
-            val isShift = event.isShiftPressed || shiftActive
+    fun handleKeyEvent(keyCode: Int, event: KeyEvent?): Boolean {
+        if (event == null) return false
+        val isCtrl = event.isCtrlPressed || ctrlActive
+        val isShift = event.isShiftPressed || shiftActive
+        val isAlt = event.isAltPressed || altActive
+
+        if (event.action == KeyEvent.ACTION_DOWN) {
             if (isCtrl) {
                 if (isShift && keyCode == KeyEvent.KEYCODE_F) {
                     onWorkspaceSearchShortcut?.invoke()
                     onResetModifiers?.invoke()
                     return true
                 }
+                if (isShift && (keyCode == KeyEvent.KEYCODE_Z || keyCode == KeyEvent.KEYCODE_Y)) {
+                    onRedoShortcut?.invoke()
+                    onResetModifiers?.invoke()
+                    return true
+                }
                 when (keyCode) {
-                    KeyEvent.KEYCODE_A -> {
-                        selectAll()
-                        onResetModifiers?.invoke()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_C -> {
-                        copySelectedText()
-                        onResetModifiers?.invoke()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_X -> {
-                        copySelectedText()
-                        deleteSelectedText()
-                        onResetModifiers?.invoke()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_V -> {
-                        pasteFromClipboard()
-                        onResetModifiers?.invoke()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_S -> {
-                        save()
-                        onResetModifiers?.invoke()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_Z -> {
-                        onUndoShortcut?.invoke()
-                        onResetModifiers?.invoke()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_Y -> {
-                        onRedoShortcut?.invoke()
-                        onResetModifiers?.invoke()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_P -> {
-                        onCommandPaletteShortcut?.invoke()
-                        onResetModifiers?.invoke()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_F -> {
-                        onFindShortcut?.invoke()
-                        onResetModifiers?.invoke()
+                    KeyEvent.KEYCODE_A -> { selectAll(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_C -> { copySelectedText(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_X -> { cutSelection(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_V -> { pasteFromClipboard(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_S -> { save(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_Z -> { onUndoShortcut?.invoke(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_Y -> { onRedoShortcut?.invoke(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_P -> { onCommandPaletteShortcut?.invoke(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_F -> { onFindShortcut?.invoke(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_D -> { duplicateLines(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_L -> { selectCurrentLine(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_SLASH -> { toggleComment(); onResetModifiers?.invoke(); return true }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { moveCursorWordLeft(isShift); return true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { moveCursorWordRight(isShift); return true }
+                    KeyEvent.KEYCODE_DEL -> { deleteWordBefore(); return true }
+                    KeyEvent.KEYCODE_FORWARD_DEL -> { deleteWordAfter(); return true }
+                    KeyEvent.KEYCODE_MOVE_HOME -> { updateCursorMove(CursorPos(0, 0), isShift); return true }
+                    KeyEvent.KEYCODE_MOVE_END -> {
+                        val lastL = (buffer.lineCount - 1).coerceAtLeast(0)
+                        updateCursorMove(CursorPos(lastL, buffer.getLineLength(lastL)), isShift)
                         return true
                     }
                 }
             }
+
+            if (isAlt) {
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    moveLinesUp()
+                    return true
+                } else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    moveLinesDown()
+                    return true
+                }
+            }
+
             when (keyCode) {
+                KeyEvent.KEYCODE_MOVE_HOME -> {
+                    updateCursorMove(CursorPos(cursorPosition.line, 0), isShift)
+                    return true
+                }
+                KeyEvent.KEYCODE_MOVE_END -> {
+                    updateCursorMove(CursorPos(cursorPosition.line, buffer.getLineLength(cursorPosition.line)), isShift)
+                    return true
+                }
+                KeyEvent.KEYCODE_PAGE_UP -> {
+                    val targetLine = (cursorPosition.line - 20).coerceAtLeast(0)
+                    updateCursorMove(CursorPos(targetLine, cursorPosition.col.coerceIn(0, buffer.getLineLength(targetLine))), isShift)
+                    return true
+                }
+                KeyEvent.KEYCODE_PAGE_DOWN -> {
+                    val lastL = (buffer.lineCount - 1).coerceAtLeast(0)
+                    val targetLine = (cursorPosition.line + 20).coerceAtMost(lastL)
+                    updateCursorMove(CursorPos(targetLine, cursorPosition.col.coerceIn(0, buffer.getLineLength(targetLine))), isShift)
+                    return true
+                }
+                KeyEvent.KEYCODE_ESCAPE -> {
+                    dismissSelectionActionMode()
+                    selection = SelectionRange(cursorPosition, cursorPosition)
+                    notifySelectionAndCursor()
+                    invalidate()
+                    return true
+                }
+                KeyEvent.KEYCODE_F3 -> {
+                    // Find Next / Previous
+                    onFindShortcut?.invoke()
+                    return true
+                }
                 KeyEvent.KEYCODE_DEL -> {
                     deleteBeforeCursor(1)
                     return true
@@ -1014,7 +1539,13 @@ class CodeEditorView @JvmOverloads constructor(
                     return true
                 }
                 KeyEvent.KEYCODE_TAB -> {
-                    insertText("    ")
+                    if (isShift) {
+                        outdentSelection()
+                    } else if (!selection.isEmpty) {
+                        indentSelection()
+                    } else {
+                        insertText("    ")
+                    }
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -1034,24 +1565,51 @@ class CodeEditorView @JvmOverloads constructor(
                     return true
                 }
             }
+
+            // Printable character fallback: hardware keyboard, adb input, IME raw characters
+            if (!isCtrl && !isAlt) {
+                val unicode = event.unicodeChar
+                if (unicode > 31 && unicode != 127) {
+                    insertText(unicode.toChar().toString())
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (handleKeyEvent(keyCode, event)) {
+            return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
+    private var currentInputConnection: EditorInputConnection? = null
+
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
+        outAttrs.initialSelStart = buffer.positionToOffset(selection.normalizedStart)
+        outAttrs.initialSelEnd = buffer.positionToOffset(selection.normalizedEnd)
         outAttrs.inputType = InputType.TYPE_CLASS_TEXT or
                 InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                 InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_ACTION_NONE
-        return EditorInputConnection(this)
+        val ic = EditorInputConnection(this)
+        currentInputConnection = ic
+        return ic
+    }
+
+    fun notifyImeSelection() {
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        val selStart = buffer.positionToOffset(selection.normalizedStart)
+        val selEnd = buffer.positionToOffset(selection.normalizedEnd)
+        val candStart = currentInputConnection?.composingStartOffset ?: -1
+        val candEnd = currentInputConnection?.composingEndOffset ?: -1
+        imm?.updateSelection(this, selStart, selEnd, candStart, candEnd)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-
-        if (lineHeight > 0f) {
-            clampScroll()
-        }
 
         val saveCount = canvas.save()
         val viewLeft = scrollX.toFloat()
@@ -1084,164 +1642,208 @@ class CodeEditorView @JvmOverloads constructor(
                 )
             }
 
-        // 3. Draw text selection background
-        if (!selection.isEmpty) {
-            uiPaint.color = theme.selectionColor
-            val normStart = selection.normalizedStart
-            val normEnd = selection.normalizedEnd
+            // 3. Draw text selection background
+            if (!selection.isEmpty) {
+                uiPaint.color = theme.selectionColor
+                val normStart = selection.normalizedStart
+                val normEnd = selection.normalizedEnd
 
-            for (l in normStart.line..normEnd.line) {
-                if (l in firstVisibleLine..lastVisibleLine) {
+                for (l in normStart.line..normEnd.line) {
+                    if (l in firstVisibleLine..lastVisibleLine) {
+                        val lineTop = l * lineHeight
+                        val lineBottom = lineTop + lineHeight
+                        val lineStr = buffer.getLine(l)
+
+                        val startX = if (l == normStart.line) {
+                            lineContentStartX + VisualColumnHelper.charIndexToVisualColumn(lineStr, normStart.col) * charWidth
+                        } else {
+                            lineContentStartX
+                        }
+                        val endX = if (l == normEnd.line) {
+                            lineContentStartX + VisualColumnHelper.charIndexToVisualColumn(lineStr, normEnd.col) * charWidth
+                        } else {
+                            lineContentStartX + (VisualColumnHelper.charIndexToVisualColumn(lineStr, lineStr.length) + 1) * charWidth
+                        }
+
+                        canvas.drawRect(startX, lineTop, endX, lineBottom, uiPaint)
+                    }
+                }
+            }
+
+            // 3b. Draw search query matches
+            val query = searchQuery
+            if (!query.isNullOrEmpty()) {
+                val matchColor = 0x66FFEB3B.toInt()
+                val activeMatchColor = 0xCCFF9800.toInt()
+                val qLen = query.length
+                val normStart = selection.normalizedStart
+                val normEnd = selection.normalizedEnd
+
+                for (l in firstVisibleLine..lastVisibleLine) {
+                    val lineStr = buffer.getLine(l)
+                    if (lineStr.isEmpty()) continue
                     val lineTop = l * lineHeight
                     val lineBottom = lineTop + lineHeight
-                    val lineStr = buffer.getLine(l)
 
-                    val startX = if (l == normStart.line) lineContentStartX + normStart.col * charWidth else lineContentStartX
-                    val endX = if (l == normEnd.line) {
-                        lineContentStartX + normEnd.col * charWidth
-                    } else {
-                        lineContentStartX + (lineStr.length + 1) * charWidth
+                    var matchIdx = lineStr.indexOf(query, 0, ignoreCase = true)
+                    while (matchIdx >= 0) {
+                        val matchEnd = matchIdx + qLen
+                        val startX = lineContentStartX + VisualColumnHelper.charIndexToVisualColumn(lineStr, matchIdx) * charWidth
+                        val endX = lineContentStartX + VisualColumnHelper.charIndexToVisualColumn(lineStr, matchEnd) * charWidth
+
+                        val isActive = (!selection.isEmpty && normStart.line == l && normStart.col == matchIdx &&
+                                normEnd.line == l && normEnd.col == matchEnd)
+
+                        uiPaint.color = if (isActive) activeMatchColor else matchColor
+                        canvas.drawRect(startX, lineTop, endX, lineBottom, uiPaint)
+
+                        matchIdx = lineStr.indexOf(query, matchIdx + 1, ignoreCase = true)
                     }
-
-                    canvas.drawRect(startX, lineTop, endX, lineBottom, uiPaint)
                 }
             }
-        }
 
-        // 4. Render visible lines
-        val density = resources.displayMetrics.density
-        val gutterPaddingRight = 8f * density
-        val diffBarWidth = 3f * density
-
-        for (lineIndex in firstVisibleLine..lastVisibleLine) {
-            val lineTop = lineIndex * lineHeight
-            val baseline = lineTop + baselineOffset
-            val lineText = buffer.getLine(lineIndex)
-
-            // Draw line text with syntax highlighting
-            val tokens = tokenizer.tokenizeLine(lineText)
-            var currentCol = 0
-            val textStartX = gutterW + padStart
-
-            for (token in tokens) {
-                // Unstyled prefix before token
-                if (token.startCol > currentCol) {
-                    val plain = lineText.substring(currentCol, token.startCol)
-                    textPaint.color = theme.textColor
-                    canvas.drawText(plain, textStartX + currentCol * charWidth, baseline, textPaint)
-                }
-
-                // Styled token
-                val tokenStr = lineText.substring(
-                    token.startCol.coerceIn(0, lineText.length),
-                    token.endCol.coerceIn(token.startCol, lineText.length)
-                )
-                val paintToUse = if (token.isBold) boldTextPaint else textPaint
-                paintToUse.color = token.color
-                canvas.drawText(tokenStr, textStartX + token.startCol * charWidth, baseline, paintToUse)
-                currentCol = token.endCol
-            }
-
-            // Remainder of line after last token
-            if (currentCol < lineText.length) {
-                val remaining = lineText.substring(currentCol)
-                textPaint.color = theme.textColor
-                canvas.drawText(remaining, textStartX + currentCol * charWidth, baseline, textPaint)
-            }
-        }
-
-        // 5. Draw line number gutter (Pinned to left viewport)
-        if (isLineNumbersEnabled) {
-            val gutterScreenLeft = scrollX.toFloat()
-            val gutterScreenRight = scrollX + gutterW
-
-            // Gutter background
-            uiPaint.color = theme.gutterBackgroundColor
-            canvas.drawRect(gutterScreenLeft, scrollY.toFloat(), gutterScreenRight, (scrollY + height).toFloat(), uiPaint)
-
-            // Gutter vertical divider line
-            uiPaint.color = theme.gutterDividerColor
-            canvas.drawRect(gutterScreenRight - 1f * density, scrollY.toFloat(), gutterScreenRight, (scrollY + height).toFloat(), uiPaint)
+            // 4. Render visible lines
+            val density = resources.displayMetrics.density
+            val gutterPaddingRight = 8f * density
+            val diffBarWidth = 3f * density
 
             for (lineIndex in firstVisibleLine..lastVisibleLine) {
                 val lineTop = lineIndex * lineHeight
                 val baseline = lineTop + baselineOffset
-                val lineNumber = lineIndex + 1
-                val isActiveLine = (lineIndex == cursorPosition.line)
+                val lineText = buffer.getLine(lineIndex)
 
-                // Line number text
-                gutterPaint.color = if (isActiveLine) theme.activeLineNumberColor else theme.lineNumberColor
-                canvas.drawText(
-                    lineNumber.toString(),
-                    gutterScreenRight - gutterPaddingRight,
-                    baseline,
-                    gutterPaint
-                )
+                // Draw line text with syntax highlighting and multi-line state
+                val startState = getLineStartState(lineIndex)
+                val tokenizeResult = tokenizer.tokenizeLine(lineText, startState)
+                setLineEndState(lineIndex, tokenizeResult.endState)
+                val tokens = tokenizeResult.tokens
+                var currentCol = 0
+                val textStartX = gutterW + padStart
 
-                // Git diff status indicator on gutter edge
-                when (lineDiffMap[lineIndex]) {
-                    LineDiffStatus.ADDED -> {
-                        uiPaint.color = theme.addedGutterColor
-                        canvas.drawRect(
-                            gutterScreenRight - diffBarWidth,
-                            lineTop,
-                            gutterScreenRight,
-                            lineTop + lineHeight,
-                            uiPaint
-                        )
+                for (token in tokens) {
+                    val tokenStartCol = token.startCol.coerceIn(0, lineText.length)
+                    val tokenEndCol = token.endCol.coerceIn(tokenStartCol, lineText.length)
+
+                    // Unstyled prefix before token
+                    if (tokenStartCol > currentCol) {
+                        val startX = textStartX + VisualColumnHelper.charIndexToVisualColumn(lineText, currentCol) * charWidth
+                        textPaint.color = theme.textColor
+                        canvas.drawText(lineText, currentCol, tokenStartCol, startX, baseline, textPaint)
                     }
-                    LineDiffStatus.MODIFIED -> {
-                        uiPaint.color = theme.modifiedGutterColor
-                        canvas.drawRect(
-                            gutterScreenRight - diffBarWidth,
-                            lineTop,
-                            gutterScreenRight,
-                            lineTop + lineHeight,
-                            uiPaint
-                        )
+
+                    // Styled token
+                    if (tokenEndCol > tokenStartCol) {
+                        val startX = textStartX + VisualColumnHelper.charIndexToVisualColumn(lineText, tokenStartCol) * charWidth
+                        val paintToUse = if (token.isBold) boldTextPaint else textPaint
+                        paintToUse.color = token.color
+                        canvas.drawText(lineText, tokenStartCol, tokenEndCol, startX, baseline, paintToUse)
                     }
-                    else -> {}
+                    currentCol = maxOf(currentCol, tokenEndCol)
+                }
+
+                // Remainder of line after last token
+                if (currentCol < lineText.length) {
+                    val startX = textStartX + VisualColumnHelper.charIndexToVisualColumn(lineText, currentCol) * charWidth
+                    textPaint.color = theme.textColor
+                    canvas.drawText(lineText, currentCol, lineText.length, startX, baseline, textPaint)
                 }
             }
-        }
 
-        // 6. Draw Selection Handles & Blinking Cursor
-        if (!selection.isEmpty) {
-            val normStart = selection.normalizedStart
-            val normEnd = selection.normalizedEnd
-            val handleRadius = 9f * density
-            uiPaint.color = theme.cursorColor
+            // 5. Draw line number gutter (Pinned to left viewport)
+            if (isLineNumbersEnabled) {
+                val gutterScreenLeft = scrollX.toFloat()
+                val gutterScreenRight = scrollX + gutterW
 
-            // Start handle
-            if (normStart.line in firstVisibleLine..lastVisibleLine) {
-                val startX = gutterW + padStart + normStart.col * charWidth
-                val startY = (normStart.line + 1) * lineHeight
-                canvas.drawRect(startX - 1f * density, startY - lineHeight, startX + 1f * density, startY, uiPaint)
-                canvas.drawCircle(startX - handleRadius / 2f, startY + handleRadius, handleRadius, uiPaint)
+                // Gutter background
+                uiPaint.color = theme.gutterBackgroundColor
+                canvas.drawRect(gutterScreenLeft, scrollY.toFloat(), gutterScreenRight, (scrollY + height).toFloat(), uiPaint)
+
+                // Gutter vertical divider line
+                uiPaint.color = theme.gutterDividerColor
+                canvas.drawRect(gutterScreenRight - 1f * density, scrollY.toFloat(), gutterScreenRight, (scrollY + height).toFloat(), uiPaint)
+
+                for (lineIndex in firstVisibleLine..lastVisibleLine) {
+                    val lineTop = lineIndex * lineHeight
+                    val baseline = lineTop + baselineOffset
+                    val lineNumber = lineIndex + 1
+                    val isActiveLine = (lineIndex == cursorPosition.line)
+
+                    // Line number text
+                    gutterPaint.color = if (isActiveLine) theme.activeLineNumberColor else theme.lineNumberColor
+                    canvas.drawText(
+                        lineNumber.toString(),
+                        gutterScreenRight - gutterPaddingRight,
+                        baseline,
+                        gutterPaint
+                    )
+
+                    // Git diff status indicator on gutter edge
+                    when (lineDiffMap[lineIndex]) {
+                        LineDiffStatus.ADDED -> {
+                            uiPaint.color = theme.addedGutterColor
+                            canvas.drawRect(
+                                gutterScreenRight - diffBarWidth,
+                                lineTop,
+                                gutterScreenRight,
+                                lineTop + lineHeight,
+                                uiPaint
+                            )
+                        }
+                        LineDiffStatus.MODIFIED -> {
+                            uiPaint.color = theme.modifiedGutterColor
+                            canvas.drawRect(
+                                gutterScreenRight - diffBarWidth,
+                                lineTop,
+                                gutterScreenRight,
+                                lineTop + lineHeight,
+                                uiPaint
+                            )
+                        }
+                        else -> {}
+                    }
+                }
             }
 
-            // End handle
-            if (normEnd.line in firstVisibleLine..lastVisibleLine) {
-                val endX = gutterW + padStart + normEnd.col * charWidth
-                val endY = (normEnd.line + 1) * lineHeight
-                canvas.drawRect(endX - 1f * density, endY - lineHeight, endX + 1f * density, endY, uiPaint)
-                canvas.drawCircle(endX + handleRadius / 2f, endY + handleRadius, handleRadius, uiPaint)
-            }
-        } else if (isFocused && cursorVisible && cursorPosition.line in firstVisibleLine..lastVisibleLine) {
-            val cursorX = gutterW + padStart + cursorPosition.col * charWidth
-            val cursorY = cursorPosition.line * lineHeight
-            val cursorW = 2f * density
+            // 6. Draw Selection Handles & Blinking Cursor
+            if (!selection.isEmpty) {
+                val normStart = selection.normalizedStart
+                val normEnd = selection.normalizedEnd
+                val handleRadius = 9f * density
+                uiPaint.color = theme.cursorColor
 
-            uiPaint.color = theme.cursorColor
-            canvas.drawRoundRect(
-                RectF(cursorX, cursorY + 2f * density, cursorX + cursorW, cursorY + lineHeight - 2f * density),
-                1f, 1f,
-                uiPaint
-            )
+                // Start handle
+                if (normStart.line in firstVisibleLine..lastVisibleLine) {
+                    val lineStr = buffer.getLine(normStart.line)
+                    val startX = gutterW + padStart + VisualColumnHelper.charIndexToVisualColumn(lineStr, normStart.col) * charWidth
+                    val startY = (normStart.line + 1) * lineHeight
+                    canvas.drawRect(startX - 1f * density, startY - lineHeight, startX + 1f * density, startY, uiPaint)
+                    canvas.drawCircle(startX - handleRadius / 2f, startY + handleRadius, handleRadius, uiPaint)
+                }
+
+                // End handle
+                if (normEnd.line in firstVisibleLine..lastVisibleLine) {
+                    val lineStr = buffer.getLine(normEnd.line)
+                    val endX = gutterW + padStart + VisualColumnHelper.charIndexToVisualColumn(lineStr, normEnd.col) * charWidth
+                    val endY = (normEnd.line + 1) * lineHeight
+                    canvas.drawRect(endX - 1f * density, endY - lineHeight, endX + 1f * density, endY, uiPaint)
+                    canvas.drawCircle(endX + handleRadius / 2f, endY + handleRadius, handleRadius, uiPaint)
+                }
+            } else if (isFocused && cursorVisible && cursorPosition.line in firstVisibleLine..lastVisibleLine) {
+                val lineStr = buffer.getLine(cursorPosition.line)
+                val cursorX = gutterW + padStart + VisualColumnHelper.charIndexToVisualColumn(lineStr, cursorPosition.col) * charWidth
+                val cursorY = cursorPosition.line * lineHeight
+                val cursorW = 2f * density
+
+                uiPaint.color = theme.cursorColor
+                canvas.drawRoundRect(
+                    RectF(cursorX, cursorY + 2f * density, cursorX + cursorW, cursorY + lineHeight - 2f * density),
+                    1f, 1f,
+                    uiPaint
+                )
+            }
+        } finally {
+            canvas.restoreToCount(saveCount)
         }
-    } finally {
-        canvas.restoreToCount(saveCount)
     }
-}
 }
 

@@ -54,7 +54,8 @@ fun DroidCodeEditor(
                 this.ctrlActive = ctrlActive
                 this.shiftActive = shiftActive
                 this.altActive = altActive
-                this.setBufferText(tab.content, tab.filePath)
+                this.searchQuery = if (tab.showFindBar) tab.findQuery else null
+                this.setBufferText(tab.content, tab.filePath, tab.contentVersion)
 
                 this.onFileContentChanged = { path, text ->
                     if (path == tab.filePath) {
@@ -104,12 +105,13 @@ fun DroidCodeEditor(
             view.ctrlActive = ctrlActive
             view.shiftActive = shiftActive
             view.altActive = altActive
+            view.searchQuery = if (tab.showFindBar) tab.findQuery else null
 
             // Sync buffer if file changed or external content change
             val isDifferentFile = view.currentFilePath != tab.filePath
-            val isContentChanged = view.lastSyncedText !== tab.content && view.lastSyncedText != tab.content
+            val isContentChanged = view.lastSyncedContentVersion != tab.contentVersion
             if (isDifferentFile) {
-                view.setBufferText(tab.content, tab.filePath)
+                view.setBufferText(tab.content, tab.filePath, tab.contentVersion)
                 if (tab.scrollX > 0 || tab.scrollY > 0) {
                     view.setScrollPositions(tab.scrollX, tab.scrollY)
                 }
@@ -117,7 +119,7 @@ fun DroidCodeEditor(
                     view.setCursorPosition(CursorPos(tab.line - 1, tab.column - 1))
                 }
             } else if (isContentChanged) {
-                view.setBufferText(tab.content, tab.filePath)
+                view.setBufferText(tab.content, tab.filePath, tab.contentVersion)
             }
 
             view.onFileContentChanged = { path, text ->
@@ -147,9 +149,15 @@ fun DroidCodeEditor(
             view.onResetModifiers = onResetModifiers
             view.onEditorFocus = onEditorFocus
 
-            // Invariant: when view is focused, view is the sole authority for cursor & selection.
-            // Never overwrite the active typing cursor with stale Compose values.
-            if (!view.isFocused) {
+            // Handle pending selection requests (Find Next, Go To Line, Select All, etc.)
+            val pendingReq = tab.pendingSelectionRequest
+            if (pendingReq != null && pendingReq.requestVersion != view.lastAppliedSelectionVersion) {
+                view.lastAppliedSelectionVersion = pendingReq.requestVersion
+                view.setSelectionOffsets(pendingReq.start, pendingReq.end)
+                view.scrollToCursor()
+            } else if (!view.isFocused) {
+                // Invariant: when view is focused, view is the sole authority for cursor & selection.
+                // Never overwrite the active typing cursor with stale Compose values.
                 if (tab.selectionStart != tab.selectionEnd) {
                     val (viewStart, viewEnd) = view.getSelectionOffsets()
                     if (tab.selectionStart != viewStart || tab.selectionEnd != viewEnd) {

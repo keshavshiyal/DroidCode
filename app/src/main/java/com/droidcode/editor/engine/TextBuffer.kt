@@ -62,26 +62,20 @@ class TextBuffer(initialText: String = "") {
 
     fun setText(newText: String) {
         lines.clear()
-        if (newText.isEmpty()) {
-            lines.add(StringBuilder())
-        } else {
-            val rawLines = newText.split("\n")
-            for (line in rawLines) {
-                // Strip CR if present
-                val sanitized = if (line.endsWith('\r')) line.substring(0, line.length - 1) else line
-                lines.add(StringBuilder(sanitized))
-            }
+        val split = splitLines(newText)
+        for (l in split) {
+            lines.add(StringBuilder(l))
         }
         onContentChanged?.invoke(true)
     }
 
-    fun getText(): String {
-        val totalLength = lines.sumOf { it.length } + (lines.size - 1).coerceAtLeast(0)
+    fun getText(lineEnding: String = "\n"): String {
+        val totalLength = lines.sumOf { it.length } + (lines.size - 1).coerceAtLeast(0) * lineEnding.length
         val sb = java.lang.StringBuilder(totalLength)
         for (i in 0 until lines.size) {
             sb.append(lines[i])
             if (i < lines.size - 1) {
-                sb.append('\n')
+                sb.append(lineEnding)
             }
         }
         return sb.toString()
@@ -90,7 +84,13 @@ class TextBuffer(initialText: String = "") {
     fun clampPosition(pos: CursorPos): CursorPos {
         val line = pos.line.coerceIn(0, (lines.size - 1).coerceAtLeast(0))
         val maxCol = if (line in 0 until lines.size) lines[line].length else 0
-        val col = pos.col.coerceIn(0, maxCol)
+        var col = pos.col.coerceIn(0, maxCol)
+        if (line in 0 until lines.size) {
+            val lineSb = lines[line]
+            if (col > 0 && col < lineSb.length && Character.isLowSurrogate(lineSb[col]) && Character.isHighSurrogate(lineSb[col - 1])) {
+                col = minOf(col + 1, lineSb.length)
+            }
+        }
         return CursorPos(line, col)
     }
 
@@ -105,7 +105,7 @@ class TextBuffer(initialText: String = "") {
         val currentLine = lines[targetLine]
         val targetCol = col.coerceIn(0, currentLine.length)
 
-        if (!text.contains('\n')) {
+        if (!text.contains('\n') && !text.contains('\r')) {
             // Fast path: single-line insertion (99.9% of user typing)
             currentLine.insert(targetCol, text)
             onContentChanged?.invoke(false)
@@ -116,9 +116,7 @@ class TextBuffer(initialText: String = "") {
         val remainingTail = currentLine.substring(targetCol)
         currentLine.delete(targetCol, currentLine.length)
 
-        val insertedLines = text.split("\n").map {
-            if (it.endsWith('\r')) it.substring(0, it.length - 1) else it
-        }
+        val insertedLines = splitLines(text)
 
         currentLine.append(insertedLines[0])
 
@@ -139,7 +137,8 @@ class TextBuffer(initialText: String = "") {
     }
 
     /**
-     * Deletes [count] characters immediately before [pos] (Backspace).
+     * Deletes [count] code points / characters immediately before [pos] (Backspace).
+     * Surrogate pairs are treated as a single unit so emojis / supplementary characters are never split.
      * Returns the new cursor position.
      */
     fun deleteBefore(pos: CursorPos, count: Int = 1): CursorPos {
@@ -150,10 +149,15 @@ class TextBuffer(initialText: String = "") {
 
         while (remaining > 0) {
             if (currentCol > 0) {
-                val deleteInLine = minOf(remaining, currentCol)
-                lines[currentLine].delete(currentCol - deleteInLine, currentCol)
+                val lineSb = lines[currentLine]
+                val deleteInLine = if (currentCol >= 2 && Character.isSurrogatePair(lineSb[currentCol - 2], lineSb[currentCol - 1])) {
+                    2
+                } else {
+                    1
+                }
+                lineSb.delete(currentCol - deleteInLine, currentCol)
                 currentCol -= deleteInLine
-                remaining -= deleteInLine
+                remaining--
             } else if (currentLine > 0) {
                 // Merge current line with previous line
                 val prevLine = currentLine - 1
@@ -170,6 +174,82 @@ class TextBuffer(initialText: String = "") {
 
         onContentChanged?.invoke(count > 1 || clamped.col == 0)
         return CursorPos(currentLine, currentCol)
+    }
+
+    /**
+     * Deletes [count] code points / characters immediately after [pos] (Forward Delete).
+     * Surrogate pairs are treated as a single unit so emojis / supplementary characters are never split.
+     * Returns the new cursor position.
+     */
+    fun deleteAfter(pos: CursorPos, count: Int = 1): CursorPos {
+        val clamped = clampPosition(pos)
+        var remaining = count
+        var currentLine = clamped.line
+        var currentCol = clamped.col
+
+        while (remaining > 0) {
+            val lineLen = lines[currentLine].length
+            if (currentCol < lineLen) {
+                val lineSb = lines[currentLine]
+                val deleteInLine = if (currentCol + 1 < lineLen && Character.isSurrogatePair(lineSb[currentCol], lineSb[currentCol + 1])) {
+                    2
+                } else {
+                    1
+                }
+                lineSb.delete(currentCol, currentCol + deleteInLine)
+                remaining--
+            } else if (currentLine < lines.size - 1) {
+                // Merge next line into current line
+                val nextLine = currentLine + 1
+                lines[currentLine].append(lines[nextLine])
+                lines.removeAt(nextLine)
+                remaining--
+            } else {
+                break
+            }
+        }
+
+        onContentChanged?.invoke(count > 1 || clamped.col >= lines[currentLine].length)
+        return CursorPos(currentLine, currentCol)
+    }
+
+    fun getStepLeftOffset(line: Int, col: Int): Int {
+        if (line !in 0 until lines.size) return 1
+        val lineSb = lines[line]
+        return if (col >= 2 && Character.isSurrogatePair(lineSb[col - 2], lineSb[col - 1])) 2 else 1
+    }
+
+    fun getStepRightOffset(line: Int, col: Int): Int {
+        if (line !in 0 until lines.size) return 1
+        val lineSb = lines[line]
+        return if (col + 1 < lineSb.length && Character.isSurrogatePair(lineSb[col], lineSb[col + 1])) 2 else 1
+    }
+
+    private fun splitLines(text: String): List<String> {
+        val result = ArrayList<String>()
+        if (text.isEmpty()) {
+            result.add("")
+            return result
+        }
+        var i = 0
+        val len = text.length
+        var lineStart = 0
+        while (i < len) {
+            val c = text[i]
+            if (c == '\r') {
+                result.add(text.substring(lineStart, i))
+                if (i + 1 < len && text[i + 1] == '\n') {
+                    i++
+                }
+                lineStart = i + 1
+            } else if (c == '\n') {
+                result.add(text.substring(lineStart, i))
+                lineStart = i + 1
+            }
+            i++
+        }
+        result.add(text.substring(lineStart, len))
+        return result
     }
 
     /**
@@ -220,6 +300,19 @@ class TextBuffer(initialText: String = "") {
         }
         sb.append(lines[end.line].substring(0, end.col))
         return sb.toString()
+    }
+
+    val totalLength: Int
+        get() = lines.sumOf { it.length } + (lines.size - 1).coerceAtLeast(0)
+
+    fun getTextInRange(startOffset: Int, endOffset: Int): String {
+        val total = totalLength
+        val start = startOffset.coerceIn(0, total)
+        val end = endOffset.coerceIn(start, total)
+        if (start == end) return ""
+        val startPos = offsetToPosition(start)
+        val endPos = offsetToPosition(end)
+        return getSelectedText(SelectionRange(startPos, endPos))
     }
 
     fun positionToOffset(pos: CursorPos): Int {

@@ -319,33 +319,132 @@ public class LocalFileSystem {
         return deleteFile(targetDir);
     }
 
-    public String readFileToString(File file) throws Exception {
+    public static class FileReadResult {
+        public final String content;
+        public final String encoding;
+        public final boolean hasBom;
+
+        public FileReadResult(String content, String encoding, boolean hasBom) {
+            this.content = content != null ? content : "";
+            this.encoding = encoding != null ? encoding : "UTF-8";
+            this.hasBom = hasBom;
+        }
+    }
+
+    public FileReadResult readFileWithMetadata(File file) throws Exception {
         if (file == null || !file.exists() || !file.isFile()) {
             throw new IllegalArgumentException("File does not exist or is a directory");
         }
-        return new String(
-            java.nio.file.Files.readAllBytes(file.toPath()),
-            StandardCharsets.UTF_8
-        );
+        long fileLength = file.length();
+        if (fileLength > 100 * 1024 * 1024) {
+            throw new IllegalArgumentException("File exceeds maximum supported size (100MB)");
+        }
+
+        byte[] bytes;
+        try (FileInputStream fis = new FileInputStream(file)) {
+            int len = (int) fileLength;
+            bytes = new byte[len];
+            int totalRead = 0;
+            int read;
+            while (totalRead < len && (read = fis.read(bytes, totalRead, len - totalRead)) != -1) {
+                totalRead += read;
+            }
+            if (totalRead < len) {
+                bytes = Arrays.copyOf(bytes, totalRead);
+            }
+        }
+
+        // BOM detection
+        if (bytes.length >= 3 &&
+                (bytes[0] & 0xFF) == 0xEF &&
+                (bytes[1] & 0xFF) == 0xBB &&
+                (bytes[2] & 0xFF) == 0xBF) {
+            String text = new String(bytes, 3, bytes.length - 3, StandardCharsets.UTF_8);
+            return new FileReadResult(text, "UTF-8", true);
+        } else if (bytes.length >= 2 &&
+                (bytes[0] & 0xFF) == 0xFF &&
+                (bytes[1] & 0xFF) == 0xFE) {
+            String text = new String(bytes, 2, bytes.length - 2, StandardCharsets.UTF_16LE);
+            return new FileReadResult(text, "UTF-16LE", true);
+        } else if (bytes.length >= 2 &&
+                (bytes[0] & 0xFF) == 0xFE &&
+                (bytes[1] & 0xFF) == 0xFF) {
+            String text = new String(bytes, 2, bytes.length - 2, StandardCharsets.UTF_16BE);
+            return new FileReadResult(text, "UTF-16BE", true);
+        }
+
+        String text = new String(bytes, StandardCharsets.UTF_8);
+        return new FileReadResult(text, "UTF-8", false);
+    }
+
+    public String readFileToString(File file) throws Exception {
+        return readFileWithMetadata(file).content;
     }
 
     public void writeStringToFile(File file, String content) throws Exception {
+        writeStringToFile(file, content, "UTF-8", false);
+    }
+
+    public void writeStringToFile(File file, String content, String encoding, boolean includeBom) throws Exception {
         if (file == null) {
             throw new IllegalArgumentException("Target file cannot be null");
         }
-        if (!file.exists()) {
-            File parent = file.getParentFile();
-            if (parent != null && !parent.exists()) {
-                parent.mkdirs();
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+
+        File tempFile = File.createTempFile(".tmp_", ".tmp", parent != null ? parent : new File("."));
+        java.nio.charset.Charset charset;
+        try {
+            charset = (encoding != null && !encoding.isEmpty()) ? java.nio.charset.Charset.forName(encoding) : StandardCharsets.UTF_8;
+        } catch (Exception e) {
+            charset = StandardCharsets.UTF_8;
+        }
+
+        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+            if (includeBom) {
+                if (charset.name().equalsIgnoreCase("UTF-8")) {
+                    fos.write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
+                } else if (charset.name().equalsIgnoreCase("UTF-16LE")) {
+                    fos.write(new byte[]{(byte) 0xFF, (byte) 0xFE});
+                } else if (charset.name().equalsIgnoreCase("UTF-16BE")) {
+                    fos.write(new byte[]{(byte) 0xFE, (byte) 0xFF});
+                }
+            }
+            byte[] bytes = (content != null ? content : "").getBytes(charset);
+            fos.write(bytes);
+            fos.flush();
+            try {
+                fos.getFD().sync();
+            } catch (Exception ignored) {}
+        }
+
+        // Atomic replace via rename
+        boolean renamed = tempFile.renameTo(file);
+        if (!renamed) {
+            if (file.exists()) {
+                file.delete();
+            }
+            renamed = tempFile.renameTo(file);
+            if (!renamed) {
+                // Fallback copy if filesystem doesn't allow direct atomic rename
+                try (FileInputStream in = new FileInputStream(tempFile);
+                     FileOutputStream out = new FileOutputStream(file)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        out.write(buf, 0, n);
+                    }
+                    out.flush();
+                    try {
+                        out.getFD().sync();
+                    } catch (Exception ignored) {}
+                } finally {
+                    tempFile.delete();
+                }
             }
         }
-        java.nio.file.Files.write(
-            file.toPath(),
-            (content != null ? content : "").getBytes(StandardCharsets.UTF_8),
-            java.nio.file.StandardOpenOption.CREATE,
-            java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
-            java.nio.file.StandardOpenOption.WRITE
-        );
         SafUtils.syncFileToSaf(file);
     }
 }

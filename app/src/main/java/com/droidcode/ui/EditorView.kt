@@ -110,6 +110,7 @@ import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.Folder
@@ -2222,53 +2223,59 @@ private fun CodeCanvas(
         if (pendingActionType != null) {
             val act = pendingActionType
             onClearPendingAction()
+            val selStart = tab.selectionStart.coerceIn(0, tab.content.length)
+            val selEnd = tab.selectionEnd.coerceIn(0, tab.content.length)
             val textValue = TextFieldValue(
                 text = tab.content,
-                selection = TextRange(tab.cursorPosition.coerceIn(0, tab.content.length))
+                selection = if (tab.selectionStart != tab.selectionEnd) {
+                    TextRange(selStart, selEnd)
+                } else {
+                    TextRange(tab.cursorPosition.coerceIn(0, tab.content.length))
+                }
             )
 
             when {
                 act == "CUT" -> EditorActionsHandler.cut(context, tab, textValue) {
                     onContentChange(it.text)
-                    tab.updateCursor(it.selection.start)
+                    tab.requestSelection(it.selection.start, it.selection.end)
                     onCursorChange(it.selection.start)
                 }
                 act == "COPY" -> EditorActionsHandler.copy(context, tab, textValue)
                 act == "PASTE" -> EditorActionsHandler.paste(context, textValue) {
                     onContentChange(it.text)
-                    tab.updateCursor(it.selection.start)
+                    tab.requestSelection(it.selection.start, it.selection.end)
                     onCursorChange(it.selection.start)
                 }
                 act == "PASTE_PLAIN" -> EditorActionsHandler.pastePlain(context, textValue) {
                     onContentChange(it.text)
-                    tab.updateCursor(it.selection.start)
+                    tab.requestSelection(it.selection.start, it.selection.end)
                     onCursorChange(it.selection.start)
                 }
                 act == "SELECT_ALL" -> EditorActionsHandler.selectAll(textValue) {
-                    tab.updateSelection(it.selection.start, it.selection.end)
+                    tab.requestSelection(it.selection.start, it.selection.end)
                 }
                 act == "SELECT_LINE" -> EditorActionsHandler.selectLine(textValue) {
-                    tab.updateSelection(it.selection.start, it.selection.end)
+                    tab.requestSelection(it.selection.start, it.selection.end)
                 }
                 act == "DUPLICATE_LINE" -> EditorActionsHandler.duplicateLineOrSelection(textValue) {
                     onContentChange(it.text)
-                    tab.updateCursor(it.selection.start)
+                    tab.requestSelection(it.selection.start, it.selection.end)
                     onCursorChange(it.selection.start)
                 }
                 act == "DELETE_LINE" -> EditorActionsHandler.deleteLine(textValue) {
                     onContentChange(it.text)
-                    tab.updateCursor(it.selection.start)
+                    tab.requestSelection(it.selection.start, it.selection.end)
                     onCursorChange(it.selection.start)
                 }
                 act == "JOIN_LINES" -> EditorActionsHandler.joinLines(textValue) {
                     onContentChange(it.text)
-                    tab.updateCursor(it.selection.start)
+                    tab.requestSelection(it.selection.start, it.selection.end)
                     onCursorChange(it.selection.start)
                 }
                 act.startsWith("GO_TO_LINE:") -> {
                     val lineNum = act.removePrefix("GO_TO_LINE:").toIntOrNull() ?: 1
                     EditorActionsHandler.goToLine(tab, lineNum) {
-                        tab.updateCursor(it.selection.start)
+                        tab.requestSelection(it.selection.start, it.selection.end)
                         onCursorChange(it.selection.start)
                     }
                 }
@@ -2383,11 +2390,31 @@ private fun CodeCanvas(
 
                         IconButton(
                             onClick = {
-                                if (tab.findQuery.isNotEmpty() && tab.content.contains(tab.findQuery, ignoreCase = true)) {
-                                    val nextPos = tab.content.indexOf(tab.findQuery, tab.cursorPosition + 1, ignoreCase = true)
-                                        .let { if (it < 0) tab.content.indexOf(tab.findQuery, ignoreCase = true) else it }
+                                val query = tab.findQuery
+                                if (query.isNotEmpty() && tab.content.contains(query, ignoreCase = true)) {
+                                    val searchFrom = (tab.selectionStart - 1).coerceAtLeast(0)
+                                    val prevPos = tab.content.lastIndexOf(query, searchFrom, ignoreCase = true)
+                                        .let { if (it < 0) tab.content.lastIndexOf(query, ignoreCase = true) else it }
+                                    if (prevPos >= 0) {
+                                        tab.requestSelection(prevPos, prevPos + query.length)
+                                        onCursorChange(prevPos)
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.ArrowUpward, contentDescription = "Previous", modifier = Modifier.size(16.dp))
+                        }
+
+                        IconButton(
+                            onClick = {
+                                val query = tab.findQuery
+                                if (query.isNotEmpty() && tab.content.contains(query, ignoreCase = true)) {
+                                    val searchFrom = tab.selectionEnd.coerceAtLeast(tab.cursorPosition + 1)
+                                    val nextPos = tab.content.indexOf(query, searchFrom, ignoreCase = true)
+                                        .let { if (it < 0) tab.content.indexOf(query, 0, ignoreCase = true) else it }
                                     if (nextPos >= 0) {
-                                        tab.updateCursor(nextPos)
+                                        tab.requestSelection(nextPos, nextPos + query.length)
                                         onCursorChange(nextPos)
                                     }
                                 }
@@ -2450,9 +2477,30 @@ private fun CodeCanvas(
 
                             Button(
                                 onClick = {
-                                    if (tab.findQuery.isNotEmpty()) {
-                                        val newText = tab.content.replaceFirst(tab.findQuery, tab.replaceQuery, ignoreCase = true)
-                                        onContentChange(newText)
+                                    val query = tab.findQuery
+                                    if (query.isNotEmpty()) {
+                                        val s = minOf(tab.selectionStart, tab.selectionEnd)
+                                        val e = maxOf(tab.selectionStart, tab.selectionEnd)
+                                        val selectedMatches = (s != e && e <= tab.content.length &&
+                                                tab.content.substring(s, e).equals(query, ignoreCase = true))
+                                        if (selectedMatches) {
+                                            val newText = tab.content.substring(0, s) + tab.replaceQuery + tab.content.substring(e)
+                                            onContentChange(newText)
+                                            val nextSearchFrom = s + tab.replaceQuery.length
+                                            val nextPos = newText.indexOf(query, nextSearchFrom, ignoreCase = true)
+                                                .let { if (it < 0) newText.indexOf(query, 0, ignoreCase = true) else it }
+                                            if (nextPos >= 0) {
+                                                tab.requestSelection(nextPos, nextPos + query.length)
+                                            } else {
+                                                tab.requestSelection(nextSearchFrom, nextSearchFrom)
+                                            }
+                                        } else {
+                                            val nextPos = tab.content.indexOf(query, tab.cursorPosition, ignoreCase = true)
+                                                .let { if (it < 0) tab.content.indexOf(query, 0, ignoreCase = true) else it }
+                                            if (nextPos >= 0) {
+                                                tab.requestSelection(nextPos, nextPos + query.length)
+                                            }
+                                        }
                                     }
                                 },
                                 modifier = Modifier.height(36.dp)

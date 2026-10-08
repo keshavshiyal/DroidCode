@@ -22,6 +22,12 @@ class EditorManager @Inject constructor() {
     val activeTab: EditorTab?
         get() = if (activeTabIndex in 0 until tabs.size) tabs[activeTabIndex] else null
 
+    var onFlushRequested: (() -> Unit)? = null
+
+    fun flushActiveEditor() {
+        onFlushRequested?.invoke()
+    }
+
     fun openFile(file: File): EditorTab {
         require(file.exists() && file.isFile) { "File does not exist or is not a valid file: ${file.path}" }
 
@@ -35,10 +41,17 @@ class EditorManager @Inject constructor() {
         }
 
         val viewerType = EditorTab.detectViewerType(file)
+        var readError: String? = null
+        var detectedEncoding = "UTF-8"
+        var hasBom = false
         val content = if (viewerType == FileViewerType.TEXT) {
             try {
-                fileSystem.readFileToString(file) ?: ""
+                val result = fileSystem.readFileWithMetadata(file)
+                detectedEncoding = result.encoding
+                hasBom = result.hasBom
+                result.content
             } catch (e: Exception) {
+                readError = e.message ?: "Failed to read file from disk"
                 ""
             }
         } else {
@@ -50,7 +63,15 @@ class EditorManager @Inject constructor() {
             fileName = file.name,
             initialContent = content,
             initialViewerType = viewerType
-        )
+        ).apply {
+            this.encoding = detectedEncoding
+            this.hasBom = hasBom
+            if (readError != null) {
+                this.isReadError = true
+                this.isReadOnly = true
+                this.readErrorMessage = readError
+            }
+        }
         tabs.add(tab)
         activeTabIndex = tabs.size - 1
 
@@ -87,6 +108,7 @@ class EditorManager @Inject constructor() {
     }
 
     fun selectTab(tabId: String) {
+        flushActiveEditor()
         val index = tabs.indexOfFirst { it.id == tabId }
         if (index >= 0) {
             activeTabIndex = index
@@ -99,8 +121,9 @@ class EditorManager @Inject constructor() {
     }
 
     fun updateTabContent(tab: EditorTab, newContent: String) {
+        val priorCursor = tab.cursorPosition
         tab.updateContent(newContent)
-        undoManagers[tab.filePath]?.pushState(newContent)
+        undoManagers[tab.filePath]?.pushState(newContent, priorCursor, tab.cursorPosition)
     }
 
     fun updateTabContentByPath(filePath: String, newContent: String) {
@@ -108,25 +131,43 @@ class EditorManager @Inject constructor() {
         updateTabContent(tab, newContent)
     }
 
-    fun saveActiveTab() {
-        val tab = activeTab ?: return
-        saveTab(tab)
+    fun saveActiveTab(): Boolean {
+        flushActiveEditor()
+        val tab = activeTab ?: return false
+        return saveTab(tab)
     }
 
-    fun saveTab(tab: EditorTab) {
-        if (tab.isModified) {
-            fileSystem.writeStringToFile(tab.file, tab.content)
-            tab.markSaved()
+    fun saveTab(tab: EditorTab): Boolean {
+        flushActiveEditor()
+        if (tab.isReadError || tab.isReadOnly) {
+            android.util.Log.e("EditorManager", "Cannot save file with read error or read-only status: ${tab.filePath}")
+            return false
         }
-    }
-
-    fun saveAllTabs() {
-        tabs.forEach { tab ->
-            if (tab.isModified) {
-                fileSystem.writeStringToFile(tab.file, tab.content)
+        if (tab.isModified) {
+            return try {
+                val contentToWrite = tab.getContentWithLineEndings()
+                fileSystem.writeStringToFile(tab.file, contentToWrite, tab.encoding, tab.hasBom)
                 tab.markSaved()
+                true
+            } catch (e: Exception) {
+                android.util.Log.e("EditorManager", "Failed to save file: ${tab.filePath}", e)
+                // Retain tab.isModified = true so user doesn't lose data
+                false
             }
         }
+        return true
+    }
+
+    fun saveAllTabs(): Boolean {
+        flushActiveEditor()
+        var allSuccess = true
+        tabs.forEach { tab ->
+            if (tab.isModified) {
+                val ok = saveTab(tab)
+                if (!ok) allSuccess = false
+            }
+        }
+        return allSuccess
     }
 
     fun hasUnsavedChanges(): Boolean = tabs.any { it.isModified }
@@ -146,18 +187,26 @@ class EditorManager @Inject constructor() {
     }
 
     fun undoTab(tab: EditorTab) {
+        flushActiveEditor()
         val undoMgr = undoManagers[tab.filePath] ?: return
         if (undoMgr.canUndo()) {
-            val previous = undoMgr.undo(tab.content)
-            tab.updateContent(previous)
+            val result = undoMgr.undoWithCursor(tab.content)
+            tab.updateContent(result.text)
+            if (result.cursorOffset >= 0) {
+                tab.requestSelection(result.cursorOffset, result.cursorOffset)
+            }
         }
     }
 
     fun redoTab(tab: EditorTab) {
+        flushActiveEditor()
         val undoMgr = undoManagers[tab.filePath] ?: return
         if (undoMgr.canRedo()) {
-            val next = undoMgr.redo(tab.content)
-            tab.updateContent(next)
+            val result = undoMgr.redoWithCursor(tab.content)
+            tab.updateContent(result.text)
+            if (result.cursorOffset >= 0) {
+                tab.requestSelection(result.cursorOffset, result.cursorOffset)
+            }
         }
     }
 
@@ -172,6 +221,7 @@ class EditorManager @Inject constructor() {
     }
 
     fun closeTab(index: Int) {
+        flushActiveEditor()
         if (index !in tabs.indices) return
         val removed = tabs.removeAt(index)
         undoManagers.remove(removed.filePath)
@@ -184,6 +234,7 @@ class EditorManager @Inject constructor() {
     }
 
     fun closeAllTabs() {
+        flushActiveEditor()
         tabs.clear()
         undoManagers.clear()
         activeTabIndex = -1
@@ -192,9 +243,17 @@ class EditorManager @Inject constructor() {
     fun reloadActiveTab() {
         val tab = activeTab ?: return
         if (tab.file.exists()) {
-            val fresh = fileSystem.readFileToString(tab.file) ?: ""
-            tab.forceOpenAsText(fresh)
-            tab.markSaved()
+            try {
+                val result = fileSystem.readFileWithMetadata(tab.file)
+                tab.encoding = result.encoding
+                tab.hasBom = result.hasBom
+                tab.forceOpenAsText(result.content)
+                tab.isReadError = false
+                tab.readErrorMessage = null
+                tab.markSaved()
+            } catch (e: Exception) {
+                android.util.Log.e("EditorManager", "Failed to reload tab: ${tab.filePath}", e)
+            }
         }
     }
 

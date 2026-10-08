@@ -4,6 +4,40 @@ All notable changes to DroidCode will be documented in this file.
 
 ## [0.1.0-alpha01] - 2026-10-03
 
+### Editor Engine Hardening (Phases 1–5)
+- **Phase 1: Crashes & Data Loss Prevention**:
+  - Replaced API 26-restricted `java.nio.file.Files` with API 24-safe `FileInputStream` / `FileOutputStream` streams.
+  - Implemented atomic file saving with temporary file writing, `fsync()`, and atomic rename to eliminate partial file writes on crash or power loss.
+  - Added multi-encoding support with BOM preservation (UTF-8, UTF-16LE, UTF-16BE) and line ending preservation (CRLF, LF).
+  - Hardened read failure handling: files failing to open are flagged read-only with explicit error diagnostics, preventing empty file overwrites on save.
+  - Added synchronous `flushContent()` triggers across save, tab close, tab switch, undo/redo, find/replace, and window focus loss.
+  - Enhanced `TextBuffer` and `CodeEditorView` with surrogate-pair awareness to prevent splitting UTF-16 emoji and complex symbols on backspace or cursor navigation.
+- **Phase 2: Rendering Correctness & Syntax Highlighting**:
+  - Re-architected `LineTokenizer` with single-pass left-to-right lexical scanner producing non-overlapping, strictly sorted token spans.
+  - Implemented multi-line parser state (`LineState`) supporting block comments (`/* ... */`), HTML comments (`<!-- ... -->`), Python docstrings (`"""`, `'''`), and JS template literals (``` `...` ```).
+  - Added language-specific comment rules across Kotlin/Java, Python, CSS, SQL, and XML/HTML.
+  - Implemented `VisualColumnHelper` accounting for tab stops and double-width glyphs, ensuring exact horizontal cursor and selection positioning.
+  - Replaced deprecated `scaledDensity` with `TypedValue.applyDimension` and removed per-frame allocations during `onDraw`.
+  - Added a 2,000-character line tokenization cap to prevent main thread ANRs on minified files.
+- **Phase 3: IME & Input Architecture**:
+  - Completely rewritten `EditorInputConnection` with explicit composing region spans (`setComposingRegion`, `setComposingText`, `commitText`, `finishComposingText`), preventing character duplication on Samsung Keyboard, SwiftKey, and Indic IMEs.
+  - Synced IME selection via `InputMethodManager.updateSelection` and documented-absolute offsets.
+  - Added auto-closing pair insertion for `()`, `[]`, `{}`, `""`, `''`, `` ` ``, smart indent on Enter after opening brackets/colons, and selection wrapping.
+  - Added rich physical keyboard shortcuts: Home/End, PageUp/PageDown, Word Jump/Delete (Ctrl+Left/Right/Backspace/Delete), Indent/Outdent (Tab/Shift+Tab), Duplicate Lines (Ctrl+D), Delete Lines (Ctrl+Shift+K), Move Lines Up/Down (Alt+Up/Down), and Comment Toggle (Ctrl+/).
+- **Phase 4: Selection, Scrolling & Gestures**:
+  - Fixed horizontal scroll range with `cachedMaxLineLength` to avoid content cutoff.
+  - Added fractional scroll accumulation (`residualScrollX`, `residualScrollY`) in `onScroll`, making slow gestures smooth and non-sticky.
+  - Implemented edge auto-scroll when dragging selection handles near viewport boundaries.
+  - Added keyboard `adjustResize` auto-scroll keeping the active cursor visible when soft input appears.
+  - Implemented double-tap (word select) and triple-tap (entire line select) gesture detection.
+  - Fixed selection collapsing in `EditorView` action dispatching by preserving full `TextRange`.
+- **Phase 5: Undo/Redo, Find/Replace & Performance**:
+  - Hardened `UndoManager` with cursor position and selection restoration on undo and redo.
+  - Implemented in-editor search query match highlighting with distinct colors for general matches and current active match.
+  - Enhanced Find/Replace bar with Previous/Next match navigation, Replace match with auto-advance, and Replace All.
+  - Added version-based content synchronization (`lastSyncedContentVersion`), eliminating O(N) string comparison on Compose recomposition.
+  - Added unit test suites for `TextBuffer`, `LineTokenizer`, and `UndoManager`.
+
 ### Milestone 1 — Performance Optimization, Engine Hardening & Diagnostics
 - **Diagnostic Stack Trace System (`StackTraceManager`)**:
   - Implemented thread-safe `StackTraceManager` installing an uncaught exception interceptor in `DroidCodeApp` to capture fatal crashes and runtime diagnostics.

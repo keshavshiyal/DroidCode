@@ -6,7 +6,8 @@ import java.util.Deque;
 /**
  * Memory-efficient, differential Undo/Redo manager for text buffers.
  * Instead of storing full-text snapshots on every keystroke (which causes severe
- * GC churn and OOM on large files), this engine stores piecewise character deltas.
+ * GC churn and OOM on large files), this engine stores piecewise character deltas
+ * along with cursor position history.
  */
 public class UndoManager {
 
@@ -18,12 +19,31 @@ public class UndoManager {
         public final String deletedText;
         public final String insertedText;
         public final String fallbackPriorState;
+        public final int priorCursorOffset;
+        public final int newCursorOffset;
 
         public TextDelta(int offset, String deletedText, String insertedText, String fallbackPriorState) {
+            this(offset, deletedText, insertedText, fallbackPriorState, -1, -1);
+        }
+
+        public TextDelta(int offset, String deletedText, String insertedText, String fallbackPriorState,
+                         int priorCursorOffset, int newCursorOffset) {
             this.offset = offset;
             this.deletedText = deletedText != null ? deletedText : "";
             this.insertedText = insertedText != null ? insertedText : "";
             this.fallbackPriorState = fallbackPriorState;
+            this.priorCursorOffset = priorCursorOffset;
+            this.newCursorOffset = newCursorOffset;
+        }
+    }
+
+    public static class UndoResult {
+        public final String text;
+        public final int cursorOffset;
+
+        public UndoResult(String text, int cursorOffset) {
+            this.text = text != null ? text : "";
+            this.cursorOffset = cursorOffset;
         }
     }
 
@@ -31,25 +51,38 @@ public class UndoManager {
     private final Deque<TextDelta> redoStack = new ArrayDeque<>();
 
     private String lastState = null;
+    private int lastCursorOffset = -1;
 
     public synchronized void pushState(String state) {
+        pushState(state, -1, -1);
+    }
+
+    public synchronized void pushState(String state, int cursorOffset) {
+        pushState(state, lastCursorOffset, cursorOffset);
+    }
+
+    public synchronized void pushState(String state, int priorCursorOffset, int newCursorOffset) {
         if (state == null) return;
         if (lastState != null && lastState.equals(state)) {
+            lastCursorOffset = newCursorOffset >= 0 ? newCursorOffset : lastCursorOffset;
             return;
         }
 
         if (lastState == null) {
             lastState = state;
+            lastCursorOffset = newCursorOffset >= 0 ? newCursorOffset : priorCursorOffset;
             return;
         }
 
-        TextDelta delta = computeDelta(lastState, state);
+        int priorCursor = priorCursorOffset >= 0 ? priorCursorOffset : lastCursorOffset;
+        TextDelta delta = computeDelta(lastState, state, priorCursor, newCursorOffset);
         undoStack.push(delta);
         if (undoStack.size() > MAX_HISTORY) {
             undoStack.removeLast();
         }
         redoStack.clear();
         lastState = state;
+        lastCursorOffset = newCursorOffset;
     }
 
     public synchronized boolean canUndo() {
@@ -61,13 +94,25 @@ public class UndoManager {
     }
 
     public synchronized String undo(String currentState) {
-        if (!canUndo()) return currentState != null ? currentState : (lastState != null ? lastState : "");
+        return undoWithCursor(currentState).text;
+    }
+
+    public synchronized UndoResult undoWithCursor(String currentState) {
+        if (!canUndo()) {
+            String fallback = currentState != null ? currentState : (lastState != null ? lastState : "");
+            return new UndoResult(fallback, lastCursorOffset);
+        }
 
         TextDelta delta = undoStack.pop();
         redoStack.push(delta);
 
         String base = currentState != null ? currentState : lastState;
         if (base == null) base = "";
+
+        int restoredCursor = delta.priorCursorOffset;
+        if (restoredCursor < 0 && delta.offset >= 0) {
+            restoredCursor = delta.offset + delta.deletedText.length();
+        }
 
         // Check if delta applies cleanly
         if (delta.offset >= 0 &&
@@ -77,27 +122,42 @@ public class UndoManager {
                     delta.deletedText +
                     base.substring(delta.offset + delta.insertedText.length());
             lastState = undone;
-            return undone;
+            lastCursorOffset = restoredCursor >= 0 ? Math.min(restoredCursor, undone.length()) : -1;
+            return new UndoResult(undone, lastCursorOffset);
         }
 
         // Fallback to snapshot if available
         if (delta.fallbackPriorState != null) {
             lastState = delta.fallbackPriorState;
-            return delta.fallbackPriorState;
+            lastCursorOffset = restoredCursor >= 0 ? Math.min(restoredCursor, lastState.length()) : -1;
+            return new UndoResult(delta.fallbackPriorState, lastCursorOffset);
         }
 
         lastState = base;
-        return base;
+        lastCursorOffset = restoredCursor >= 0 ? Math.min(restoredCursor, base.length()) : -1;
+        return new UndoResult(base, lastCursorOffset);
     }
 
     public synchronized String redo(String currentState) {
-        if (!canRedo()) return currentState != null ? currentState : (lastState != null ? lastState : "");
+        return redoWithCursor(currentState).text;
+    }
+
+    public synchronized UndoResult redoWithCursor(String currentState) {
+        if (!canRedo()) {
+            String fallback = currentState != null ? currentState : (lastState != null ? lastState : "");
+            return new UndoResult(fallback, lastCursorOffset);
+        }
 
         TextDelta delta = redoStack.pop();
         undoStack.push(delta);
 
         String base = currentState != null ? currentState : lastState;
         if (base == null) base = "";
+
+        int restoredCursor = delta.newCursorOffset;
+        if (restoredCursor < 0 && delta.offset >= 0) {
+            restoredCursor = delta.offset + delta.insertedText.length();
+        }
 
         // Check if delta applies cleanly
         if (delta.offset >= 0 &&
@@ -107,20 +167,27 @@ public class UndoManager {
                     delta.insertedText +
                     base.substring(delta.offset + delta.deletedText.length());
             lastState = redone;
-            return redone;
+            lastCursorOffset = restoredCursor >= 0 ? Math.min(restoredCursor, redone.length()) : -1;
+            return new UndoResult(redone, lastCursorOffset);
         }
 
         lastState = base;
-        return base;
+        lastCursorOffset = restoredCursor >= 0 ? Math.min(restoredCursor, base.length()) : -1;
+        return new UndoResult(base, lastCursorOffset);
     }
 
     public synchronized void clear() {
         undoStack.clear();
         redoStack.clear();
         lastState = null;
+        lastCursorOffset = -1;
     }
 
     public static TextDelta computeDelta(String oldText, String newText) {
+        return computeDelta(oldText, newText, -1, -1);
+    }
+
+    public static TextDelta computeDelta(String oldText, String newText, int priorCursor, int newCursor) {
         if (oldText == null) oldText = "";
         if (newText == null) newText = "";
 
@@ -141,6 +208,6 @@ public class UndoManager {
         String inserted = newText.substring(prefix, newSuffix + 1);
         String fallback = oldText.length() <= SNAPSHOT_THRESHOLD_BYTES ? oldText : null;
 
-        return new TextDelta(prefix, deleted, inserted, fallback);
+        return new TextDelta(prefix, deleted, inserted, fallback, priorCursor, newCursor);
     }
 }

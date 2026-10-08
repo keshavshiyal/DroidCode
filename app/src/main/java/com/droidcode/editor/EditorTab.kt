@@ -29,14 +29,30 @@ class EditorTab(
     var content: String by mutableStateOf(initialContent ?: "")
         private set
 
-    var lineStartOffsets: IntArray = computeLineStartOffsets(initialContent ?: "")
+    var isReadOnly: Boolean by mutableStateOf(false)
+    var isReadError: Boolean by mutableStateOf(false)
+    var readErrorMessage: String? by mutableStateOf(null)
+
+    var contentVersion: Long by mutableStateOf(0L)
         private set
+
+    private var _lineStartOffsets: IntArray? = null
+    val lineStartOffsets: IntArray
+        get() {
+            var offsets = _lineStartOffsets
+            if (offsets == null) {
+                offsets = computeLineStartOffsets(content)
+                _lineStartOffsets = offsets
+            }
+            return offsets
+        }
 
     fun forceOpenAsText(rawText: String) {
         this.content = rawText
         this.originalContent = rawText
-        this.lineStartOffsets = computeLineStartOffsets(rawText)
+        this._lineStartOffsets = null
         this.viewerType = FileViewerType.TEXT
+        this.contentVersion++
         calculateLineColumn()
     }
 
@@ -58,6 +74,8 @@ class EditorTab(
 
     var encoding: String by mutableStateOf("UTF-8")
 
+    var hasBom: Boolean by mutableStateOf(false)
+
     var lineEnding: String by mutableStateOf(if (initialContent?.contains("\r\n") == true) "CRLF" else "LF")
 
     var selectionStart: Int by mutableIntStateOf(0)
@@ -74,6 +92,26 @@ class EditorTab(
 
     val foldedLines = mutableStateListOf<Int>()
 
+    fun getContentWithLineEndings(): String {
+        val normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+        return if (lineEnding.equals("CRLF", ignoreCase = true)) {
+            normalized.replace("\n", "\r\n")
+        } else {
+            normalized
+        }
+    }
+
+    data class SelectionRequest(val start: Int, val end: Int, val requestVersion: Long)
+
+    var pendingSelectionRequest: SelectionRequest? by mutableStateOf(null)
+        private set
+    private var selectionRequestCounter: Long = 0L
+
+    fun requestSelection(start: Int, end: Int) {
+        updateSelection(start, end)
+        pendingSelectionRequest = SelectionRequest(start, end, ++selectionRequestCounter)
+    }
+
     fun updateSelection(start: Int, end: Int) {
         this.selectionStart = start
         this.selectionEnd = end
@@ -84,8 +122,10 @@ class EditorTab(
     }
 
     fun updateContent(newContent: String) {
+        if (this.content == newContent) return
         this.content = newContent
-        this.lineStartOffsets = computeLineStartOffsets(newContent)
+        this._lineStartOffsets = null
+        this.contentVersion++
         this.isModified = (this.content != this.originalContent)
         calculateLineColumn()
     }
