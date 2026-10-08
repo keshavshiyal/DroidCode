@@ -1,6 +1,5 @@
 package com.droidcode.language.css
 
-import android.graphics.Color
 import androidx.annotation.ColorInt
 
 data class CssColorMatch(
@@ -21,6 +20,16 @@ object CssColorHelper {
     // Regex for hsl/hsla: hsl(120, 100%, 50%), hsla(120, 100%, 50%, 0.5)
     private val HSL_PATTERN = Regex("hsla?\\(\\s*(\\d{1,3}(?:deg)?)\\s*[,\\s]\\s*(\\d{1,3}%)\\s*[,\\s]\\s*(\\d{1,3}%)(?:\\s*[,/]\\s*([0-9.]+%?))?\\s*\\)")
 
+    fun argb(a: Int, r: Int, g: Int, b: Int): Int =
+        ((a and 0xFF) shl 24) or ((r and 0xFF) shl 16) or ((g and 0xFF) shl 8) or (b and 0xFF)
+
+    fun rgb(r: Int, g: Int, b: Int): Int = argb(255, r, g, b)
+
+    fun alpha(@ColorInt color: Int): Int = (color ushr 24) and 0xFF
+    fun red(@ColorInt color: Int): Int = (color ushr 16) and 0xFF
+    fun green(@ColorInt color: Int): Int = (color ushr 8) and 0xFF
+    fun blue(@ColorInt color: Int): Int = color and 0xFF
+
     /**
      * Parses a CSS color string into an Android ARGB color integer.
      */
@@ -36,7 +45,7 @@ object CssColorHelper {
                         val r = hex[0].toString().repeat(2).toInt(16)
                         val g = hex[1].toString().repeat(2).toInt(16)
                         val b = hex[2].toString().repeat(2).toInt(16)
-                        Color.rgb(r, g, b)
+                        rgb(r, g, b)
                     }
                     4 -> {
                         // #RGBA -> #AARRGGBB
@@ -44,18 +53,21 @@ object CssColorHelper {
                         val g = hex[1].toString().repeat(2).toInt(16)
                         val b = hex[2].toString().repeat(2).toInt(16)
                         val a = hex[3].toString().repeat(2).toInt(16)
-                        Color.argb(a, r, g, b)
+                        argb(a, r, g, b)
                     }
                     6 -> {
-                        Color.parseColor(trimmed)
+                        val r = hex.substring(0, 2).toInt(16)
+                        val g = hex.substring(2, 4).toInt(16)
+                        val b = hex.substring(4, 6).toInt(16)
+                        rgb(r, g, b)
                     }
                     8 -> {
-                        // In CSS #RRGGBBAA, in Android #AARRGGBB
+                        // In CSS #RRGGBBAA, in Android ARGB
                         val r = hex.substring(0, 2).toInt(16)
                         val g = hex.substring(2, 4).toInt(16)
                         val b = hex.substring(4, 6).toInt(16)
                         val a = hex.substring(6, 8).toInt(16)
-                        Color.argb(a, r, g, b)
+                        argb(a, r, g, b)
                     }
                     else -> null
                 }
@@ -69,7 +81,7 @@ object CssColorHelper {
                 val b = parseComponent(rgbMatch.groupValues[3], 255)
                 val aStr = rgbMatch.groupValues[4]
                 val a = if (aStr.isNotEmpty()) parseAlpha(aStr) else 255
-                return Color.argb(a, r, g, b)
+                return argb(a, r, g, b)
             }
 
             // HSL / HSLA
@@ -80,8 +92,8 @@ object CssColorHelper {
                 val l = hslMatch.groupValues[3].removeSuffix("%").toFloatOrNull()?.div(100f) ?: 0f
                 val aStr = hslMatch.groupValues[4]
                 val a = if (aStr.isNotEmpty()) parseAlpha(aStr) else 255
-                val rgb = hslToRgb(h, s, l)
-                return Color.argb(a, rgb[0], rgb[1], rgb[2])
+                val rgbComponents = hslToRgb(h, s, l)
+                return argb(a, rgbComponents[0], rgbComponents[1], rgbComponents[2])
             }
         } catch (e: Exception) {
             return null
@@ -130,10 +142,10 @@ object CssColorHelper {
      * Formats an ARGB color as a standard Hex string `#RRGGBB` or `#RRGGBBAA`.
      */
     fun toHexString(@ColorInt color: Int, includeAlpha: Boolean = false): String {
-        val a = Color.alpha(color)
-        val r = Color.red(color)
-        val g = Color.green(color)
-        val b = Color.blue(color)
+        val a = alpha(color)
+        val r = red(color)
+        val g = green(color)
+        val b = blue(color)
         return if (includeAlpha && a < 255) {
             String.format("#%02X%02X%02X%02X", r, g, b, a)
         } else {
@@ -145,10 +157,10 @@ object CssColorHelper {
      * Formats an ARGB color as `rgb(r, g, b)` or `rgba(r, g, b, a)`.
      */
     fun toRgbString(@ColorInt color: Int): String {
-        val a = Color.alpha(color)
-        val r = Color.red(color)
-        val g = Color.green(color)
-        val b = Color.blue(color)
+        val a = alpha(color)
+        val r = red(color)
+        val g = green(color)
+        val b = blue(color)
         return if (a < 255) {
             val alphaFloat = (a / 255f)
             String.format(java.util.Locale.US, "rgba(%d, %d, %d, %.2f)", r, g, b, alphaFloat)

@@ -1618,8 +1618,8 @@ fun EditorView(
     if (showHtmlPreviewDialog && activeTab != null) {
         HtmlPreviewDialog(
             htmlContent = activeTab.content,
-            file = File(activeTab.filePath),
-            onDismiss = { showHtmlPreviewDialog = false }
+            filePath = activeTab.filePath,
+            onDismissRequest = { showHtmlPreviewDialog = false }
         )
     }
 
@@ -1627,34 +1627,35 @@ fun EditorView(
         JsonTreeViewerDialog(
             jsonContent = activeTab.content,
             fileName = activeTab.fileName,
-            onDismiss = { showJsonTreeDialog = false }
+            onDismissRequest = { showJsonTreeDialog = false }
         )
     }
 
     if (showColorPickerDialog && activeTab != null) {
         ColorPickerDialog(
-            onDismiss = { showColorPickerDialog = false },
             onColorSelected = { hexString ->
                 pendingActionType = "INSERT_TEXT:$hexString"
-            }
+            },
+            onDismissRequest = { showColorPickerDialog = false }
         )
     }
 
-    if (showJsProblemsDialog) {
+    if (showJsProblemsDialog && activeTab != null) {
         JsProblemsDialog(
+            fileName = activeTab.fileName,
             diagnostics = jsDiagnosticsList,
-            onDismiss = { showJsProblemsDialog = false },
-            onSelectDiagnostic = { diag ->
+            onJumpToLine = { line, _ ->
                 showJsProblemsDialog = false
-                pendingActionType = "GO_TO_LINE:${diag.line}"
-            }
+                pendingActionType = "GO_TO_LINE:$line"
+            },
+            onDismissRequest = { showJsProblemsDialog = false }
         )
     }
 
     if (showDatabaseConsoleDialog && activeDbFile != null) {
         DatabaseConsoleDialog(
             dbFile = activeDbFile!!,
-            onDismiss = { showDatabaseConsoleDialog = false }
+            onDismissRequest = { showDatabaseConsoleDialog = false }
         )
     }
 }

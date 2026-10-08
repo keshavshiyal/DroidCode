@@ -1,9 +1,8 @@
 package com.droidcode
 
-import androidx.compose.ui.graphics.Color
 import com.droidcode.language.css.CssColorHelper
-import com.droidcode.language.js.DiagnosticSeverity
 import com.droidcode.language.js.JsSyntaxChecker
+import com.droidcode.language.json.JsonNodeType
 import com.droidcode.language.json.JsonToolHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,13 +55,15 @@ class Milestone2WebIdeTest {
                 "author": { "name": "Keshav" }
             }
         """.trimIndent()
-        val tree = JsonToolHelper.buildTree(sample)
-        assertEquals("Root should be object", "object", tree.type)
+        val treeResult = JsonToolHelper.buildJsonTree(sample)
+        assertTrue("Tree build should succeed", treeResult.isSuccess)
+        val tree = treeResult.getOrThrow()
+        assertEquals("Root should be object", JsonNodeType.OBJECT, tree.type)
         assertEquals("Root should have 5 children", 5, tree.children.size)
 
         val tagsNode = tree.children.find { it.key == "tags" }
         assertNotNull("Tags node must exist", tagsNode)
-        assertEquals("Tags should be array", "array", tagsNode!!.type)
+        assertEquals("Tags should be array", JsonNodeType.ARRAY, tagsNode!!.type)
         assertEquals("Tags array should have 3 items", 3, tagsNode.children.size)
     }
 
@@ -75,41 +76,36 @@ class Milestone2WebIdeTest {
         // Hex colors
         val red6 = CssColorHelper.parseColor("#FF0000")
         assertNotNull("Should parse #FF0000", red6)
-        assertEquals(1f, red6!!.red, 0.01f)
-        assertEquals(0f, red6.green, 0.01f)
-        assertEquals(0f, red6.blue, 0.01f)
+        assertEquals(255, CssColorHelper.red(red6!!))
+        assertEquals(0, CssColorHelper.green(red6))
+        assertEquals(0, CssColorHelper.blue(red6))
+        assertEquals(255, CssColorHelper.alpha(red6))
 
         val green3 = CssColorHelper.parseColor("#0F0")
         assertNotNull("Should parse #0F0", green3)
-        assertEquals(0f, green3!!.red, 0.01f)
-        assertEquals(1f, green3.green, 0.01f)
-        assertEquals(0f, green3.blue, 0.01f)
+        assertEquals(0, CssColorHelper.red(green3!!))
+        assertEquals(255, CssColorHelper.green(green3))
+        assertEquals(0, CssColorHelper.blue(green3))
 
         // RGB / RGBA
         val blueRgb = CssColorHelper.parseColor("rgb(0, 0, 255)")
         assertNotNull("Should parse rgb(0, 0, 255)", blueRgb)
-        assertEquals(1f, blueRgb!!.blue, 0.01f)
+        assertEquals(255, CssColorHelper.blue(blueRgb!!))
 
         val alphaRgba = CssColorHelper.parseColor("rgba(255, 255, 0, 0.5)")
         assertNotNull("Should parse rgba(255, 255, 0, 0.5)", alphaRgba)
-        assertEquals(0.5f, alphaRgba!!.alpha, 0.05f)
+        assertTrue("Alpha should be around 127", kotlin.math.abs(CssColorHelper.alpha(alphaRgba!!) - 127) <= 3)
 
         // HSL
         val hslRed = CssColorHelper.parseColor("hsl(0, 100%, 50%)")
         assertNotNull("Should parse hsl(0, 100%, 50%)", hslRed)
-        assertEquals(1f, hslRed!!.red, 0.05f)
+        assertEquals(255, CssColorHelper.red(hslRed!!))
     }
 
     @Test
-    fun testFindColorsInCssText() {
-        val css = """
-            body {
-                background-color: #1E1E1E;
-                color: #FFFFFF;
-                border: 1px solid rgb(255, 0, 0);
-            }
-        """.trimIndent()
-        val found = CssColorHelper.findAllColorsInText(css)
+    fun testFindColorsInCssLine() {
+        val cssLine = "background-color: #1E1E1E; color: #FFFFFF; border: 1px solid rgb(255, 0, 0);"
+        val found = CssColorHelper.findColorsInLine(cssLine)
         assertEquals("Should find 3 color definitions", 3, found.size)
         assertEquals("#1E1E1E", found[0].rawText)
         assertEquals("#FFFFFF", found[1].rawText)
@@ -118,9 +114,10 @@ class Milestone2WebIdeTest {
 
     @Test
     fun testColorToHex() {
-        val c = Color(red = 1f, green = 0f, blue = 0f, alpha = 1f)
+        val c = CssColorHelper.rgb(255, 0, 0)
         assertEquals("#FF0000", CssColorHelper.toHexString(c, includeAlpha = false))
-        assertEquals("#FFFF0000", CssColorHelper.toHexString(c, includeAlpha = true))
+        val withAlpha = CssColorHelper.argb(128, 255, 0, 0)
+        assertEquals("#FF000080", CssColorHelper.toHexString(withAlpha, includeAlpha = true))
     }
 
     // ==========================================
