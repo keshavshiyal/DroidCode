@@ -273,9 +273,9 @@ fun MainShell(
         })
         commandRegistry.registerCommand(Command("view.toggle_breadcrumbs", "Toggle Breadcrumbs Path Bar", "View", null) {
             val newState = !settingsState.isBreadcrumbsEnabled
-            settingsState.setBreadcrumbsEnabled(newState)
+            settingsState.isBreadcrumbsEnabled = newState
             settingsMgr.saveSettings(context)
-            settingsTrigger++
+            settingsState = settingsMgr.getSettingsCopy()
             val status = if (newState) "shown" else "hidden"
             Toast.makeText(context, "Breadcrumbs path bar $status", Toast.LENGTH_SHORT).show()
         })
